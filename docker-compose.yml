@@ -1,0 +1,37 @@
+version: "3.8"
+
+services:
+  site-vitals:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: site-vitals-app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_TELEMETRY_DISABLED=1
+      # Optional: Add your PageSpeed Insights API key here
+      # - PSI_API_KEY=your_api_key_here
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://localhost:3000/', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})",
+        ]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    # Optional: Add volume for persistent data if needed
+    # volumes:
+    #   - ./data:/app/data
+    networks:
+      - site-vitals-network
+
+networks:
+  site-vitals-network:
+    driver: bridge

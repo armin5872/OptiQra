@@ -1,0 +1,27 @@
+version: "3.8"
+
+services:
+  site-vitals-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: site-vitals-dev
+    ports:
+      - "3000:3000"
+      - "9229:9229"
+    environment:
+      - NODE_ENV=development
+      - NEXT_TELEMETRY_DISABLED=1
+      # - PSI_API_KEY=your_api_key_here
+    restart: unless-stopped
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    networks:
+      - site-vitals-network
+    command: npm run dev
+
+networks:
+  site-vitals-network:
+    driver: bridge

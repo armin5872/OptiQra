@@ -1,0 +1,31 @@
+# Development Dockerfile with hot reload support
+
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install dumb-init
+RUN apk add --no-cache dumb-init
+
+# Copy package files
+COPY package.json package-lock.json* yarn.lock* pnpm-lock.yaml* ./
+
+# Install dependencies
+RUN npm ci || npm install
+
+# Copy source code
+COPY . .
+
+# Set environment
+ENV NODE_ENV=development
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+
+# Expose ports
+EXPOSE 3000 9229
+
+# Use dumb-init
+ENTRYPOINT ["dumb-init", "--"]
+
+# Run dev server
+CMD ["npm", "run", "dev"]

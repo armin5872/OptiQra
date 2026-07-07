@@ -1,0 +1,601 @@
+import * as cheerio from "cheerio";
+import type { CheerioAPI } from "cheerio";
+import { issue, pass, scoreFromIssues, type Issue } from "@/lib/auditUtils";
+import { analyzeCrawlFiles } from "@/lib/crawlAudit";
+import { analyzeStructuredData } from "@/lib/structuredDataAudit";
+
+export type { Issue } from "@/lib/auditUtils";
+export { issue, pass, scoreFromIssues } from "@/lib/auditUtils";
+
+const GENERIC_CTA_WORDS = [
+	"submit",
+	"click here",
+	"here",
+	"go",
+	"learn more",
+	"read more",
+];
+const TRUST_KEYWORDS = [
+	"testimonial",
+	"review",
+	"trusted by",
+	"as seen in",
+	"guarantee",
+	"rated",
+	"customers",
+	"star",
+];
+
+export async function fetchPage(targetUrl: string) {
+	const started = Date.now();
+	// Next.js specific: Cache this raw HTML fetch for 1 hour to prevent redundant external loads
+	const response = await fetch(targetUrl, {
+		redirect: "follow",
+		headers: { "User-Agent": "SiteVitalsBot/1.0 (+https://example.com/bot)" },
+		next: { revalidate: 3600 },
+	});
+	const elapsedMs = Date.now() - started;
+	const html = await response.text();
+	return { response, html, elapsedMs };
+}
+
+export async function analyzeSEO(
+	$: CheerioAPI,
+	html: string,
+	targetUrl: string,
+) {
+	const issues: Issue[] = [];
+	const passed: Issue[] = [];
+
+	const title = $("title").first().text().trim();
+	if (!title) {
+		issues.push(
+			issue(
+				"title",
+				"Title tag is missing",
+				"No <title> element was found in the page head, so search results fall back to a generic or unreadable title.",
+				"Add a unique, descriptive <title> tag, ideally 50–60 characters.",
+				14,
+			),
+		);
+	} else if (title.length < 10 || title.length > 65) {
+		issues.push(
+			issue(
+				"title-length",
+				"Title tag length is off",
+				`The title is ${title.length} characters ("${title.slice(0, 60)}${title.length > 60 ? "…" : ""}"). Search engines typically truncate titles outside the 50–60 character range.`,
+				"Tighten the title to roughly 50–60 characters while keeping it descriptive.",
+				6,
+			),
+		);
+	} else {
+		passed.push(pass("title", "Title tag is present and well-sized"));
+	}
+
+	const metaDesc = $('meta[name="description"]').attr("content") || "";
+	if (!metaDesc.trim()) {
+		issues.push(
+			issue(
+				"meta-desc",
+				"No meta description",
+				"Search engines are writing their own snippet because no meta description was found.",
+				"Add a 140–160 character meta description summarizing the page.",
+				9,
+			),
+		);
+	} else if (metaDesc.length < 50 || metaDesc.length > 165) {
+		issues.push(
+			issue(
+				"meta-desc-length",
+				"Meta description length is off",
+				`The description is ${metaDesc.length} characters, outside the ~140–160 range search engines display in full.`,
+				"Adjust the meta description to roughly 140–160 characters.",
+				5,
+			),
+		);
+	} else {
+		passed.push(
+			pass("meta-desc", "Meta description is present and well-sized"),
+		);
+	}
+
+	const canonical = $('link[rel="canonical"]').attr("href");
+	if (!canonical) {
+		issues.push(
+			issue(
+				"canonical",
+				"Missing canonical tag",
+				"Without a canonical tag, pages reachable through multiple URLs (tracking params, trailing slashes) risk being indexed as duplicates.",
+				'Add a self-referencing <link rel="canonical"> tag to every indexable page.',
+				8,
+			),
+		);
+	} else {
+		passed.push(pass("canonical", "Canonical tag is present"));
+	}
+
+	const h1s = $("h1");
+	if (h1s.length === 0) {
+		issues.push(
+			issue(
+				"h1-missing",
+				"No H1 heading found",
+				"The page has no top-level H1, leaving both users and search engines without a clear statement of the page topic.",
+				"Add exactly one H1 that describes the page's main topic.",
+				10,
+			),
+		);
+	} else if (h1s.length > 1) {
+		issues.push(
+			issue(
+				"h1-multiple",
+				`Multiple H1 headings found (${h1s.length})`,
+				"Several H1 elements dilute the page's topical signal and can confuse heading-based navigation.",
+				"Keep a single H1 per page and demote the rest to H2/H3.",
+				6,
+			),
+		);
+	} else {
+		passed.push(pass("h1", "Exactly one H1 heading"));
+	}
+
+	const headingLevels: number[] = [];
+	$("h1, h2, h3, h4, h5, h6").each((_, el) => {
+		headingLevels.push(Number(el.tagName.slice(1)));
+	});
+	let skipped = false;
+	for (let i = 1; i < headingLevels.length; i++) {
+		if (headingLevels[i] - headingLevels[i - 1] > 1) skipped = true;
+	}
+	if (skipped) {
+		issues.push(
+			issue(
+				"heading-order",
+				"Heading levels skip a step",
+				"Somewhere the page jumps, e.g. H2 straight to H4, which breaks the logical outline for screen readers and crawlers.",
+				"Restructure headings so each level follows in order without skipping.",
+				6,
+			),
+		);
+	} else if (headingLevels.length > 1) {
+		passed.push(pass("heading-order", "Heading hierarchy is in order"));
+	}
+
+	const imgs = $("img");
+	const missingAlt = imgs.filter(
+		(_, el) => !$(el).attr("alt") || !($(el).attr("alt") || "").trim(),
+	).length;
+	if (imgs.length > 0 && missingAlt > 0) {
+		issues.push(
+			issue(
+				"alt-text",
+				`${missingAlt} of ${imgs.length} images missing alt text`,
+				"Images without descriptive alt attributes lose potential image-search traffic and provide no fallback content.",
+				"Add descriptive alt text to every meaningful image.",
+				missingAlt / Math.max(imgs.length, 1) > 0.5 ? 10 : 6,
+			),
+		);
+	} else if (imgs.length > 0) {
+		passed.push(pass("alt-text", "All images have alt text"));
+	}
+
+	const robotsMeta = $('meta[name="robots"]').attr("content") || "";
+	if (/noindex/i.test(robotsMeta)) {
+		issues.push(
+			issue(
+				"noindex",
+				"Page is marked noindex",
+				"A robots meta tag is telling search engines not to index this page.",
+				"Remove the noindex directive if this page should appear in search results.",
+				15,
+			),
+		);
+	}
+
+	const crawlAudit = await analyzeCrawlFiles(targetUrl);
+	issues.push(...crawlAudit.issues);
+	passed.push(...crawlAudit.passed);
+
+	const ogTitle = $('meta[property="og:title"]').attr("content");
+	const ogDesc = $('meta[property="og:description"]').attr("content");
+	if (!ogTitle || !ogDesc) {
+		issues.push(
+			issue(
+				"open-graph",
+				"Incomplete Open Graph tags",
+				"Missing og:title or og:description means links shared on social platforms will render with a blank or generic preview.",
+				"Add og:title, og:description, and og:image meta tags.",
+				5,
+			),
+		);
+	} else {
+		passed.push(pass("open-graph", "Open Graph tags are present"));
+	}
+
+	const structuredDataResult = analyzeStructuredData($, html);
+	issues.push(...structuredDataResult.issues);
+	passed.push(...structuredDataResult.passed);
+
+	return { issues, passed };
+}
+
+export function analyzeSpeed(
+	$: CheerioAPI,
+	html: string,
+	response: Response,
+	elapsedMs: number,
+) {
+	const issues: Issue[] = [];
+	const passed: Issue[] = [];
+
+	const sizeKb = Buffer.byteLength(html, "utf8") / 1024;
+	if (sizeKb > 300) {
+		issues.push(
+			issue(
+				"html-size",
+				`HTML document is large (${Math.round(sizeKb)} KB)`,
+				"A large initial HTML payload delays first paint, especially on slower connections.",
+				"Trim unused markup and move large inline content out of the initial HTML.",
+				sizeKb > 600 ? 12 : 7,
+			),
+		);
+	} else {
+		passed.push(pass("html-size", "Initial HTML payload is a reasonable size"));
+	}
+
+	if (elapsedMs > 800) {
+		issues.push(
+			issue(
+				"ttfb",
+				`Server response took ${elapsedMs}ms`,
+				"A slow time-to-first-byte delays everything else on the page, since the browser can't start rendering until the response arrives.",
+				"Investigate server/database response time, or add caching/CDN in front of the origin.",
+				elapsedMs > 1800 ? 15 : 9,
+			),
+		);
+	} else {
+		passed.push(pass("ttfb", "Server responded quickly"));
+	}
+
+	const encoding = response.headers.get("content-encoding") || "";
+	if (!/br|gzip|deflate/i.test(encoding)) {
+		issues.push(
+			issue(
+				"compression",
+				"Response is not compressed",
+				"No gzip/Brotli content-encoding header was returned, so the page transfers larger than necessary.",
+				"Enable gzip or Brotli compression on the server or CDN.",
+				9,
+			),
+		);
+	} else {
+		passed.push(pass("compression", "Response is compressed"));
+	}
+
+	const cacheControl = response.headers.get("cache-control") || "";
+	if (!cacheControl) {
+		issues.push(
+			issue(
+				"cache",
+				"No Cache-Control header",
+				"Without caching headers, repeat visitors re-download the page unnecessarily.",
+				"Set Cache-Control headers appropriate to how often the page changes.",
+				6,
+			),
+		);
+	} else {
+		passed.push(pass("cache", "Cache-Control header is set"));
+	}
+
+	const blockingScripts = $("head script").filter(
+		(_, el) =>
+			!$(el).attr("async") &&
+			!$(el).attr("defer") &&
+			!$(el).attr("type")?.includes("module"),
+	).length;
+	if (blockingScripts > 0) {
+		issues.push(
+			issue(
+				"render-blocking-js",
+				`${blockingScripts} render-blocking script${blockingScripts === 1 ? "" : "s"} in <head>`,
+				"Scripts in the head without async/defer stop the browser from parsing the rest of the page until they finish loading.",
+				"Add defer (or async, if order doesn't matter) to head scripts, or move them before </body>.",
+				blockingScripts > 2 ? 11 : 7,
+			),
+		);
+	} else {
+		passed.push(
+			pass("render-blocking-js", "No render-blocking scripts in <head>"),
+		);
+	}
+
+	const stylesheets = $('link[rel="stylesheet"]').length;
+	if (stylesheets > 4) {
+		issues.push(
+			issue(
+				"css-count",
+				`${stylesheets} separate stylesheets loaded`,
+				"Many separate CSS files each cost a network round trip before the page can be styled.",
+				"Bundle stylesheets and load non-critical CSS asynchronously.",
+				6,
+			),
+		);
+	}
+
+	const imgsNoSize = $("img").filter(
+		(_, el) => !$(el).attr("width") || !$(el).attr("height"),
+	).length;
+	const totalImgs = $("img").length;
+	if (totalImgs > 0 && imgsNoSize > 0) {
+		issues.push(
+			issue(
+				"cls-images",
+				`${imgsNoSize} of ${totalImgs} images missing width/height`,
+				"Images without explicit dimensions cause layout shifts as they load, pushing content around the page.",
+				"Add width and height attributes (or aspect-ratio in CSS) to every image.",
+				imgsNoSize / totalImgs > 0.5 ? 10 : 6,
+			),
+		);
+	} else if (totalImgs > 0) {
+		passed.push(pass("cls-images", "Images have explicit dimensions"));
+	}
+
+	const lazyImgs = $('img[loading="lazy"]').length;
+	if (totalImgs > 6 && lazyImgs === 0) {
+		issues.push(
+			issue(
+				"lazy-loading",
+				"No images use lazy loading",
+				"Every image on a long page loads immediately, even ones far below the fold.",
+				'Add loading="lazy" to images that appear below the initial viewport.',
+				5,
+			),
+		);
+	}
+
+	return { issues, passed };
+}
+
+export function analyzeA11y($: CheerioAPI) {
+	const issues: Issue[] = [];
+	const passed: Issue[] = [];
+
+	const htmlLang = $("html").attr("lang");
+	if (!htmlLang) {
+		issues.push(
+			issue(
+				"lang",
+				"Missing lang attribute on <html>",
+				"Screen readers use this attribute to choose the correct pronunciation and voice; without it they default to guessing.",
+				'Add a lang attribute, e.g. <html lang="en">.',
+				8,
+			),
+		);
+	} else {
+		passed.push(pass("lang", "Page declares a language"));
+	}
+
+	const inputs = $(
+		'input:not([type="hidden"]):not([type="submit"]):not([type="button"])',
+	);
+	let unlabeled = 0;
+	inputs.each((_, el) => {
+		const id = $(el).attr("id");
+		const hasLabel = id && $(`label[for="${id}"]`).length > 0;
+		const hasAria = $(el).attr("aria-label") || $(el).attr("aria-labelledby");
+		const wrappedInLabel = $(el).parents("label").length > 0;
+		if (!hasLabel && !hasAria && !wrappedInLabel) unlabeled++;
+	});
+	if (inputs.length > 0 && unlabeled > 0) {
+		issues.push(
+			issue(
+				"labels",
+				`${unlabeled} of ${inputs.length} form fields have no associated label`,
+				"Inputs relying on placeholder text alone lose their hint on focus and are often skipped by screen readers.",
+				'Add a <label for="..."> element (or aria-label) tied to every input.',
+				unlabeled > 2 ? 12 : 8,
+			),
+		);
+	} else if (inputs.length > 0) {
+		passed.push(pass("labels", "Form fields have associated labels"));
+	}
+
+	const iconButtons = $('button, a[role="button"]').filter((_, el) => {
+		const text = $(el).text().trim();
+		const hasAria =
+			$(el).attr("aria-label") ||
+			$(el).attr("aria-labelledby") ||
+			$(el).attr("title");
+		return !text && !hasAria;
+	}).length;
+	if (iconButtons > 0) {
+		issues.push(
+			issue(
+				"button-names",
+				`${iconButtons} button${iconButtons === 1 ? "" : "s"} with no accessible name`,
+				'Buttons that show only an icon and expose no text or aria-label are announced as "button" with no purpose to screen reader users.',
+				"Add an aria-label describing the action each icon-only button performs.",
+				9,
+			),
+		);
+	}
+
+	const landmarks = ["main", "nav", "footer"].filter(
+		(tag) =>
+			$(tag).length > 0 ||
+			$(
+				`[role="${
+					tag === "main" ? "main"
+					: tag === "nav" ? "navigation"
+					: "contentinfo"
+				}"]`,
+			).length > 0,
+	);
+	if (landmarks.length < 3) {
+		const missing = ["main", "nav", "footer"].filter(
+			(t) => !landmarks.includes(t),
+		);
+		issues.push(
+			issue(
+				"landmarks",
+				`Missing landmark element${missing.length === 1 ? "" : "s"}: ${missing.join(", ")}`,
+				"Landmark regions let screen reader users jump directly to the main content, navigation, or footer instead of tabbing through everything.",
+				"Wrap key regions in <main>, <nav>, and <footer> elements.",
+				7,
+			),
+		);
+	} else {
+		passed.push(pass("landmarks", "Page uses main/nav/footer landmarks"));
+	}
+
+	const decorativeCandidates = $(
+		'img[src*="spacer"], img[src*="divider"], img[src*="decoration"]',
+	);
+	const badDecorative = decorativeCandidates.filter(
+		(_, el) => !!($(el).attr("alt") || "").trim(),
+	).length;
+	if (badDecorative > 0) {
+		issues.push(
+			issue(
+				"decorative-alt",
+				"Likely decorative images have non-empty alt text",
+				'Purely decorative images should have alt="" so screen readers skip them instead of reading a meaningless description.',
+				'Set alt="" on purely decorative images.',
+				4,
+			),
+		);
+	}
+
+	const viewport = $('meta[name="viewport"]').attr("content") || "";
+	if (/user-scalable=no|maximum-scale=1(\.0)?\b/.test(viewport)) {
+		issues.push(
+			issue(
+				"zoom-disabled",
+				"Pinch-to-zoom is disabled",
+				"The viewport meta tag blocks zooming, which many low-vision users rely on to read content.",
+				"Remove user-scalable=no and maximum-scale restrictions from the viewport meta tag.",
+				8,
+			),
+		);
+	}
+
+	return { issues, passed };
+}
+
+export function analyzeConversions($: CheerioAPI, html: string) {
+	const issues: Issue[] = [];
+	const passed: Issue[] = [];
+
+	const bodyHtml = $("body").html() || "";
+	const firstChunk = bodyHtml.slice(0, 4000).toLowerCase();
+	const ctaPattern = /<(a|button)[^>]*>(.*?)<\/\1>/gi;
+	let hasCtaEarly = false;
+	let match;
+	while ((match = ctaPattern.exec(firstChunk)) !== null) {
+		const text = match[2].replace(/<[^>]+>/g, "").trim();
+		if (text.length > 1 && text.length < 40) {
+			hasCtaEarly = true;
+			break;
+		}
+	}
+	if (!hasCtaEarly) {
+		issues.push(
+			issue(
+				"above-fold",
+				"No clear call-to-action near the top of the page",
+				"Visitors may need to scroll well past the first screen before finding anything to click.",
+				"Place a primary action (button or prominent link) within the first section of the page.",
+				12,
+			),
+		);
+	} else {
+		passed.push(
+			pass("above-fold", "A call-to-action appears early in the page"),
+		);
+	}
+
+	const allCtas = $("a, button")
+		.map((_, el) => $(el).text().trim().toLowerCase())
+		.get()
+		.filter(Boolean);
+	const genericCtas = allCtas.filter((t) => GENERIC_CTA_WORDS.includes(t));
+	if (genericCtas.length > 0) {
+		issues.push(
+			issue(
+				"cta-clarity",
+				`Generic call-to-action text found ("${genericCtas[0]}")`,
+				'Buttons labeled "Submit" or "Click here" don\'t tell visitors what happens next, which softens click-through.',
+				'Rename buttons to describe the outcome, e.g. "Start free trial" instead of "Submit".',
+				8,
+			),
+		);
+	} else if (allCtas.length > 0) {
+		passed.push(pass("cta-clarity", "Call-to-action text is descriptive"));
+	}
+
+	const firstForm = $("form").first();
+	if (firstForm.length) {
+		const fieldCount = firstForm.find(
+			'input:not([type="hidden"]):not([type="submit"]):not([type="button"]), select, textarea',
+		).length;
+		if (fieldCount > 6) {
+			issues.push(
+				issue(
+					"form-length",
+					`Signup/contact form asks for ${fieldCount} fields`,
+					"Long forms shown before a visitor has a reason to trust the site tend to suppress completion rates.",
+					"Cut the form to essential fields only, and ask for the rest after signup.",
+					9,
+				),
+			);
+		} else {
+			passed.push(pass("form-length", "Form length is reasonable"));
+		}
+	}
+
+	const lowerHtml = html.toLowerCase();
+	const hasTrustSignal = TRUST_KEYWORDS.some((k) => lowerHtml.includes(k));
+	if (!hasTrustSignal) {
+		issues.push(
+			issue(
+				"trust",
+				"No obvious trust signals detected",
+				"No testimonials, review mentions, or guarantee language were found, which can leave first-time visitors uncertain.",
+				"Add a short trust signal near the primary action: a testimonial, rating, or guarantee.",
+				7,
+			),
+		);
+	} else {
+		passed.push(pass("trust", "Trust signals are present on the page"));
+	}
+
+	const viewport = $('meta[name="viewport"]').attr("content");
+	if (!viewport) {
+		issues.push(
+			issue(
+				"mobile-viewport",
+				"No responsive viewport meta tag",
+				"Without a viewport meta tag, mobile browsers render a desktop layout and zoom out, making buttons and text hard to tap and read.",
+				'Add <meta name="viewport" content="width=device-width, initial-scale=1">.',
+				11,
+			),
+		);
+	} else {
+		passed.push(pass("mobile-viewport", "Responsive viewport meta tag is set"));
+	}
+
+	const hasContactPath = /tel:|mailto:|contact/i.test(html);
+	if (!hasContactPath) {
+		issues.push(
+			issue(
+				"contact-path",
+				"No visible contact method found",
+				"Visitors who hesitate before converting have no easy way to reach out with questions.",
+				"Add a visible contact link, phone number, or chat option.",
+				5,
+			),
+		);
+	}
+
+	return { issues, passed };
+}
