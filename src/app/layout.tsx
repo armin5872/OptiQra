@@ -37,7 +37,23 @@ export const metadata = {
 		"conversion",
 		"audit",
 	],
-	authors: [{ name: "ArminNX", url: "https://optiqra.com" }],
+	authors: [{ name: "ArminNX", url: "https://optiqra.vercel.app/" }],
+	openGraph: {
+		title: "OptiQra Site Vitals — Website diagnostic scan",
+		description:
+			"A powerful, open-source diagnostic tool for analyzing and improving website health across multiple dimensions.",
+		url: "https://optiqra.vercel.app/",
+		siteName: "OptiQra Site Vitals",
+		images: [
+			{
+				url: "https://optiqra.vercel.app/optigra.png",
+				width: 1200,
+				height: 630,
+			},
+		],
+		locale: "en_US",
+		type: "website",
+	},
 };
 
 export default function RootLayout({
@@ -51,15 +67,16 @@ export default function RootLayout({
 				className={`${plexSans.variable} ${plexCondensed.variable} ${plexMono.variable} font-sans`}
 			>
 				{children}
-				<hr />
-				made by{" "}
-				<a
-					href="https://github.com/armin5872"
-					target="_blank"
-					rel="noopener noreferrer"
-				>
-					ArminNX
-				</a>
+				<footer className="site-footer">
+					<span>Made by</span>{" "}
+					<a
+						href="https://github.com/armin5872"
+						target="_blank"
+						rel="noopener noreferrer"
+					>
+						ArminNX
+					</a>
+				</footer>
 			</body>
 		</html>
 	);

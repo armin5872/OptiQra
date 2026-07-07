@@ -38,6 +38,25 @@ body {
 a {
 	color: inherit;
 }
+.site-footer {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	gap: 6px;
+	padding: 20px 24px 32px;
+	margin-top: 24px;
+	font-size: 0.95rem;
+	color: var(--ink-soft);
+	border-top: 1px solid var(--line);
+}
+.site-footer a {
+	font-weight: 600;
+	color: var(--accent);
+	text-decoration: none;
+}
+.site-footer a:hover {
+	text-decoration: underline;
+}
 header {
 	padding: 28px 0 20px;
 	border-bottom: 1px solid var(--line);

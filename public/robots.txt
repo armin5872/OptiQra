@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://optiqra.vercel.app/sitemap.xml
