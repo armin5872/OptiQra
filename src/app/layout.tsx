@@ -38,6 +38,9 @@ export const metadata = {
 		"audit",
 	],
 	authors: [{ name: "ArminNX", url: "https://optiqra.vercel.app/" }],
+	verification: {
+		google: "9nEQzTfKfm86Xd3dosIFdH--YQMNQXs_hbFjYEI8DXg",
+	},
 	openGraph: {
 		title: "OptiQra Site Vitals — Website diagnostic scan",
 		description:
