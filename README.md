@@ -2,7 +2,12 @@
 
 A powerful, open-source diagnostic tool for analyzing and improving website health across multiple dimensions: **SEO**, **Performance**, **Accessibility**, **Security Headers**, **Conversions**, and more.
 
-## 🎯 Features
+## � Live Demo
+
+The application is currently deployed at https://optiqra.vercel.app/.
+![OptiqRA Logo](/optiqra.png)
+
+## �🎯 Features
 
 ### Comprehensive Auditing
 

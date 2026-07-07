@@ -2,6 +2,10 @@
 
 This guide provides detailed instructions for deploying Site Vitals in various environments.
 
+## Current Production Deployment
+
+The live application is available at https://optiqra.vercel.app/.
+
 ## Table of Contents
 
 1. [Local Development](#local-development)
@@ -107,6 +111,8 @@ docker-compose up -d
 ## Cloud Platforms
 
 ### Vercel (Recommended for Next.js)
+
+The project is configured for deployment to Vercel, and the current production URL is https://optiqra.vercel.app/.
 
 ```bash
 # Install Vercel CLI
