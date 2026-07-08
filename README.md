@@ -1,11 +1,22 @@
-# Site Vitals – Comprehensive Website Diagnostic Tool
+# OptiQra – Comprehensive Website Diagnostic And Fixing Tool
 
-A powerful, open-source diagnostic tool for analyzing and improving website health across multiple dimensions: **SEO**, **Performance**, **Accessibility**, **Security Headers**, **Conversions**, and more.
+**Paste your website URL. We find problems and automatically improve your SEO, speed, accessibility, and conversions.**
+
+![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)
+![License](https://img.shields.io/badge/License-MIT-green)
+![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen)
+![Status](https://img.shields.io/badge/Status-Active-success)
+![Open Source](https://img.shields.io/badge/Open%20Source-❤-red)
+![Vercel](https://img.shields.io/badge/Deployed-Vercel-black?logo=vercel)
+
+![OptiqRA Logo](/optiqra.png)
 
 ## 🚀 Live Demo
 
 The application is currently deployed at https://optiqra.vercel.app/.
-![OptiqRA Logo](/optiqra.png)
+
 
 ## 🛠️ Features
 
@@ -20,7 +31,7 @@ The application is currently deployed at https://optiqra.vercel.app/.
 
 ### Security Headers Coverage
 
-The tool scans and validates the following critical security headers:
+OptiQra scans and validates the following critical security headers:
 
 | Header                           | Purpose                                  | Importance                                                |
 | -------------------------------- | ---------------------------------------- | --------------------------------------------------------- |
@@ -417,7 +428,7 @@ To use PageSpeed Insights integration:
 ## 📁 Project Structure
 
 ```
-site-vitals-next/
+OptiQra/
 ├── src/
 │   ├── app/
 │   │   ├── api/
@@ -551,9 +562,64 @@ docker-compose up --build
 
 This project is open source and available under the MIT License.
 
+## 🌱 Roadmap
+
+## v1.0
+- [x] SEO Audit
+- [x] Accessibility Audit
+- [x] Performance Audit
+- [x] Conversion Analysis
+- [x] Security Header Analysis
+- [x] robots.txt Analysis
+- [x] Sitemap Analysis
+- [x] Structured Data Detection
+- [x] Google Lighthouse Integration
+
+---
+
+## v1.1
+- [ ] Advanced Link Analyzer
+- [ ] Advanced Image Analyzer
+- [ ] Open Graph Preview
+- [ ] Twitter Card Preview
+- [ ] Security Score Improvements
+- [ ] HTTP/2 & HTTP/3 Detection
+- [ ] Core Web Vitals Visualization
+
+---
+
+## v1.2
+- [ ] Whole Website Crawler
+- [ ] Multi-page SEO Reports
+- [ ] Duplicate Content Detection
+- [ ] Internal Linking Analysis
+- [ ] Broken Link Detection
+- [ ] Crawl Visualization
+
+---
+
+## v2.0
+- [ ] AI Website Review
+- [ ] AI Generated Fixes
+- [ ] Competitor Comparison
+- [ ] Historical Scan Tracking
+- [ ] CI/CD Integration
+- [ ] GitHub Pull Request Fixes
+
+---
+
+## Future Vision
+- [ ] Visual AI UX Analysis
+- [ ] Heatmap Prediction
+- [ ] Automated Performance Optimization
+- [ ] Plugin Ecosystem
+- [ ] Team Dashboards
+- [ ] Enterprise API 
+
 ## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit pull requests or open issues for bugs and feature requests.
+Or you Could also start developing the next feature in the roadmap!
 
 ## 📚 Further Reading
 
@@ -562,7 +628,7 @@ Contributions are welcome! Please feel free to submit pull requests or open issu
 - [Google Lighthouse Documentation](https://developers.google.com/web/tools/lighthouse)
 - [W3C Web Content Accessibility Guidelines (WCAG)](https://www.w3.org/WAI/WCAG21/quickref/)
 
-## 💡 Tips for Best Results
+## 📌 Tips for Best Results
 
 1. **Regular Scanning** - Scan your site weekly or after major updates
 2. **Fix Progressively** - Address critical issues first, then optimization
@@ -572,4 +638,9 @@ Contributions are welcome! Please feel free to submit pull requests or open issu
 
 ---
 
-**Made with ❤️ for better web security and accessibility**
+## 💡 Vision
+Site Vitals aims to evolve from a single-page auditing tool into a complete AI-powered website optimization platform capable of crawling entire websites, identifying issues, prioritizing improvements, generating fixes, and helping developers build faster, more secure, and more accessible web experiences.
+
+**Made with ❤️ for better web performance, SEO and security**
+
+## Made By ArminNX
