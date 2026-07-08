@@ -645,4 +645,4 @@ Site Vitals aims to evolve from a single-page auditing tool into a complete AI-p
 
 **Made with ❤️ for better web performance, SEO and security**
 
-## Made By ArminNX
+## Made By ArminNX And The Community
