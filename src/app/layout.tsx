@@ -3,6 +3,7 @@ import {
 	IBM_Plex_Sans_Condensed,
 	IBM_Plex_Mono,
 } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 
 const plexSans = IBM_Plex_Sans({
@@ -10,11 +11,13 @@ const plexSans = IBM_Plex_Sans({
 	weight: ["400", "500", "600"],
 	variable: "--font-plex-sans",
 });
+
 const plexCondensed = IBM_Plex_Sans_Condensed({
 	subsets: ["latin"],
 	weight: ["500", "600", "700"],
 	variable: "--font-plex-cond",
 });
+
 const plexMono = IBM_Plex_Mono({
 	subsets: ["latin"],
 	weight: ["400", "500"],
@@ -69,7 +72,22 @@ export default function RootLayout({
 			<body
 				className={`${plexSans.variable} ${plexCondensed.variable} ${plexMono.variable} font-sans`}
 			>
+				{/* Google Analytics */}
+				<Script
+					src="https://www.googletagmanager.com/gtag/js?id=G-MTPEEM6L09"
+					strategy="afterInteractive"
+				/>
+				<Script id="google-analytics" strategy="afterInteractive">
+					{`
+						window.dataLayer = window.dataLayer || [];
+						function gtag(){dataLayer.push(arguments);}
+						gtag('js', new Date());
+						gtag('config', 'G-MTPEEM6L09');
+					`}
+				</Script>
+
 				{children}
+
 				<footer className="site-footer">
 					<span>Made by</span>{" "}
 					<a
