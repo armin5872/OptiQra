@@ -7,9 +7,14 @@ import {
 	analyzeConversions,
 	type Issue,
 } from "@/lib/htmlAudit";
+import { analyzeLinks } from "@/lib/link-analyzer";
+import { analyzeImages } from "@/lib/image-analyzer";
 import { analyzeSecurityHeaders } from "@/lib/securityHeadersAudit";
 import { runPageSpeed } from "@/lib/pagespeed";
 import { CheerioAPI, load } from "cheerio";
+
+export const runtime = "nodejs";
+export const maxDuration = 60;
 
 type Category = {
 	label: string;
@@ -18,6 +23,52 @@ type Category = {
 	passed: Issue[];
 	source: string;
 };
+
+type ImagesRequestBody = {
+	url: string;
+	maxFileSizeBytes?: number;
+	oversizeRatio?: number;
+};
+
+type LinksRequestBody = {
+	url: string;
+	externalLinkThreshold?: number;
+	checkLinkStatuses?: boolean;
+};
+
+function validateRequestUrl(url: unknown) {
+	if (!url || typeof url !== "string") {
+		throw new Error("Missing required 'url' string in request body.");
+	}
+	try {
+		return new URL(url).toString();
+	} catch {
+		throw new Error("Invalid URL.");
+	}
+}
+
+export async function analyzeImagesRequest(body: ImagesRequestBody) {
+	const targetUrl = validateRequestUrl(body?.url);
+	return analyzeImages(targetUrl, {
+		maxFileSizeBytes:
+			typeof body.maxFileSizeBytes === "number" ?
+				body.maxFileSizeBytes
+			:	undefined,
+		oversizeRatio:
+			typeof body.oversizeRatio === "number" ? body.oversizeRatio : undefined,
+	});
+}
+
+export async function analyzeLinksRequest(body: LinksRequestBody) {
+	const targetUrl = validateRequestUrl(body?.url);
+	return analyzeLinks(targetUrl, {
+		externalLinkThreshold:
+			typeof body.externalLinkThreshold === "number" ?
+				body.externalLinkThreshold
+			:	undefined,
+		checkLinkStatuses: body.checkLinkStatuses !== false,
+	});
+}
 
 export async function POST(req: NextRequest) {
 	try {

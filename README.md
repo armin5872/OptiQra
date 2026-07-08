@@ -117,6 +117,8 @@ npm run lint     # Run ESLint checks
 
 Analyzes a website and returns comprehensive audit results.
 
+> Note: the API route is centralized in `src/app/api/analyze/route.ts`, including the audit logic previously split into image and link analysis helpers.
+
 **Request:**
 
 ```json
