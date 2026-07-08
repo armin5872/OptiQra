@@ -15,7 +15,7 @@
 
 ## 🚀 Live Demo
 
-The application is currently deployed at https://optiqra.vercel.app/.
+You can go ahead and checkout  OptiQra at https://optiqra.vercel.app/.
 
 
 ## 🛠️ Features
