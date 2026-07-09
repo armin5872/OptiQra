@@ -4,4 +4,4 @@ Thank you for your interest in contributing to OptiQra! All forms of contributio
 
 ## Pull Requests
 
-after you have fixed an issue or refactored the code or added something go ahead and create a pull request and I will go and sync it with the original.
+After you have fixed an issue or refactored the code or added something go ahead and create a pull request and I will go and sync it with the original.
