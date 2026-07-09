@@ -196,20 +196,157 @@ export async function analyzeSEO(
 	issues.push(...crawlAudit.issues);
 	passed.push(...crawlAudit.passed);
 
-	const ogTitle = $('meta[property="og:title"]').attr("content");
-	const ogDesc = $('meta[property="og:description"]').attr("content");
+	// --- Open Graph & Twitter Card ---
+	const ogTitle = $('meta[property="og:title"]').attr("content")?.trim();
+	const ogDesc = $('meta[property="og:description"]').attr("content")?.trim();
+	const ogImage = $('meta[property="og:image"]').attr("content")?.trim();
+	const ogUrl = $('meta[property="og:url"]').attr("content")?.trim();
+	const ogType = $('meta[property="og:type"]').attr("content")?.trim();
+	const ogSiteName = $('meta[property="og:site_name"]').attr("content")?.trim();
+
+	const twitterCard = $('meta[name="twitter:card"]').attr("content")?.trim();
+	const twitterTitle = $('meta[name="twitter:title"]').attr("content")?.trim();
+	const twitterDesc = $('meta[name="twitter:description"]')
+		.attr("content")
+		?.trim();
+	const twitterImage = $('meta[name="twitter:image"]').attr("content")?.trim();
+
 	if (!ogTitle || !ogDesc) {
+		const missing =
+			!ogTitle && !ogDesc ? "og:title and og:description are"
+			: !ogTitle ? "og:title is"
+			: "og:description is";
 		issues.push(
 			issue(
-				"open-graph",
-				"Incomplete Open Graph tags",
-				"Missing og:title or og:description means links shared on social platforms will render with a blank or generic preview.",
-				"Add og:title, og:description, and og:image meta tags.",
+				"og-basic",
+				"Missing core Open Graph tags",
+				`${missing} missing, so links shared on Facebook, LinkedIn, Slack, and similar platforms fall back to a blank or auto-generated title/snippet.`,
+				"Add og:title and og:description meta tags with content written for social sharing.",
 				5,
 			),
 		);
 	} else {
-		passed.push(pass("open-graph", "Open Graph tags are present"));
+		passed.push(pass("og-basic", "og:title and og:description are present"));
+	}
+
+	if (!ogImage) {
+		issues.push(
+			issue(
+				"og-image",
+				"Missing og:image",
+				"Without an og:image tag, shared links render as a plain text card with no thumbnail, which measurably lowers click-through on social feeds.",
+				'Add <meta property="og:image" content="https://.../preview.jpg"> pointing at a roughly 1200×630 image.',
+				8,
+			),
+		);
+	} else {
+		passed.push(pass("og-image", "og:image is present"));
+	}
+
+	if (!ogUrl) {
+		issues.push(
+			issue(
+				"og-url",
+				"Missing og:url",
+				"Without og:url, shares of the same page reached through different query strings or paths can be treated as separate URLs, splitting likes and shares across duplicates.",
+				`Add <meta property="og:url" content="${targetUrl}"> using the canonical URL of the page.`,
+				3,
+			),
+		);
+	} else {
+		passed.push(pass("og-url", "og:url is present"));
+	}
+
+	if (!ogType) {
+		issues.push(
+			issue(
+				"og-type",
+				"Missing og:type",
+				'Open Graph silently defaults to "website" when og:type is absent, but declaring it explicitly (article, product, etc.) unlocks richer, type-specific card layouts on some platforms.',
+				'Add <meta property="og:type" content="website"> (or "article", "product", etc. as appropriate).',
+				2,
+			),
+		);
+	} else {
+		passed.push(pass("og-type", "og:type is present"));
+	}
+
+	if (!ogSiteName) {
+		issues.push(
+			issue(
+				"og-site-name",
+				"Missing og:site_name",
+				"Without og:site_name, some platforms omit the brand label that normally appears above the title in a shared card.",
+				'Add <meta property="og:site_name" content="Your Site Name">.',
+				2,
+			),
+		);
+	} else {
+		passed.push(pass("og-site-name", "og:site_name is present"));
+	}
+
+	const VALID_TWITTER_CARDS = [
+		"summary",
+		"summary_large_image",
+		"app",
+		"player",
+	];
+	if (!twitterCard) {
+		issues.push(
+			issue(
+				"twitter-card",
+				"Missing twitter:card",
+				"X/Twitter will not render a rich preview at all without a twitter:card tag, even when Open Graph tags are present.",
+				'Add <meta name="twitter:card" content="summary_large_image"> (or "summary" for a smaller preview).',
+				4,
+			),
+		);
+	} else if (!VALID_TWITTER_CARDS.includes(twitterCard)) {
+		issues.push(
+			issue(
+				"twitter-card-invalid",
+				`Unrecognized twitter:card value ("${twitterCard}")`,
+				'X/Twitter only recognizes "summary", "summary_large_image", "app", and "player" as twitter:card values — anything else causes the preview to silently fail.',
+				'Set twitter:card to "summary_large_image" for most content pages.',
+				4,
+			),
+		);
+	} else {
+		passed.push(pass("twitter-card", "twitter:card is present and valid"));
+	}
+
+	// twitter:title / twitter:description / twitter:image fall back to their
+	// og: equivalents when omitted, so only flag a gap when neither is set.
+	const effectiveTwitterTitle = twitterTitle || ogTitle;
+	const effectiveTwitterDesc = twitterDesc || ogDesc;
+	const effectiveTwitterImage = twitterImage || ogImage;
+	if (
+		twitterCard &&
+		(!effectiveTwitterTitle || !effectiveTwitterDesc || !effectiveTwitterImage)
+	) {
+		const missingParts = [
+			!effectiveTwitterTitle && "title",
+			!effectiveTwitterDesc && "description",
+			!effectiveTwitterImage && "image",
+		]
+			.filter(Boolean)
+			.join(", ");
+		issues.push(
+			issue(
+				"twitter-content",
+				`Twitter card is missing ${missingParts}`,
+				"twitter:title, twitter:description, and twitter:image fall back to their og: equivalents when absent, but neither the twitter:* nor the og: version is set here, so the card renders incomplete.",
+				"Add the missing twitter:* tags directly, or add the matching og: tags so Twitter can fall back to them.",
+				3,
+			),
+		);
+	} else if (twitterCard) {
+		passed.push(
+			pass(
+				"twitter-content",
+				"Twitter card has title, description, and image (directly or via Open Graph fallback)",
+			),
+		);
 	}
 
 	const structuredDataResult = analyzeStructuredData($, html);
