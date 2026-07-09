@@ -7,6 +7,8 @@ OptiQra is a Next.js website auditing experience for spotting SEO, performance, 
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
+![OptiQra](optiqra.webp)
+
 ## What it does
 
 - Scans a target URL and produces a multi-category audit report
