@@ -580,8 +580,8 @@ This project is open source and available under the MIT License.
 ---
 
 ## v1.1
-- [ ] Advanced Link Analyzer
-- [ ] Advanced Image Analyzer
+- [x] Advanced Link Analyzer
+- [x] Advanced Image Analyzer
 - [ ] Open Graph Preview
 - [ ] Twitter Card Preview
 - [ ] Security Score Improvements
