@@ -171,7 +171,7 @@ export async function POST(req: NextRequest) {
 		if (mode === "site") {
 			const normalizedMaxPages =
 				typeof maxPages === "number" && Number.isFinite(maxPages) ?
-					Math.min(500, Math.max(1, Math.round(maxPages)))
+					Math.min(1000, Math.max(1, Math.round(maxPages)))
 				:	undefined;
 			return runSiteCrawl(targetUrl, normalizedMaxPages);
 		}

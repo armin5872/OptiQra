@@ -58,7 +58,7 @@ export default function Home() {
 		const parsedMaxPages = Number(maxPages);
 		const normalizedMaxPages =
 			Number.isFinite(parsedMaxPages) ?
-				Math.min(45, Math.max(1, Math.round(parsedMaxPages)))
+				Math.min(1000, Math.max(1, Math.round(parsedMaxPages)))
 			:	30;
 		setUrl(formattedUrl);
 		setMaxPages(String(normalizedMaxPages));
@@ -196,7 +196,7 @@ export default function Home() {
 							<input
 								type="number"
 								min="1"
-								max="45"
+								max="1000"
 								step="1"
 								value={maxPages}
 								onChange={(e) => setMaxPages(e.target.value)}
