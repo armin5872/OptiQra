@@ -6,10 +6,10 @@ type ScanState = "hero" | "scanning" | "report";
 type ScanMode = "single" | "site";
 
 const SCAN_DEPTHS = [
-	{ id: "quick", label: "Quick scan", pages: 15 },
-	{ id: "standard", label: "Standard scan", pages: 50 },
-	{ id: "full", label: "Full site scan", pages: 100 },
-	{ id: "crawl", label: "Full crawl", pages: 250 },
+	{ id: "quick", label: "⚡Quick scan", pages: 15 },
+	{ id: "standard", label: "🔍Standard scan", pages: 50 },
+	{ id: "full", label: "🏢Full site scan", pages: 100 },
+	{ id: "crawl", label: "🌍Full crawl", pages: 250 },
 	{ id: "custom", label: "Custom", pages: null },
 ] as const;
 type ScanDepthId = (typeof SCAN_DEPTHS)[number]["id"];
