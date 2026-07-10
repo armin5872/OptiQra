@@ -7,7 +7,7 @@ import { extractLinks } from "@/lib/link-analyzer";
 
 const CRAWL_USER_AGENT = "SiteVitalsBot/1.0 (+https://example.com/bot)";
 export const DEFAULT_MAX_PAGES = 30;
-export const HARD_MAX_PAGES = 500;
+export const HARD_MAX_PAGES = 45;
 const DEFAULT_MAX_DEPTH = 3;
 const FETCH_TIMEOUT_MS = 9000;
 const NON_HTML_EXTENSIONS =
