@@ -36,7 +36,9 @@ export default function Home() {
 	const [errorMsg, setErrorMsg] = useState("");
 	const [stoppedNote, setStoppedNote] = useState("");
 	const [activeStep, setActiveStep] = useState(0);
-	const [crawlProgress, setCrawlProgress] = useState<CrawlProgress | null>(null);
+	const [crawlProgress, setCrawlProgress] = useState<CrawlProgress | null>(
+		null,
+	);
 	const [statusMessage, setStatusMessage] = useState("");
 	const abortRef = useRef<AbortController | null>(null);
 	const [reportData, setReportData] = useState<{
@@ -57,7 +59,10 @@ export default function Home() {
 		scanDepth === "custom" ?
 			Math.max(
 				MIN_CUSTOM_PAGES,
-				Math.min(MAX_CUSTOM_PAGES, Math.round(Number(customPages)) || MIN_CUSTOM_PAGES),
+				Math.min(
+					MAX_CUSTOM_PAGES,
+					Math.round(Number(customPages)) || MIN_CUSTOM_PAGES,
+				),
 			)
 		:	(SCAN_DEPTHS.find((d) => d.id === scanDepth)?.pages ?? 15);
 
@@ -91,7 +96,9 @@ export default function Home() {
 		setViewState("scanning");
 		setActiveStep(0);
 		setStatusMessage("");
-		setCrawlProgress(scanMode === "site" ? { scanned: 0, total: resolvedMaxPages } : null);
+		setCrawlProgress(
+			scanMode === "site" ? { scanned: 0, total: resolvedMaxPages } : null,
+		);
 
 		const controller = new AbortController();
 		abortRef.current = controller;
@@ -132,11 +139,18 @@ export default function Home() {
 	// Reads the /api/analyze NDJSON stream for a site (multi-page) scan, updating
 	// live progress as each page comes in and resolving once the final report
 	// ("done") line arrives.
-	const runSiteScanStream = async (formattedUrl: string, signal: AbortSignal) => {
+	const runSiteScanStream = async (
+		formattedUrl: string,
+		signal: AbortSignal,
+	) => {
 		const res = await fetch("/api/analyze", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ url: formattedUrl, mode: "site", maxPages: resolvedMaxPages }),
+			body: JSON.stringify({
+				url: formattedUrl,
+				mode: "site",
+				maxPages: resolvedMaxPages,
+			}),
 			signal,
 		});
 
@@ -195,7 +209,9 @@ export default function Home() {
 					setViewState("hero");
 					return;
 				} else if (evt.type === "error") {
-					throw new Error(evt.message || "Something went wrong running that scan.");
+					throw new Error(
+						evt.message || "Something went wrong running that scan.",
+					);
 				}
 			}
 		}
@@ -267,7 +283,7 @@ export default function Home() {
 							/>
 						</svg>
 					</span>
-					Site Vitals
+					OptiQra
 				</div>
 			</header>
 
@@ -279,11 +295,7 @@ export default function Home() {
 						Paste a URL. We check your SEO, speed, accessibility, and conversion
 						paths — then show you exactly what to fix.
 					</p>
-					<div
-						className="mode-toggle"
-						role="radiogroup"
-						aria-label="Scan mode"
-					>
+					<div className="mode-toggle" role="radiogroup" aria-label="Scan mode">
 						<button
 							type="button"
 							role="radio"
@@ -304,7 +316,11 @@ export default function Home() {
 						</button>
 					</div>
 					{scanMode === "site" && (
-						<div className="depth-select" role="radiogroup" aria-label="Scan depth">
+						<div
+							className="depth-select"
+							role="radiogroup"
+							aria-label="Scan depth"
+						>
 							{SCAN_DEPTHS.map((d) => (
 								<button
 									key={d.id}
@@ -335,7 +351,10 @@ export default function Home() {
 								onBlur={() => {
 									const n = Math.max(
 										MIN_CUSTOM_PAGES,
-										Math.min(MAX_CUSTOM_PAGES, Math.round(Number(customPages)) || MIN_CUSTOM_PAGES),
+										Math.min(
+											MAX_CUSTOM_PAGES,
+											Math.round(Number(customPages)) || MIN_CUSTOM_PAGES,
+										),
 									);
 									setCustomPages(String(n));
 								}}
@@ -353,15 +372,14 @@ export default function Home() {
 							aria-label="Website URL"
 						/>
 						<button type="submit">
-							{scanMode === "site" ?
-								"Crawl site →"
-							:	"Run diagnostic →"}
+							{scanMode === "site" ? "Crawl site →" : "Run diagnostic →"}
 						</button>
 					</form>
 					{scanMode === "site" && (
 						<p className="demo-note">
-							We'll follow internal links (and your sitemap, if there is one)
-							to scan up to {resolvedMaxPages} page{resolvedMaxPages === 1 ? "" : "s"}.
+							We'll follow internal links (and your sitemap, if there is one) to
+							scan up to {resolvedMaxPages} page
+							{resolvedMaxPages === 1 ? "" : "s"}.
 						</p>
 					)}
 					{errorMsg && (
@@ -381,9 +399,7 @@ export default function Home() {
 				<section className="scan active">
 					<p className="scan-url">{url}</p>
 					<p className="scan-title">
-						{scanMode === "site" ?
-							"Crawling the site…"
-						:	"Running diagnostic…"}
+						{scanMode === "site" ? "Crawling the site…" : "Running diagnostic…"}
 					</p>
 
 					{scanMode === "site" && crawlProgress && (
@@ -396,7 +412,9 @@ export default function Home() {
 								<span>
 									{Math.min(
 										100,
-										Math.round((crawlProgress.scanned / crawlProgress.total) * 100),
+										Math.round(
+											(crawlProgress.scanned / crawlProgress.total) * 100,
+										),
 									)}
 									%
 								</span>
@@ -407,13 +425,17 @@ export default function Home() {
 									style={{
 										width: `${Math.min(
 											100,
-											Math.round((crawlProgress.scanned / crawlProgress.total) * 100),
+											Math.round(
+												(crawlProgress.scanned / crawlProgress.total) * 100,
+											),
 										)}%`,
 									}}
 								/>
 							</div>
 							<p className="crawl-current-url">
-								{crawlProgress.currentUrl || statusMessage || "Getting started…"}
+								{crawlProgress.currentUrl ||
+									statusMessage ||
+									"Getting started…"}
 							</p>
 						</div>
 					)}
@@ -456,7 +478,9 @@ export default function Home() {
 						<p className="demo-note">
 							Scanned {reportData.pagesScanned.length} page
 							{reportData.pagesScanned.length === 1 ? "" : "s"}
-							{reportData.crawlTruncated ? " (more pages were found but not scanned — increase the page limit to cover the rest)" : ""}
+							{reportData.crawlTruncated ?
+								" (more pages were found but not scanned — increase the page limit to cover the rest)"
+							:	""}
 							.{" "}
 							<button
 								type="button"
