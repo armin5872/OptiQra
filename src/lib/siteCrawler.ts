@@ -100,7 +100,9 @@ async function discoverUrlsFromSitemap(
 
 			const $ = cheerio.load(trimmed, { xmlMode: true });
 			const directLocs: string[] = [];
-			$("url > loc").each((_, el) => directLocs.push($(el).text().trim()));
+			$("url > loc").each((_, el) => {
+				directLocs.push($(el).text().trim());
+			});
 
 			if (directLocs.length > 0) {
 				return directLocs
@@ -110,9 +112,9 @@ async function discoverUrlsFromSitemap(
 
 			// Might be a sitemap index — follow a couple of child sitemaps.
 			const childSitemaps: string[] = [];
-			$("sitemap > loc").each((_, el) =>
-				childSitemaps.push($(el).text().trim()),
-			);
+			$("sitemap > loc").each((_, el) => {
+				childSitemaps.push($(el).text().trim());
+			});
 
 			const collected: string[] = [];
 			for (const childUrl of childSitemaps.slice(0, 3)) {
@@ -122,9 +124,9 @@ async function discoverUrlsFromSitemap(
 					if (!childRes.ok) continue;
 					const childText = await childRes.text();
 					const $$ = cheerio.load(childText, { xmlMode: true });
-					$$("url > loc").each((_, el) =>
-						collected.push($$(el).text().trim()),
-					);
+					$$("url > loc").each((_, el) => {
+						collected.push($$(el).text().trim());
+					});
 				} catch {
 					// skip unreachable child sitemap
 				}
