@@ -1,6 +1,6 @@
 # OptiQra
 
-OptiQra is a Next.js website auditing experience for spotting SEO, performance, accessibility, security, and conversion issues. Paste a URL, run a diagnostic, and review a structured report with actionable findings.
+OptiQra is an AI optimized SEO crawling analyzer that crawls analyzes every page associated with the url the user inputs and creates visual tree and scores based on its SEO of the whole site and each page it has crawled through.
 
 ![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
@@ -8,13 +8,15 @@ OptiQra is a Next.js website auditing experience for spotting SEO, performance, 
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 
-https://optiqra.vercel.app
+See a live demo via the vercel deployment: https://optiqra.vercel.app
+
 ![OptiQra](optiqra.webp)
 
 ## What it does
 
 - Crawlers through the site via internal links in the sitemap and analyzes every page
-- Scans a target URL and produces a multi-category audit report
+- Scans a target URL and crawls its associated links and produces a multi-category audit report
+- Creates a visual tree of the pages it has crawled with the abilty to hover or cilck each page to see its individual stats
 - Checks SEO metadata, structured data, robots files, and sitemaps
 - Evaluates performance-related HTML and response characteristics
 - Reviews accessibility issues such as missing labels and contrast problems
@@ -88,7 +90,7 @@ The endpoint returns a report with categories such as security, SEO, performance
 
 - src/app/page.tsx: the main diagnostic UI
 - src/app/api/analyze/route.ts: the analysis orchestration endpoint
-- src/lib: audit modules for SEO, speed, accessibility, links, images, security headers, and PageSpeed
+- src/lib: audit modules for Crawler, SEO, speed, accessibility, links, images, security headers, and PageSpeed
 
 ## 🌱 Roadmap
 
