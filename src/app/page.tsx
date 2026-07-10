@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import CrawlTree from "./components/CrawlTree";
-import type { PageNode } from "./components/CrawlTree";
+import type { PageNode, Issue } from "./components/CrawlTree";
 
 type ScanState = "hero" | "scanning" | "report";
 type ScanMode = "single" | "site";
