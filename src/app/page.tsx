@@ -1,9 +1,23 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 type ScanState = "hero" | "scanning" | "report";
 type ScanMode = "single" | "site";
+
+const SCAN_DEPTHS = [
+	{ id: "quick", label: "Quick scan", pages: 15 },
+	{ id: "standard", label: "Standard scan", pages: 50 },
+	{ id: "full", label: "Full site scan", pages: 100 },
+	{ id: "crawl", label: "Full crawl", pages: 250 },
+	{ id: "custom", label: "Custom", pages: null },
+] as const;
+type ScanDepthId = (typeof SCAN_DEPTHS)[number]["id"];
+const MIN_CUSTOM_PAGES = 1;
+const MAX_CUSTOM_PAGES = 1000;
+
+type CrawlProgress = { scanned: number; total: number; currentUrl?: string };
+
 type Category = {
 	label: string;
 	score: number;
@@ -17,9 +31,14 @@ export default function Home() {
 	const [viewState, setViewState] = useState<ScanState>("hero");
 	const [url, setUrl] = useState("");
 	const [scanMode, setScanMode] = useState<ScanMode>("single");
-	const [maxPages, setMaxPages] = useState("30");
+	const [scanDepth, setScanDepth] = useState<ScanDepthId>("quick");
+	const [customPages, setCustomPages] = useState("100");
 	const [errorMsg, setErrorMsg] = useState("");
+	const [stoppedNote, setStoppedNote] = useState("");
 	const [activeStep, setActiveStep] = useState(0);
+	const [crawlProgress, setCrawlProgress] = useState<CrawlProgress | null>(null);
+	const [statusMessage, setStatusMessage] = useState("");
+	const abortRef = useRef<AbortController | null>(null);
 	const [reportData, setReportData] = useState<{
 		url: string;
 		mode?: ScanMode;
@@ -32,12 +51,24 @@ export default function Home() {
 	const [openPanel, setOpenPanel] = useState<string | null>(null);
 	const [showPageList, setShowPageList] = useState(false);
 
-	// Scanning animation logic
+	// Site-mode page count comes from the chosen preset, or the custom field
+	// (clamped to 1–1000).
+	const resolvedMaxPages =
+		scanDepth === "custom" ?
+			Math.max(
+				MIN_CUSTOM_PAGES,
+				Math.min(MAX_CUSTOM_PAGES, Math.round(Number(customPages)) || MIN_CUSTOM_PAGES),
+			)
+		:	(SCAN_DEPTHS.find((d) => d.id === scanDepth)?.pages ?? 15);
+
+	// Fake step-by-step animation for single-page scans (no real per-page
+	// progress to report there, so this just gives a sense of motion). Site
+	// scans get a real progress bar driven by the server instead.
 	useEffect(() => {
 		let timeout: NodeJS.Timeout;
-		if (viewState === "scanning") {
-			const stepCount = scanMode === "site" ? 8 : 7;
-			const tickDelay = scanMode === "site" ? 900 : 480;
+		if (viewState === "scanning" && scanMode === "single") {
+			const stepCount = 7;
+			const tickDelay = 480;
 			const tick = (step: number) => {
 				setActiveStep(step);
 				if (step < stepCount - 1) {
@@ -52,41 +83,126 @@ export default function Home() {
 	const runScan = async (e: React.FormEvent) => {
 		e.preventDefault();
 		setErrorMsg("");
+		setStoppedNote("");
 		if (!url) return;
 
 		const formattedUrl = /^https?:\/\//i.test(url) ? url : `https://${url}`;
-		const parsedMaxPages = Number(maxPages);
-		const normalizedMaxPages =
-			Number.isFinite(parsedMaxPages) ?
-				Math.min(1000, Math.max(1, Math.round(parsedMaxPages)))
-			:	30;
 		setUrl(formattedUrl);
-		setMaxPages(String(normalizedMaxPages));
 		setViewState("scanning");
+		setActiveStep(0);
+		setStatusMessage("");
+		setCrawlProgress(scanMode === "site" ? { scanned: 0, total: resolvedMaxPages } : null);
+
+		const controller = new AbortController();
+		abortRef.current = controller;
 
 		try {
-			const res = await fetch("/api/analyze", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					url: formattedUrl,
-					mode: scanMode,
-					maxPages: normalizedMaxPages,
-				}),
-			});
-			const data = await res.json();
+			if (scanMode === "site") {
+				await runSiteScanStream(formattedUrl, controller.signal);
+			} else {
+				const res = await fetch("/api/analyze", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ url: formattedUrl, mode: scanMode }),
+					signal: controller.signal,
+				});
+				const data = await res.json();
 
-			if (!res.ok)
-				throw new Error(
-					data.error || "Something went wrong running that scan.",
-				);
+				if (!res.ok)
+					throw new Error(
+						data.error || "Something went wrong running that scan.",
+					);
 
-			setReportData(data);
-			setTimeout(() => setViewState("report"), 350);
+				setReportData(data);
+				setTimeout(() => setViewState("report"), 350);
+			}
 		} catch (err: any) {
-			setErrorMsg(err.message);
-			setViewState("hero");
+			if (err?.name === "AbortError") {
+				setStoppedNote("Scan stopped.");
+				setViewState("hero");
+			} else {
+				setErrorMsg(err.message);
+				setViewState("hero");
+			}
+		} finally {
+			abortRef.current = null;
 		}
+	};
+
+	// Reads the /api/analyze NDJSON stream for a site (multi-page) scan, updating
+	// live progress as each page comes in and resolving once the final report
+	// ("done") line arrives.
+	const runSiteScanStream = async (formattedUrl: string, signal: AbortSignal) => {
+		const res = await fetch("/api/analyze", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ url: formattedUrl, mode: "site", maxPages: resolvedMaxPages }),
+			signal,
+		});
+
+		if (!res.ok || !res.body) {
+			let message = "Something went wrong running that scan.";
+			try {
+				const errJson = await res.json();
+				message = errJson.error || message;
+			} catch {
+				// response wasn't JSON (or already consumed) — fall back to the default message
+			}
+			throw new Error(message);
+		}
+
+		const reader = res.body.getReader();
+		const decoder = new TextDecoder();
+		let buffer = "";
+
+		while (true) {
+			const { value, done } = await reader.read();
+			if (done) break;
+			buffer += decoder.decode(value, { stream: true });
+
+			let newlineIdx;
+			while ((newlineIdx = buffer.indexOf("\n")) >= 0) {
+				const line = buffer.slice(0, newlineIdx).trim();
+				buffer = buffer.slice(newlineIdx + 1);
+				if (!line) continue;
+
+				let evt: any;
+				try {
+					evt = JSON.parse(line);
+				} catch {
+					continue;
+				}
+
+				if (evt.type === "status") {
+					setStatusMessage(evt.message ?? "");
+				} else if (evt.type === "progress") {
+					setCrawlProgress({
+						scanned: evt.scanned,
+						total: evt.total,
+						currentUrl: evt.currentUrl,
+					});
+				} else if (evt.type === "done") {
+					setCrawlProgress((p) => (p ? { ...p, scanned: p.total } : p));
+					setReportData(evt.data);
+					setTimeout(() => setViewState("report"), 350);
+					return;
+				} else if (evt.type === "aborted") {
+					setStoppedNote(
+						evt.pagesScanned ?
+							`Scan stopped — ${evt.pagesScanned} page${evt.pagesScanned === 1 ? "" : "s"} were analyzed before you stopped it.`
+						:	"Scan stopped.",
+					);
+					setViewState("hero");
+					return;
+				} else if (evt.type === "error") {
+					throw new Error(evt.message || "Something went wrong running that scan.");
+				}
+			}
+		}
+	};
+
+	const stopScan = () => {
+		abortRef.current?.abort();
 	};
 
 	const applyFix = (catKey: string, issueIdx: number) => {
@@ -163,7 +279,11 @@ export default function Home() {
 						Paste a URL. We check your SEO, speed, accessibility, and conversion
 						paths — then show you exactly what to fix.
 					</p>
-					<div className="mode-toggle" role="radiogroup" aria-label="Scan mode">
+					<div
+						className="mode-toggle"
+						role="radiogroup"
+						aria-label="Scan mode"
+					>
 						<button
 							type="button"
 							role="radio"
@@ -183,6 +303,46 @@ export default function Home() {
 							Whole site
 						</button>
 					</div>
+					{scanMode === "site" && (
+						<div className="depth-select" role="radiogroup" aria-label="Scan depth">
+							{SCAN_DEPTHS.map((d) => (
+								<button
+									key={d.id}
+									type="button"
+									role="radio"
+									aria-checked={scanDepth === d.id}
+									className={`depth-btn ${scanDepth === d.id ? "active" : ""}`}
+									onClick={() => setScanDepth(d.id)}
+								>
+									<span className="depth-label">{d.label}</span>
+									<span className="depth-hint">
+										{d.id === "custom" ? "your choice" : `${d.pages} pages`}
+									</span>
+								</button>
+							))}
+						</div>
+					)}
+					{scanMode === "site" && scanDepth === "custom" && (
+						<div className="custom-pages">
+							<label htmlFor="customPages">Pages to scan</label>
+							<input
+								id="customPages"
+								type="number"
+								min={MIN_CUSTOM_PAGES}
+								max={MAX_CUSTOM_PAGES}
+								value={customPages}
+								onChange={(e) => setCustomPages(e.target.value)}
+								onBlur={() => {
+									const n = Math.max(
+										MIN_CUSTOM_PAGES,
+										Math.min(MAX_CUSTOM_PAGES, Math.round(Number(customPages)) || MIN_CUSTOM_PAGES),
+									);
+									setCustomPages(String(n));
+								}}
+								aria-label="Custom number of pages (1-1000)"
+							/>
+						</div>
+					)}
 					<form className="intake" onSubmit={runScan}>
 						<input
 							type="text"
@@ -192,31 +352,26 @@ export default function Home() {
 							required
 							aria-label="Website URL"
 						/>
-						{scanMode === "site" && (
-							<input
-								type="number"
-								min="1"
-								max="1000"
-								step="1"
-								value={maxPages}
-								onChange={(e) => setMaxPages(e.target.value)}
-								placeholder="30"
-								aria-label="Maximum pages to scan"
-							/>
-						)}
 						<button type="submit">
-							{scanMode === "site" ? "Crawl site →" : "Run diagnostic →"}
+							{scanMode === "site" ?
+								"Crawl site →"
+							:	"Run diagnostic →"}
 						</button>
 					</form>
 					{scanMode === "site" && (
 						<p className="demo-note">
-							We&apos;ll follow internal links (and your sitemap, if there is
-							one) to scan up to {maxPages || "30"} pages.
+							We'll follow internal links (and your sitemap, if there is one)
+							to scan up to {resolvedMaxPages} page{resolvedMaxPages === 1 ? "" : "s"}.
 						</p>
 					)}
 					{errorMsg && (
 						<p className="demo-note error-note show" role="alert">
 							{errorMsg}
+						</p>
+					)}
+					{stoppedNote && (
+						<p className="demo-note stopped-note show" role="status">
+							{stoppedNote}
 						</p>
 					)}
 				</section>
@@ -226,12 +381,46 @@ export default function Home() {
 				<section className="scan active">
 					<p className="scan-url">{url}</p>
 					<p className="scan-title">
-						{scanMode === "site" ? "Crawling the site…" : "Running diagnostic…"}
+						{scanMode === "site" ?
+							"Crawling the site…"
+						:	"Running diagnostic…"}
 					</p>
-					<ul className="steps">
-						{(scanMode === "site" ?
-							[
-								"Discovering pages (sitemap & links)",
+
+					{scanMode === "site" && crawlProgress && (
+						<div className="crawl-progress">
+							<div className="crawl-progress-head">
+								<span>
+									Scanned {crawlProgress.scanned} of {crawlProgress.total} page
+									{crawlProgress.total === 1 ? "" : "s"}
+								</span>
+								<span>
+									{Math.min(
+										100,
+										Math.round((crawlProgress.scanned / crawlProgress.total) * 100),
+									)}
+									%
+								</span>
+							</div>
+							<div className="progress-bar">
+								<div
+									className="progress-bar-fill"
+									style={{
+										width: `${Math.min(
+											100,
+											Math.round((crawlProgress.scanned / crawlProgress.total) * 100),
+										)}%`,
+									}}
+								/>
+							</div>
+							<p className="crawl-current-url">
+								{crawlProgress.currentUrl || statusMessage || "Getting started…"}
+							</p>
+						</div>
+					)}
+
+					{scanMode === "single" && (
+						<ul className="steps">
+							{[
 								"Reading page structure",
 								"Checking meta tags & schema",
 								"Analyzing robots.txt & sitemaps",
@@ -239,29 +428,24 @@ export default function Home() {
 								"Measuring load & paint timing",
 								"Auditing color contrast & ARIA",
 								"Compiling full report",
-							]
-						:	[
-								"Reading page structure",
-								"Checking meta tags & schema",
-								"Analyzing robots.txt & sitemaps",
-								"Scanning security headers",
-								"Measuring load & paint timing",
-								"Auditing color contrast & ARIA",
-								"Compiling full report",
-							]
-						).map((stepText, i) => (
-							<li
-								key={i}
-								className={`${
-									activeStep === i ? "active"
-									: activeStep > i ? "done"
-									: ""
-								}`}
-							>
-								<span className="dot"></span> {stepText}
-							</li>
-						))}
-					</ul>
+							].map((stepText, i) => (
+								<li
+									key={i}
+									className={`${
+										activeStep === i ? "active"
+										: activeStep > i ? "done"
+										: ""
+									}`}
+								>
+									<span className="dot"></span> {stepText}
+								</li>
+							))}
+						</ul>
+					)}
+
+					<button type="button" className="stop-btn" onClick={stopScan}>
+						Stop scan
+					</button>
 				</section>
 			)}
 
@@ -272,9 +456,7 @@ export default function Home() {
 						<p className="demo-note">
 							Scanned {reportData.pagesScanned.length} page
 							{reportData.pagesScanned.length === 1 ? "" : "s"}
-							{reportData.crawlTruncated ?
-								" (more pages were found but not scanned — increase the page limit to cover the rest)"
-							:	""}
+							{reportData.crawlTruncated ? " (more pages were found but not scanned — increase the page limit to cover the rest)" : ""}
 							.{" "}
 							<button
 								type="button"
@@ -393,6 +575,9 @@ export default function Home() {
 							onClick={() => {
 								setViewState("hero");
 								setUrl("");
+								setErrorMsg("");
+								setStoppedNote("");
+								setCrawlProgress(null);
 							}}
 						>
 							Run another scan

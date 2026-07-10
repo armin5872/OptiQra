@@ -6,10 +6,20 @@ import * as cheerio from "cheerio";
 import { extractLinks } from "@/lib/link-analyzer";
 
 const CRAWL_USER_AGENT = "SiteVitalsBot/1.0 (+https://example.com/bot)";
-export const DEFAULT_MAX_PAGES = 30;
+export const DEFAULT_MAX_PAGES = 15;
 export const HARD_MAX_PAGES = 1000;
 const DEFAULT_MAX_DEPTH = 3;
 const FETCH_TIMEOUT_MS = 9000;
+
+/** Preset scan depths surfaced in the UI. "custom" lets the user pick any
+ *  value between 1 and HARD_MAX_PAGES. */
+export const SCAN_PRESETS = {
+	quick: 15,
+	standard: 50,
+	full: 100,
+	crawl: 250,
+} as const;
+export type ScanPreset = keyof typeof SCAN_PRESETS | "custom";
 const NON_HTML_EXTENSIONS =
 	/\.(pdf|jpe?g|png|gif|svg|webp|ico|bmp|css|js|mjs|json|xml|zip|rar|7z|gz|mp4|mp3|wav|avi|mov|wmv|doc|docx|xls|xlsx|ppt|pptx|woff2?|ttf|eot|otf|csv|rss|atom)(\?.*)?$/i;
 
@@ -24,6 +34,12 @@ export interface CrawledPage {
 export interface CrawlOptions {
 	maxPages?: number;
 	maxDepth?: number;
+	/** Aborting this signal stops the crawl as soon as the in-flight fetch settles. */
+	signal?: AbortSignal;
+	/** Called right after each page is fetched (in crawl order), before the next
+	 *  fetch starts. Lets the caller run per-page work (e.g. audits) and report
+	 *  progress without waiting for the whole crawl to finish. */
+	onPage?: (page: CrawledPage, pagesSoFar: number) => void | Promise<void>;
 }
 
 export interface CrawlSummary {
@@ -32,6 +48,7 @@ export interface CrawlSummary {
 	skipped: { url: string; reason: string }[];
 	source: "sitemap" | "links" | "mixed";
 	truncated: boolean;
+	aborted: boolean;
 }
 
 function normalizeForDedup(rawUrl: string): string {
@@ -68,9 +85,18 @@ function isCrawlableUrl(candidate: string, origin: string): boolean {
 	}
 }
 
-async function fetchWithTimeout(url: string, timeoutMs = FETCH_TIMEOUT_MS) {
+async function fetchWithTimeout(
+	url: string,
+	timeoutMs = FETCH_TIMEOUT_MS,
+	outerSignal?: AbortSignal,
+) {
 	const controller = new AbortController();
 	const timer = setTimeout(() => controller.abort(), timeoutMs);
+	const onOuterAbort = () => controller.abort();
+	if (outerSignal) {
+		if (outerSignal.aborted) controller.abort();
+		else outerSignal.addEventListener("abort", onOuterAbort);
+	}
 	try {
 		return await fetch(url, {
 			redirect: "follow",
@@ -80,6 +106,7 @@ async function fetchWithTimeout(url: string, timeoutMs = FETCH_TIMEOUT_MS) {
 		});
 	} finally {
 		clearTimeout(timer);
+		if (outerSignal) outerSignal.removeEventListener("abort", onOuterAbort);
 	}
 }
 
@@ -87,12 +114,18 @@ async function fetchWithTimeout(url: string, timeoutMs = FETCH_TIMEOUT_MS) {
 async function discoverUrlsFromSitemap(
 	origin: string,
 	limit: number,
+	signal?: AbortSignal,
 ): Promise<string[]> {
 	const candidatePaths = ["/sitemap.xml", "/sitemap_index.xml"];
 
 	for (const path of candidatePaths) {
+		if (signal?.aborted) return [];
 		try {
-			const res = await fetchWithTimeout(new URL(path, origin).toString());
+			const res = await fetchWithTimeout(
+				new URL(path, origin).toString(),
+				FETCH_TIMEOUT_MS,
+				signal,
+			);
 			if (!res.ok) continue;
 			const text = await res.text();
 			const trimmed = text.trim();
@@ -118,9 +151,13 @@ async function discoverUrlsFromSitemap(
 
 			const collected: string[] = [];
 			for (const childUrl of childSitemaps.slice(0, 3)) {
-				if (collected.length >= limit) break;
+				if (collected.length >= limit || signal?.aborted) break;
 				try {
-					const childRes = await fetchWithTimeout(childUrl);
+					const childRes = await fetchWithTimeout(
+						childUrl,
+						FETCH_TIMEOUT_MS,
+						signal,
+					);
 					if (!childRes.ok) continue;
 					const childText = await childRes.text();
 					const $$ = cheerio.load(childText, { xmlMode: true });
@@ -132,9 +169,7 @@ async function discoverUrlsFromSitemap(
 				}
 			}
 			if (collected.length > 0) {
-				return collected
-					.filter((u) => isCrawlableUrl(u, origin))
-					.slice(0, limit);
+				return collected.filter((u) => isCrawlableUrl(u, origin)).slice(0, limit);
 			}
 		} catch {
 			// try next candidate path
@@ -159,13 +194,14 @@ export async function crawlSite(
 		Math.min(options.maxPages ?? DEFAULT_MAX_PAGES, HARD_MAX_PAGES),
 	);
 	const maxDepth = options.maxDepth ?? DEFAULT_MAX_DEPTH;
+	const signal = options.signal;
 	const origin = new URL(startUrl).origin;
 
 	const pages: CrawledPage[] = [];
 	const skipped: { url: string; reason: string }[] = [];
 	const seen = new Set<string>([normalizeForDedup(startUrl)]);
 
-	const sitemapUrls = await discoverUrlsFromSitemap(origin, maxPages * 2);
+	const sitemapUrls = await discoverUrlsFromSitemap(origin, maxPages * 2, signal);
 	const usedSitemap = sitemapUrls.length > 0;
 
 	const queue: { url: string; depth: number }[] = [{ url: startUrl, depth: 0 }];
@@ -178,12 +214,18 @@ export async function crawlSite(
 	}
 
 	let discoveredExtraLinks = false;
+	let aborted = false;
 
 	while (queue.length > 0 && pages.length < maxPages) {
+		if (signal?.aborted) {
+			aborted = true;
+			break;
+		}
+
 		const next = queue.shift()!;
 		try {
 			const started = Date.now();
-			const res = await fetchWithTimeout(next.url);
+			const res = await fetchWithTimeout(next.url, FETCH_TIMEOUT_MS, signal);
 			const elapsedMs = Date.now() - started;
 			const contentType = res.headers.get("content-type") || "";
 
@@ -197,13 +239,18 @@ export async function crawlSite(
 			}
 
 			const html = await res.text();
-			pages.push({
+			const page: CrawledPage = {
 				url: res.url || next.url,
 				html,
 				response: res,
 				elapsedMs,
 				depth: next.depth,
-			});
+			};
+			pages.push(page);
+
+			if (options.onPage) {
+				await options.onPage(page, pages.length);
+			}
 
 			if (next.depth < maxDepth && pages.length < maxPages) {
 				const links = extractLinks(html, next.url);
@@ -218,12 +265,13 @@ export async function crawlSite(
 				}
 			}
 		} catch (err: any) {
+			if (signal?.aborted) {
+				aborted = true;
+				break;
+			}
 			skipped.push({
 				url: next.url,
-				reason:
-					err?.name === "AbortError" ?
-						"Timed out"
-					:	(err?.message ?? "Fetch failed"),
+				reason: err?.name === "AbortError" ? "Timed out" : (err?.message ?? "Fetch failed"),
 			});
 		}
 	}
@@ -232,11 +280,8 @@ export async function crawlSite(
 		startUrl,
 		pages,
 		skipped,
-		source:
-			usedSitemap ?
-				discoveredExtraLinks ? "mixed"
-				:	"sitemap"
-			:	"links",
-		truncated: queue.length > 0,
+		source: usedSitemap ? (discoveredExtraLinks ? "mixed" : "sitemap") : "links",
+		truncated: !aborted && queue.length > 0,
+		aborted,
 	};
 }

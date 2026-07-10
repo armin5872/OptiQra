@@ -11,15 +11,15 @@ import { analyzeLinks } from "@/lib/link-analyzer";
 import { analyzeImages } from "@/lib/image-analyzer";
 import { analyzeSecurityHeaders } from "@/lib/securityHeadersAudit";
 import { runPageSpeed } from "@/lib/pagespeed";
-import {
-	crawlSite,
-	DEFAULT_MAX_PAGES,
-	HARD_MAX_PAGES,
-} from "@/lib/siteCrawler";
+import { crawlSite, DEFAULT_MAX_PAGES, HARD_MAX_PAGES } from "@/lib/siteCrawler";
 import { CheerioAPI, load } from "cheerio";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// Site scans can now go up to 1000 pages, which won't finish in the default 60s.
+// 300s is the max allowed on Vercel Pro; on Hobby this is capped back down to 60s
+// by the platform regardless of what's set here. Long custom scans are still
+// "best effort" within whatever the hosting plan allows.
+export const maxDuration = 300;
 
 type Category = {
 	label: string;
@@ -46,14 +46,7 @@ function aggregateCategory(
 	perPage: PageCategoryResult[],
 ): Category {
 	if (perPage.length === 0) {
-		return {
-			label,
-			score: 50,
-			issues: [],
-			passed: [],
-			source,
-			pagesAnalyzed: 0,
-		};
+		return { label, score: 50, issues: [], passed: [], source, pagesAnalyzed: 0 };
 	}
 
 	const avgScore = Math.round(
@@ -149,33 +142,45 @@ export async function analyzeLinksRequest(body: LinksRequestBody) {
 	});
 }
 
+function throwIfAborted(signal?: AbortSignal) {
+	if (signal?.aborted) {
+		throw new DOMException("Scan stopped by user.", "AbortError");
+	}
+}
+
 export async function POST(req: NextRequest) {
+	let url: unknown, mode: unknown, maxPages: unknown;
 	try {
-		const { url, mode, maxPages } = await req.json();
+		({ url, mode, maxPages } = await req.json());
+	} catch {
+		return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+	}
 
-		if (!url || typeof url !== "string") {
-			return NextResponse.json({ error: "URL is required" }, { status: 400 });
-		}
+	if (!url || typeof url !== "string") {
+		return NextResponse.json({ error: "URL is required" }, { status: 400 });
+	}
 
-		// Validate URL format
-		let targetUrl: string;
-		try {
-			targetUrl = new URL(url).toString();
-		} catch {
-			return NextResponse.json(
-				{ error: "Invalid URL format" },
-				{ status: 400 },
-			);
-		}
+	// Validate URL format
+	let targetUrl: string;
+	try {
+		targetUrl = new URL(url).toString();
+	} catch {
+		return NextResponse.json({ error: "Invalid URL format" }, { status: 400 });
+	}
 
-		if (mode === "site") {
-			const normalizedMaxPages =
-				typeof maxPages === "number" && Number.isFinite(maxPages) ?
-					Math.min(1000, Math.max(1, Math.round(maxPages)))
-				:	undefined;
-			return runSiteCrawl(targetUrl, normalizedMaxPages);
-		}
+	if (mode === "site") {
+		return streamSiteCrawl(
+			targetUrl,
+			typeof maxPages === "number" ? maxPages : undefined,
+			req.signal,
+		);
+	}
 
+	return runSinglePageScan(targetUrl, req.signal);
+}
+
+async function runSinglePageScan(targetUrl: string, signal: AbortSignal) {
+	try {
 		const categories: Record<string, Category> = {};
 		let lighthouseAvailable = false;
 
@@ -186,17 +191,22 @@ export async function POST(req: NextRequest) {
 		let elapsedMs: number;
 
 		try {
-			const fetchResult = await fetchPage(targetUrl);
+			const fetchResult = await fetchPage(targetUrl, { signal });
 			$ = load(fetchResult.html);
 			html = fetchResult.html;
 			response = fetchResult.response;
 			elapsedMs = fetchResult.elapsedMs;
 		} catch (error: any) {
+			if (error?.name === "AbortError") {
+				return NextResponse.json({ error: "Scan stopped by user." }, { status: 499 });
+			}
 			return NextResponse.json(
 				{ error: `Failed to fetch page: ${error.message}` },
 				{ status: 400 },
 			);
 		}
+
+		throwIfAborted(signal);
 
 		// 2. Analyze Security Headers
 		try {
@@ -313,6 +323,8 @@ export async function POST(req: NextRequest) {
 			};
 		}
 
+		throwIfAborted(signal);
+
 		// 7. Try to run PageSpeed Insights (optional, requires API key)
 		try {
 			const psiResult = await runPageSpeed(targetUrl);
@@ -367,6 +379,9 @@ export async function POST(req: NextRequest) {
 			timestamp: new Date().toISOString(),
 		});
 	} catch (error: any) {
+		if (error?.name === "AbortError") {
+			return NextResponse.json({ error: "Scan stopped by user." }, { status: 499 });
+		}
 		console.error("Analyze endpoint error:", error);
 		return NextResponse.json(
 			{ error: error.message || "Internal server error" },
@@ -375,180 +390,262 @@ export async function POST(req: NextRequest) {
 	}
 }
 
-async function runSiteCrawl(targetUrl: string, requestedMaxPages?: number) {
+function ndjson(obj: unknown): Uint8Array {
+	return new TextEncoder().encode(JSON.stringify(obj) + "\n");
+}
+
+/** Streams a whole-site scan as newline-delimited JSON so the client can render
+ *  a live progress bar and offer a "stop scan" control instead of waiting on a
+ *  single request/response round trip. Each line is one JSON object:
+ *   - {type:"status", message}                          general phase updates
+ *   - {type:"progress", scanned, total, currentUrl}      after each page is crawled + audited
+ *   - {type:"done", data}                                final report, same shape the old JSON endpoint returned
+ *   - {type:"aborted", pagesScanned}                     user hit "stop" before the crawl finished
+ *   - {type:"error", message}                            unrecoverable failure
+ */
+function streamSiteCrawl(
+	targetUrl: string,
+	requestedMaxPages: number | undefined,
+	signal: AbortSignal,
+) {
 	const maxPages = Math.max(
 		1,
 		Math.min(requestedMaxPages ?? DEFAULT_MAX_PAGES, HARD_MAX_PAGES),
 	);
 
-	const crawl = await crawlSite(targetUrl, { maxPages });
-
-	if (crawl.pages.length === 0) {
-		return NextResponse.json(
-			{
-				error:
-					"Couldn't reach any pages on that site. Check the URL and make sure the site is publicly accessible.",
-			},
-			{ status: 400 },
-		);
-	}
-
-	const seoPerPage: PageCategoryResult[] = [];
-	const speedPerPage: PageCategoryResult[] = [];
-	const a11yPerPage: PageCategoryResult[] = [];
-	const convPerPage: PageCategoryResult[] = [];
-
-	for (let i = 0; i < crawl.pages.length; i++) {
-		const page = crawl.pages[i];
-		const $ = load(page.html);
-
-		try {
-			const result = await analyzeSEO($, page.html, page.url, {
-				includeCrawlFiles: i === 0, // robots.txt / sitemap only need checking once per site
-			});
-			const score =
-				100 - result.issues.reduce((sum, iss) => sum + iss.weight, 0);
-			seoPerPage.push({
-				url: page.url,
-				score: Math.max(20, Math.min(100, score)),
-				issues: result.issues,
-				passed: result.passed,
-			});
-		} catch (error) {
-			console.warn(`SEO audit failed for ${page.url}:`, error);
-		}
-
-		try {
-			const result = analyzeSpeed($, page.html, page.response, page.elapsedMs);
-			const score =
-				100 - result.issues.reduce((sum, iss) => sum + iss.weight, 0);
-			speedPerPage.push({
-				url: page.url,
-				score: Math.max(20, Math.min(100, score)),
-				issues: result.issues,
-				passed: result.passed,
-			});
-		} catch (error) {
-			console.warn(`Speed audit failed for ${page.url}:`, error);
-		}
-
-		try {
-			const result = analyzeA11y($);
-			const score =
-				100 - result.issues.reduce((sum, iss) => sum + iss.weight, 0);
-			a11yPerPage.push({
-				url: page.url,
-				score: Math.max(20, Math.min(100, score)),
-				issues: result.issues,
-				passed: result.passed,
-			});
-		} catch (error) {
-			console.warn(`Accessibility audit failed for ${page.url}:`, error);
-		}
-
-		try {
-			const result = analyzeConversions($, page.html);
-			const score =
-				100 - result.issues.reduce((sum, iss) => sum + iss.weight, 0);
-			convPerPage.push({
-				url: page.url,
-				score: Math.max(20, Math.min(100, score)),
-				issues: result.issues,
-				passed: result.passed,
-			});
-		} catch (error) {
-			console.warn(`Conversions audit failed for ${page.url}:`, error);
-		}
-	}
-
-	const categories: Record<string, Category> = {
-		seo: aggregateCategory("SEO", "html-audit", seoPerPage),
-		speed: aggregateCategory("Performance", "html-audit", speedPerPage),
-		a11y: aggregateCategory("Accessibility", "html-audit", a11yPerPage),
-		conversions: aggregateCategory("Conversions", "html-audit", convPerPage),
-	};
-
-	// Security headers are effectively a server/site-wide config, so check the
-	// homepage only rather than once per crawled page.
-	try {
-		const securityResult = await analyzeSecurityHeaders(targetUrl);
-		const secScore =
-			100 - securityResult.issues.reduce((sum, i) => sum + i.weight, 0);
-		categories["security"] = {
-			label: "Security Headers",
-			score: Math.max(20, Math.min(100, secScore)),
-			issues: securityResult.issues,
-			passed: securityResult.passed,
-			source: "security-headers-audit",
-		};
-	} catch (error) {
-		console.warn("Security headers audit failed:", error);
-		categories["security"] = {
-			label: "Security Headers",
-			score: 50,
-			issues: [],
-			passed: [],
-			source: "security-headers-audit",
-		};
-	}
-
-	let lighthouseAvailable = false;
-	try {
-		const psiResult = await runPageSpeed(targetUrl);
-		if (psiResult.speed) {
-			categories["psi-speed"] = {
-				label: "PageSpeed Insights - Performance (homepage)",
-				score: psiResult.speed.score || 50,
-				issues: psiResult.speed.issues || [],
-				passed: psiResult.speed.passed || [],
-				source: "pagespeed-insights",
+	const stream = new ReadableStream<Uint8Array>({
+		async start(controller) {
+			let closed = false;
+			const enqueue = (obj: unknown) => {
+				if (closed) return;
+				try {
+					controller.enqueue(ndjson(obj));
+				} catch {
+					// stream already closed (client disconnected) — safe to ignore
+				}
 			};
-		}
-		if (psiResult.a11y) {
-			categories["psi-a11y"] = {
-				label: "PageSpeed Insights - Accessibility (homepage)",
-				score: psiResult.a11y.score || 50,
-				issues: psiResult.a11y.issues || [],
-				passed: psiResult.a11y.passed || [],
-				source: "pagespeed-insights",
+			const close = () => {
+				if (closed) return;
+				closed = true;
+				try {
+					controller.close();
+				} catch {
+					// already closed
+				}
 			};
-		}
-		if (psiResult.seo) {
-			categories["psi-seo"] = {
-				label: "PageSpeed Insights - SEO (homepage)",
-				score: psiResult.seo.score || 50,
-				issues: psiResult.seo.issues || [],
-				passed: psiResult.seo.passed || [],
-				source: "pagespeed-insights",
-			};
-		}
-		if (psiResult.bestPractices) {
-			categories["psi-bp"] = {
-				label: "PageSpeed Insights - Best Practices (homepage)",
-				score: psiResult.bestPractices.score || 50,
-				issues: psiResult.bestPractices.issues || [],
-				passed: psiResult.bestPractices.passed || [],
-				source: "pagespeed-insights",
-			};
-		}
-		lighthouseAvailable = true;
-	} catch (error) {
-		console.warn(
-			"PageSpeed Insights audit skipped (API key not configured):",
-			error,
-		);
-	}
 
-	return NextResponse.json({
-		url: targetUrl,
-		mode: "site",
-		categories,
-		lighthouseAvailable,
-		pagesScanned: crawl.pages.map((p) => p.url),
-		pagesSkipped: crawl.skipped,
-		crawlSource: crawl.source,
-		crawlTruncated: crawl.truncated,
-		maxPages,
-		timestamp: new Date().toISOString(),
+			try {
+				enqueue({ type: "status", message: `Discovering pages (up to ${maxPages})...` });
+
+				const seoPerPage: PageCategoryResult[] = [];
+				const speedPerPage: PageCategoryResult[] = [];
+				const a11yPerPage: PageCategoryResult[] = [];
+				const convPerPage: PageCategoryResult[] = [];
+
+				const crawl = await crawlSite(targetUrl, {
+					maxPages,
+					signal,
+					onPage: async (page, pagesSoFar) => {
+						const $ = load(page.html);
+
+						try {
+							const result = await analyzeSEO($, page.html, page.url, {
+								includeCrawlFiles: pagesSoFar === 1, // robots.txt / sitemap only need checking once per site
+							});
+							const score = 100 - result.issues.reduce((sum, iss) => sum + iss.weight, 0);
+							seoPerPage.push({
+								url: page.url,
+								score: Math.max(20, Math.min(100, score)),
+								issues: result.issues,
+								passed: result.passed,
+							});
+						} catch (error) {
+							console.warn(`SEO audit failed for ${page.url}:`, error);
+						}
+
+						try {
+							const result = analyzeSpeed($, page.html, page.response, page.elapsedMs);
+							const score = 100 - result.issues.reduce((sum, iss) => sum + iss.weight, 0);
+							speedPerPage.push({
+								url: page.url,
+								score: Math.max(20, Math.min(100, score)),
+								issues: result.issues,
+								passed: result.passed,
+							});
+						} catch (error) {
+							console.warn(`Speed audit failed for ${page.url}:`, error);
+						}
+
+						try {
+							const result = analyzeA11y($);
+							const score = 100 - result.issues.reduce((sum, iss) => sum + iss.weight, 0);
+							a11yPerPage.push({
+								url: page.url,
+								score: Math.max(20, Math.min(100, score)),
+								issues: result.issues,
+								passed: result.passed,
+							});
+						} catch (error) {
+							console.warn(`Accessibility audit failed for ${page.url}:`, error);
+						}
+
+						try {
+							const result = analyzeConversions($, page.html);
+							const score = 100 - result.issues.reduce((sum, iss) => sum + iss.weight, 0);
+							convPerPage.push({
+								url: page.url,
+								score: Math.max(20, Math.min(100, score)),
+								issues: result.issues,
+								passed: result.passed,
+							});
+						} catch (error) {
+							console.warn(`Conversions audit failed for ${page.url}:`, error);
+						}
+
+						enqueue({
+							type: "progress",
+							scanned: pagesSoFar,
+							total: maxPages,
+							currentUrl: page.url,
+						});
+					},
+				});
+
+				if (crawl.pages.length === 0) {
+					enqueue({
+						type: "error",
+						message: crawl.aborted
+							? "Scan stopped before any pages could be analyzed."
+							: "Couldn't reach any pages on that site. Check the URL and make sure the site is publicly accessible.",
+					});
+					return close();
+				}
+
+				if (crawl.aborted) {
+					enqueue({ type: "aborted", pagesScanned: crawl.pages.length });
+					return close();
+				}
+
+				const categories: Record<string, Category> = {
+					seo: aggregateCategory("SEO", "html-audit", seoPerPage),
+					speed: aggregateCategory("Performance", "html-audit", speedPerPage),
+					a11y: aggregateCategory("Accessibility", "html-audit", a11yPerPage),
+					conversions: aggregateCategory("Conversions", "html-audit", convPerPage),
+				};
+
+				enqueue({ type: "status", message: "Checking security headers..." });
+
+				// Security headers are effectively a server/site-wide config, so check the
+				// homepage only rather than once per crawled page.
+				try {
+					const securityResult = await analyzeSecurityHeaders(targetUrl);
+					const secScore =
+						100 - securityResult.issues.reduce((sum, i) => sum + i.weight, 0);
+					categories["security"] = {
+						label: "Security Headers",
+						score: Math.max(20, Math.min(100, secScore)),
+						issues: securityResult.issues,
+						passed: securityResult.passed,
+						source: "security-headers-audit",
+					};
+				} catch (error) {
+					console.warn("Security headers audit failed:", error);
+					categories["security"] = {
+						label: "Security Headers",
+						score: 50,
+						issues: [],
+						passed: [],
+						source: "security-headers-audit",
+					};
+				}
+
+				if (signal.aborted) {
+					enqueue({ type: "aborted", pagesScanned: crawl.pages.length });
+					return close();
+				}
+
+				enqueue({ type: "status", message: "Running Lighthouse on the homepage..." });
+
+				let lighthouseAvailable = false;
+				try {
+					const psiResult = await runPageSpeed(targetUrl);
+					if (psiResult.speed) {
+						categories["psi-speed"] = {
+							label: "PageSpeed Insights - Performance (homepage)",
+							score: psiResult.speed.score || 50,
+							issues: psiResult.speed.issues || [],
+							passed: psiResult.speed.passed || [],
+							source: "pagespeed-insights",
+						};
+					}
+					if (psiResult.a11y) {
+						categories["psi-a11y"] = {
+							label: "PageSpeed Insights - Accessibility (homepage)",
+							score: psiResult.a11y.score || 50,
+							issues: psiResult.a11y.issues || [],
+							passed: psiResult.a11y.passed || [],
+							source: "pagespeed-insights",
+						};
+					}
+					if (psiResult.seo) {
+						categories["psi-seo"] = {
+							label: "PageSpeed Insights - SEO (homepage)",
+							score: psiResult.seo.score || 50,
+							issues: psiResult.seo.issues || [],
+							passed: psiResult.seo.passed || [],
+							source: "pagespeed-insights",
+						};
+					}
+					if (psiResult.bestPractices) {
+						categories["psi-bp"] = {
+							label: "PageSpeed Insights - Best Practices (homepage)",
+							score: psiResult.bestPractices.score || 50,
+							issues: psiResult.bestPractices.issues || [],
+							passed: psiResult.bestPractices.passed || [],
+							source: "pagespeed-insights",
+						};
+					}
+					lighthouseAvailable = true;
+				} catch (error) {
+					console.warn(
+						"PageSpeed Insights audit skipped (API key not configured):",
+						error,
+					);
+				}
+
+				enqueue({
+					type: "done",
+					data: {
+						url: targetUrl,
+						mode: "site",
+						categories,
+						lighthouseAvailable,
+						pagesScanned: crawl.pages.map((p) => p.url),
+						pagesSkipped: crawl.skipped,
+						crawlSource: crawl.source,
+						crawlTruncated: crawl.truncated,
+						maxPages,
+						timestamp: new Date().toISOString(),
+					},
+				});
+				close();
+			} catch (error: any) {
+				if (error?.name === "AbortError" || signal.aborted) {
+					enqueue({ type: "aborted", pagesScanned: 0 });
+				} else {
+					console.error("Site crawl stream error:", error);
+					enqueue({ type: "error", message: error?.message || "Internal server error" });
+				}
+				close();
+			}
+		},
+	});
+
+	return new Response(stream, {
+		headers: {
+			"Content-Type": "application/x-ndjson; charset=utf-8",
+			"Cache-Control": "no-cache, no-transform",
+			"X-Content-Type-Options": "nosniff",
+		},
 	});
 }

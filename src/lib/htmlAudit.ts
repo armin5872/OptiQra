@@ -26,13 +26,14 @@ const TRUST_KEYWORDS = [
 	"star",
 ];
 
-export async function fetchPage(targetUrl: string) {
+export async function fetchPage(targetUrl: string, options?: { signal?: AbortSignal }) {
 	const started = Date.now();
 	// Next.js specific: Cache this raw HTML fetch for 1 hour to prevent redundant external loads
 	const response = await fetch(targetUrl, {
 		redirect: "follow",
 		headers: { "User-Agent": "SiteVitalsBot/1.0 (+https://example.com/bot)" },
 		next: { revalidate: 3600 },
+		signal: options?.signal,
 	});
 	const elapsedMs = Date.now() - started;
 	const html = await response.text();
