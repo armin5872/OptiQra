@@ -17,6 +17,7 @@ export default function Home() {
 	const [viewState, setViewState] = useState<ScanState>("hero");
 	const [url, setUrl] = useState("");
 	const [scanMode, setScanMode] = useState<ScanMode>("single");
+	const [maxPages, setMaxPages] = useState("30");
 	const [errorMsg, setErrorMsg] = useState("");
 	const [activeStep, setActiveStep] = useState(0);
 	const [reportData, setReportData] = useState<{
@@ -54,14 +55,24 @@ export default function Home() {
 		if (!url) return;
 
 		const formattedUrl = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+		const parsedMaxPages = Number(maxPages);
+		const normalizedMaxPages =
+			Number.isFinite(parsedMaxPages) ?
+				Math.min(45, Math.max(1, Math.round(parsedMaxPages)))
+			:	30;
 		setUrl(formattedUrl);
+		setMaxPages(String(normalizedMaxPages));
 		setViewState("scanning");
 
 		try {
 			const res = await fetch("/api/analyze", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ url: formattedUrl, mode: scanMode }),
+				body: JSON.stringify({
+					url: formattedUrl,
+					mode: scanMode,
+					maxPages: normalizedMaxPages,
+				}),
 			});
 			const data = await res.json();
 
@@ -152,11 +163,7 @@ export default function Home() {
 						Paste a URL. We check your SEO, speed, accessibility, and conversion
 						paths — then show you exactly what to fix.
 					</p>
-					<div
-						className="mode-toggle"
-						role="radiogroup"
-						aria-label="Scan mode"
-					>
+					<div className="mode-toggle" role="radiogroup" aria-label="Scan mode">
 						<button
 							type="button"
 							role="radio"
@@ -185,16 +192,26 @@ export default function Home() {
 							required
 							aria-label="Website URL"
 						/>
+						{scanMode === "site" && (
+							<input
+								type="number"
+								min="1"
+								max="45"
+								step="1"
+								value={maxPages}
+								onChange={(e) => setMaxPages(e.target.value)}
+								placeholder="30"
+								aria-label="Maximum pages to scan"
+							/>
+						)}
 						<button type="submit">
-							{scanMode === "site" ?
-								"Crawl site →"
-							:	"Run diagnostic →"}
+							{scanMode === "site" ? "Crawl site →" : "Run diagnostic →"}
 						</button>
 					</form>
 					{scanMode === "site" && (
 						<p className="demo-note">
-							We&apos;ll follow internal links (and your sitemap, if there is one)
-							to scan up to 30 pages.
+							We&apos;ll follow internal links (and your sitemap, if there is
+							one) to scan up to {maxPages || "30"} pages.
 						</p>
 					)}
 					{errorMsg && (
@@ -209,9 +226,7 @@ export default function Home() {
 				<section className="scan active">
 					<p className="scan-url">{url}</p>
 					<p className="scan-title">
-						{scanMode === "site" ?
-							"Crawling the site…"
-						:	"Running diagnostic…"}
+						{scanMode === "site" ? "Crawling the site…" : "Running diagnostic…"}
 					</p>
 					<ul className="steps">
 						{(scanMode === "site" ?
@@ -257,7 +272,9 @@ export default function Home() {
 						<p className="demo-note">
 							Scanned {reportData.pagesScanned.length} page
 							{reportData.pagesScanned.length === 1 ? "" : "s"}
-							{reportData.crawlTruncated ? " (more pages were found but not scanned — increase the page limit to cover the rest)" : ""}
+							{reportData.crawlTruncated ?
+								" (more pages were found but not scanned — increase the page limit to cover the rest)"
+							:	""}
 							.{" "}
 							<button
 								type="button"

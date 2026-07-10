@@ -11,7 +11,11 @@ import { analyzeLinks } from "@/lib/link-analyzer";
 import { analyzeImages } from "@/lib/image-analyzer";
 import { analyzeSecurityHeaders } from "@/lib/securityHeadersAudit";
 import { runPageSpeed } from "@/lib/pagespeed";
-import { crawlSite, DEFAULT_MAX_PAGES, HARD_MAX_PAGES } from "@/lib/siteCrawler";
+import {
+	crawlSite,
+	DEFAULT_MAX_PAGES,
+	HARD_MAX_PAGES,
+} from "@/lib/siteCrawler";
 import { CheerioAPI, load } from "cheerio";
 
 export const runtime = "nodejs";
@@ -42,7 +46,14 @@ function aggregateCategory(
 	perPage: PageCategoryResult[],
 ): Category {
 	if (perPage.length === 0) {
-		return { label, score: 50, issues: [], passed: [], source, pagesAnalyzed: 0 };
+		return {
+			label,
+			score: 50,
+			issues: [],
+			passed: [],
+			source,
+			pagesAnalyzed: 0,
+		};
 	}
 
 	const avgScore = Math.round(
@@ -158,7 +169,11 @@ export async function POST(req: NextRequest) {
 		}
 
 		if (mode === "site") {
-			return runSiteCrawl(targetUrl, typeof maxPages === "number" ? maxPages : undefined);
+			const normalizedMaxPages =
+				typeof maxPages === "number" && Number.isFinite(maxPages) ?
+					Math.min(45, Math.max(1, Math.round(maxPages)))
+				:	undefined;
+			return runSiteCrawl(targetUrl, normalizedMaxPages);
 		}
 
 		const categories: Record<string, Category> = {};
