@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import CrawlTree from "./components/CrawlTree";
+import type { PageNode } from "./components/CrawlTree";
 
 type ScanState = "hero" | "scanning" | "report";
 type ScanMode = "single" | "site";
@@ -21,8 +23,8 @@ type CrawlProgress = { scanned: number; total: number; currentUrl?: string };
 type Category = {
 	label: string;
 	score: number;
-	issues: any[];
-	passed: any[];
+	issues: Issue[];
+	passed: Issue[];
 	source: string;
 	pagesAnalyzed?: number;
 };
@@ -49,6 +51,7 @@ export default function Home() {
 		pagesScanned?: string[];
 		pagesSkipped?: { url: string; reason: string }[];
 		crawlTruncated?: boolean;
+		pages?: PageNode[];
 	} | null>(null);
 	const [openPanel, setOpenPanel] = useState<string | null>(null);
 	const [showPageList, setShowPageList] = useState(false);
@@ -474,6 +477,15 @@ export default function Home() {
 			{viewState === "report" && reportData && (
 				<section className="report active">
 					<p className="report-url">{reportData.url}</p>
+					{reportData.mode === "site" &&
+						reportData.pages &&
+						reportData.pages.length > 1 && (
+							<CrawlTree
+								pages={reportData.pages}
+								title="Site structure & performance"
+							/>
+						)}
+
 					{reportData.mode === "site" && reportData.pagesScanned && (
 						<p className="demo-note">
 							Scanned {reportData.pagesScanned.length} page

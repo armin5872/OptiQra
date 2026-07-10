@@ -11,7 +11,11 @@ import { analyzeLinks } from "@/lib/link-analyzer";
 import { analyzeImages } from "@/lib/image-analyzer";
 import { analyzeSecurityHeaders } from "@/lib/securityHeadersAudit";
 import { runPageSpeed } from "@/lib/pagespeed";
-import { crawlSite, DEFAULT_MAX_PAGES, HARD_MAX_PAGES } from "@/lib/siteCrawler";
+import {
+	crawlSite,
+	DEFAULT_MAX_PAGES,
+	HARD_MAX_PAGES,
+} from "@/lib/siteCrawler";
 import { CheerioAPI, load } from "cheerio";
 
 export const runtime = "nodejs";
@@ -37,6 +41,17 @@ type PageCategoryResult = {
 	passed: Issue[];
 };
 
+type PageNode = {
+	url: string;
+	parentUrl?: string;
+	depth: number;
+	score: number;
+	categories: Record<
+		string,
+		{ label: string; score: number; issues: Issue[]; passed: Issue[] }
+	>;
+};
+
 /** Merges the same category (e.g. "SEO") computed across many pages into one card:
  *  score is the average across pages, issues are grouped by id with the list of
  *  pages each one showed up on, and passed checks are deduped. */
@@ -46,7 +61,14 @@ function aggregateCategory(
 	perPage: PageCategoryResult[],
 ): Category {
 	if (perPage.length === 0) {
-		return { label, score: 50, issues: [], passed: [], source, pagesAnalyzed: 0 };
+		return {
+			label,
+			score: 50,
+			issues: [],
+			passed: [],
+			source,
+			pagesAnalyzed: 0,
+		};
 	}
 
 	const avgScore = Math.round(
@@ -153,7 +175,10 @@ export async function POST(req: NextRequest) {
 	try {
 		({ url, mode, maxPages } = await req.json());
 	} catch {
-		return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+		return NextResponse.json(
+			{ error: "Invalid request body" },
+			{ status: 400 },
+		);
 	}
 
 	if (!url || typeof url !== "string") {
@@ -198,7 +223,10 @@ async function runSinglePageScan(targetUrl: string, signal: AbortSignal) {
 			elapsedMs = fetchResult.elapsedMs;
 		} catch (error: any) {
 			if (error?.name === "AbortError") {
-				return NextResponse.json({ error: "Scan stopped by user." }, { status: 499 });
+				return NextResponse.json(
+					{ error: "Scan stopped by user." },
+					{ status: 499 },
+				);
 			}
 			return NextResponse.json(
 				{ error: `Failed to fetch page: ${error.message}` },
@@ -277,7 +305,7 @@ async function runSinglePageScan(targetUrl: string, signal: AbortSignal) {
 			};
 		}
 
-		// 5. Analyze Accessibility
+		// 5. Analyze A11y
 		try {
 			const a11yResult = analyzeA11y($);
 			const a11yScore =
@@ -323,9 +351,7 @@ async function runSinglePageScan(targetUrl: string, signal: AbortSignal) {
 			};
 		}
 
-		throwIfAborted(signal);
-
-		// 7. Try to run PageSpeed Insights (optional, requires API key)
+		// 7. Run Lighthouse (PageSpeed Insights) if API key is configured
 		try {
 			const psiResult = await runPageSpeed(targetUrl);
 			if (psiResult.speed) {
@@ -334,7 +360,7 @@ async function runSinglePageScan(targetUrl: string, signal: AbortSignal) {
 					score: psiResult.speed.score || 50,
 					issues: psiResult.speed.issues || [],
 					passed: psiResult.speed.passed || [],
-					source: "pagespeed-insights",
+					source: "lighthouse",
 				};
 			}
 			if (psiResult.a11y) {
@@ -343,7 +369,7 @@ async function runSinglePageScan(targetUrl: string, signal: AbortSignal) {
 					score: psiResult.a11y.score || 50,
 					issues: psiResult.a11y.issues || [],
 					passed: psiResult.a11y.passed || [],
-					source: "pagespeed-insights",
+					source: "lighthouse",
 				};
 			}
 			if (psiResult.seo) {
@@ -352,7 +378,7 @@ async function runSinglePageScan(targetUrl: string, signal: AbortSignal) {
 					score: psiResult.seo.score || 50,
 					issues: psiResult.seo.issues || [],
 					passed: psiResult.seo.passed || [],
-					source: "pagespeed-insights",
+					source: "lighthouse",
 				};
 			}
 			if (psiResult.bestPractices) {
@@ -361,7 +387,7 @@ async function runSinglePageScan(targetUrl: string, signal: AbortSignal) {
 					score: psiResult.bestPractices.score || 50,
 					issues: psiResult.bestPractices.issues || [],
 					passed: psiResult.bestPractices.passed || [],
-					source: "pagespeed-insights",
+					source: "lighthouse",
 				};
 			}
 			lighthouseAvailable = true;
@@ -380,7 +406,10 @@ async function runSinglePageScan(targetUrl: string, signal: AbortSignal) {
 		});
 	} catch (error: any) {
 		if (error?.name === "AbortError") {
-			return NextResponse.json({ error: "Scan stopped by user." }, { status: 499 });
+			return NextResponse.json(
+				{ error: "Scan stopped by user." },
+				{ status: 499 },
+			);
 		}
 		console.error("Analyze endpoint error:", error);
 		return NextResponse.json(
@@ -435,72 +464,152 @@ function streamSiteCrawl(
 			};
 
 			try {
-				enqueue({ type: "status", message: `Discovering pages (up to ${maxPages})...` });
+				enqueue({
+					type: "status",
+					message: `Discovering pages (up to ${maxPages})...`,
+				});
 
 				const seoPerPage: PageCategoryResult[] = [];
 				const speedPerPage: PageCategoryResult[] = [];
 				const a11yPerPage: PageCategoryResult[] = [];
 				const convPerPage: PageCategoryResult[] = [];
+				const pageNodes: PageNode[] = [];
 
 				const crawl = await crawlSite(targetUrl, {
 					maxPages,
 					signal,
 					onPage: async (page, pagesSoFar) => {
 						const $ = load(page.html);
+						const pageCategories: PageNode["categories"] = {
+							seo: { label: "SEO", score: 0, issues: [], passed: [] },
+							speed: { label: "Performance", score: 0, issues: [], passed: [] },
+							a11y: {
+								label: "Accessibility",
+								score: 0,
+								issues: [],
+								passed: [],
+							},
+							conversions: {
+								label: "Conversions",
+								score: 0,
+								issues: [],
+								passed: [],
+							},
+						};
+						let pageScore = 0;
+						let categoryCount = 0;
 
 						try {
 							const result = await analyzeSEO($, page.html, page.url, {
 								includeCrawlFiles: pagesSoFar === 1, // robots.txt / sitemap only need checking once per site
 							});
-							const score = 100 - result.issues.reduce((sum, iss) => sum + iss.weight, 0);
+							const score =
+								100 - result.issues.reduce((sum, iss) => sum + iss.weight, 0);
+							const clampedScore = Math.max(20, Math.min(100, score));
 							seoPerPage.push({
 								url: page.url,
-								score: Math.max(20, Math.min(100, score)),
+								score: clampedScore,
 								issues: result.issues,
 								passed: result.passed,
 							});
+							pageCategories.seo = {
+								label: "SEO",
+								score: clampedScore,
+								issues: result.issues,
+								passed: result.passed,
+							};
+							pageScore += clampedScore;
+							categoryCount++;
 						} catch (error) {
 							console.warn(`SEO audit failed for ${page.url}:`, error);
 						}
 
 						try {
-							const result = analyzeSpeed($, page.html, page.response, page.elapsedMs);
-							const score = 100 - result.issues.reduce((sum, iss) => sum + iss.weight, 0);
+							const result = analyzeSpeed(
+								$,
+								page.html,
+								page.response,
+								page.elapsedMs,
+							);
+							const score =
+								100 - result.issues.reduce((sum, iss) => sum + iss.weight, 0);
+							const clampedScore = Math.max(20, Math.min(100, score));
 							speedPerPage.push({
 								url: page.url,
-								score: Math.max(20, Math.min(100, score)),
+								score: clampedScore,
 								issues: result.issues,
 								passed: result.passed,
 							});
+							pageCategories.speed = {
+								label: "Performance",
+								score: clampedScore,
+								issues: result.issues,
+								passed: result.passed,
+							};
+							pageScore += clampedScore;
+							categoryCount++;
 						} catch (error) {
 							console.warn(`Speed audit failed for ${page.url}:`, error);
 						}
 
 						try {
 							const result = analyzeA11y($);
-							const score = 100 - result.issues.reduce((sum, iss) => sum + iss.weight, 0);
+							const score =
+								100 - result.issues.reduce((sum, iss) => sum + iss.weight, 0);
+							const clampedScore = Math.max(20, Math.min(100, score));
 							a11yPerPage.push({
 								url: page.url,
-								score: Math.max(20, Math.min(100, score)),
+								score: clampedScore,
 								issues: result.issues,
 								passed: result.passed,
 							});
+							pageCategories.a11y = {
+								label: "Accessibility",
+								score: clampedScore,
+								issues: result.issues,
+								passed: result.passed,
+							};
+							pageScore += clampedScore;
+							categoryCount++;
 						} catch (error) {
-							console.warn(`Accessibility audit failed for ${page.url}:`, error);
+							console.warn(
+								`Accessibility audit failed for ${page.url}:`,
+								error,
+							);
 						}
 
 						try {
 							const result = analyzeConversions($, page.html);
-							const score = 100 - result.issues.reduce((sum, iss) => sum + iss.weight, 0);
+							const score =
+								100 - result.issues.reduce((sum, iss) => sum + iss.weight, 0);
+							const clampedScore = Math.max(20, Math.min(100, score));
 							convPerPage.push({
 								url: page.url,
-								score: Math.max(20, Math.min(100, score)),
+								score: clampedScore,
 								issues: result.issues,
 								passed: result.passed,
 							});
+							pageCategories.conversions = {
+								label: "Conversions",
+								score: clampedScore,
+								issues: result.issues,
+								passed: result.passed,
+							};
+							pageScore += clampedScore;
+							categoryCount++;
 						} catch (error) {
 							console.warn(`Conversions audit failed for ${page.url}:`, error);
 						}
+
+						const overallScore =
+							categoryCount > 0 ? Math.round(pageScore / categoryCount) : 50;
+						pageNodes.push({
+							url: page.url,
+							parentUrl: page.parent,
+							depth: page.depth ?? 0,
+							score: overallScore,
+							categories: pageCategories,
+						});
 
 						enqueue({
 							type: "progress",
@@ -514,9 +623,10 @@ function streamSiteCrawl(
 				if (crawl.pages.length === 0) {
 					enqueue({
 						type: "error",
-						message: crawl.aborted
-							? "Scan stopped before any pages could be analyzed."
-							: "Couldn't reach any pages on that site. Check the URL and make sure the site is publicly accessible.",
+						message:
+							crawl.aborted ?
+								"Scan stopped before any pages could be analyzed."
+							:	"Couldn't reach any pages on that site. Check the URL and make sure the site is publicly accessible.",
 					});
 					return close();
 				}
@@ -530,7 +640,11 @@ function streamSiteCrawl(
 					seo: aggregateCategory("SEO", "html-audit", seoPerPage),
 					speed: aggregateCategory("Performance", "html-audit", speedPerPage),
 					a11y: aggregateCategory("Accessibility", "html-audit", a11yPerPage),
-					conversions: aggregateCategory("Conversions", "html-audit", convPerPage),
+					conversions: aggregateCategory(
+						"Conversions",
+						"html-audit",
+						convPerPage,
+					),
 				};
 
 				enqueue({ type: "status", message: "Checking security headers..." });
@@ -564,7 +678,10 @@ function streamSiteCrawl(
 					return close();
 				}
 
-				enqueue({ type: "status", message: "Running Lighthouse on the homepage..." });
+				enqueue({
+					type: "status",
+					message: "Running Lighthouse on the homepage...",
+				});
 
 				let lighthouseAvailable = false;
 				try {
@@ -626,6 +743,7 @@ function streamSiteCrawl(
 						crawlTruncated: crawl.truncated,
 						maxPages,
 						timestamp: new Date().toISOString(),
+						pages: pageNodes,
 					},
 				});
 				close();
@@ -634,7 +752,10 @@ function streamSiteCrawl(
 					enqueue({ type: "aborted", pagesScanned: 0 });
 				} else {
 					console.error("Site crawl stream error:", error);
-					enqueue({ type: "error", message: error?.message || "Internal server error" });
+					enqueue({
+						type: "error",
+						message: error?.message || "Internal server error",
+					});
 				}
 				close();
 			}
