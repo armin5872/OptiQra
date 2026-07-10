@@ -23,6 +23,9 @@ See a live demo via the vercel deployment: https://optiqra.vercel.app
 - Audits key security headers and conversion-oriented signals
 - Optionally uses PageSpeed Insights when a PSI API key is configured
 
+## Showcase
+![showcase](showcase.gif)
+
 ## 📚 Tech stack
 
 - Next.js 16
