@@ -7,10 +7,13 @@ OptiQra is a Next.js website auditing experience for spotting SEO, performance, 
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
+
+https://optiqra.vercel.app
 ![OptiQra](optiqra.webp)
 
 ## What it does
 
+- Crawlers through the site via internal links in the sitemap and analyzes every page
 - Scans a target URL and produces a multi-category audit report
 - Checks SEO metadata, structured data, robots files, and sitemaps
 - Evaluates performance-related HTML and response characteristics
@@ -89,7 +92,7 @@ The endpoint returns a report with categories such as security, SEO, performance
 
 ## 🌱 Roadmap
 
-### v1.0
+### v0.2
 
 - [x] SEO audit
 - [x] Accessibility audit
@@ -101,26 +104,26 @@ The endpoint returns a report with categories such as security, SEO, performance
 - [x] Structured data detection
 - [x] Google Lighthouse integration
 
-### v1.1
+### v0.3
 
 - [x] Advanced link analyzer
 - [x] Advanced image analyzer
 - [x] Open Graph preview
 - [x] Twitter card preview
-- [ ] Security score improvements
+- [x] Security score improvements
 - [ ] HTTP/2 and HTTP/3 detection
 - [ ] Core Web Vitals visualization
 
-### v1.2
+### v0.5
 
-- [ ] Whole website crawler
-- [ ] Multi-page SEO reports
+- [x] Whole website crawler
+- [x] Multi-page SEO reports
 - [ ] Duplicate content detection
-- [ ] Internal linking analysis
+- [x] Internal linking analysis
 - [ ] Broken link detection
-- [ ] Crawl visualization
+- [x] Crawl visualization
 
-### v2.0
+### v1.0
 
 - [ ] AI website review
 - [ ] AI generated fixes
