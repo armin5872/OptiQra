@@ -193,8 +193,8 @@ export default function Home() {
 					</form>
 					{scanMode === "site" && (
 						<p className="demo-note">
-							We'll follow internal links (and your sitemap, if there is one)
-							to scan up to 15 pages.
+							We&apos;ll follow internal links (and your sitemap, if there is one)
+							to scan up to 30 pages.
 						</p>
 					)}
 					{errorMsg && (

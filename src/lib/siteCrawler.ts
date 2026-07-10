@@ -6,8 +6,8 @@ import * as cheerio from "cheerio";
 import { extractLinks } from "@/lib/link-analyzer";
 
 const CRAWL_USER_AGENT = "SiteVitalsBot/1.0 (+https://example.com/bot)";
-export const DEFAULT_MAX_PAGES = 15;
-export const HARD_MAX_PAGES = 30;
+export const DEFAULT_MAX_PAGES = 30;
+export const HARD_MAX_PAGES = 45;
 const DEFAULT_MAX_DEPTH = 3;
 const FETCH_TIMEOUT_MS = 9000;
 const NON_HTML_EXTENSIONS =
@@ -132,7 +132,9 @@ async function discoverUrlsFromSitemap(
 				}
 			}
 			if (collected.length > 0) {
-				return collected.filter((u) => isCrawlableUrl(u, origin)).slice(0, limit);
+				return collected
+					.filter((u) => isCrawlableUrl(u, origin))
+					.slice(0, limit);
 			}
 		} catch {
 			// try next candidate path
@@ -218,7 +220,10 @@ export async function crawlSite(
 		} catch (err: any) {
 			skipped.push({
 				url: next.url,
-				reason: err?.name === "AbortError" ? "Timed out" : (err?.message ?? "Fetch failed"),
+				reason:
+					err?.name === "AbortError" ?
+						"Timed out"
+					:	(err?.message ?? "Fetch failed"),
 			});
 		}
 	}
@@ -227,7 +232,11 @@ export async function crawlSite(
 		startUrl,
 		pages,
 		skipped,
-		source: usedSitemap ? (discoveredExtraLinks ? "mixed" : "sitemap") : "links",
+		source:
+			usedSitemap ?
+				discoveredExtraLinks ? "mixed"
+				:	"sitemap"
+			:	"links",
 		truncated: queue.length > 0,
 	};
 }
