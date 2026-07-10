@@ -605,7 +605,6 @@ function streamSiteCrawl(
 							categoryCount > 0 ? Math.round(pageScore / categoryCount) : 50;
 						pageNodes.push({
 							url: page.url,
-							parentUrl: page.parent,
 							depth: page.depth ?? 0,
 							score: overallScore,
 							categories: pageCategories,
