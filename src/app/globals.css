@@ -197,6 +197,68 @@ h1 {
 	display: block;
 }
 
+/* ---------- Mode toggle ---------- */
+.mode-toggle {
+	display: inline-flex;
+	gap: 4px;
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: 999px;
+	padding: 4px;
+	margin-bottom: 14px;
+}
+.mode-toggle button {
+	border: none;
+	background: transparent;
+	color: var(--ink-soft);
+	font-family: "IBM Plex Sans", sans-serif;
+	font-weight: 600;
+	font-size: 13.5px;
+	padding: 8px 16px;
+	border-radius: 999px;
+	cursor: pointer;
+	transition: background 0.15s ease, color 0.15s ease;
+}
+.mode-toggle button:hover {
+	color: var(--ink);
+}
+.mode-toggle button.active {
+	background: var(--accent);
+	color: #fff;
+}
+
+.link-btn {
+	border: none;
+	background: none;
+	color: var(--accent);
+	font-family: "IBM Plex Mono", monospace;
+	font-size: 12.5px;
+	text-decoration: underline;
+	cursor: pointer;
+	padding: 0;
+}
+
+.crawled-pages {
+	list-style: none;
+	margin: 8px 0 0;
+	padding: 10px 14px;
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: 8px;
+	max-height: 180px;
+	overflow-y: auto;
+	font-family: "IBM Plex Mono", monospace;
+	font-size: 12px;
+	color: var(--ink-soft);
+}
+.crawled-pages li {
+	padding: 3px 0;
+	word-break: break-all;
+}
+.crawled-pages li + li {
+	border-top: 1px dashed var(--line);
+}
+
 /* ---------- Waveform (signature element) ---------- */
 .vitals-strip {
 	margin-top: 48px;

@@ -43,7 +43,9 @@ export async function analyzeSEO(
 	$: CheerioAPI,
 	html: string,
 	targetUrl: string,
+	options?: { includeCrawlFiles?: boolean },
 ) {
+	const includeCrawlFiles = options?.includeCrawlFiles ?? true;
 	const issues: Issue[] = [];
 	const passed: Issue[] = [];
 
@@ -192,9 +194,11 @@ export async function analyzeSEO(
 		);
 	}
 
-	const crawlAudit = await analyzeCrawlFiles(targetUrl);
-	issues.push(...crawlAudit.issues);
-	passed.push(...crawlAudit.passed);
+	if (includeCrawlFiles) {
+		const crawlAudit = await analyzeCrawlFiles(targetUrl);
+		issues.push(...crawlAudit.issues);
+		passed.push(...crawlAudit.passed);
+	}
 
 	// --- Open Graph & Twitter Card ---
 	const ogTitle = $('meta[property="og:title"]').attr("content")?.trim();

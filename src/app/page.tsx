@@ -3,40 +3,50 @@
 import { useState, useEffect } from "react";
 
 type ScanState = "hero" | "scanning" | "report";
+type ScanMode = "single" | "site";
 type Category = {
 	label: string;
 	score: number;
 	issues: any[];
 	passed: any[];
 	source: string;
+	pagesAnalyzed?: number;
 };
 
 export default function Home() {
 	const [viewState, setViewState] = useState<ScanState>("hero");
 	const [url, setUrl] = useState("");
+	const [scanMode, setScanMode] = useState<ScanMode>("single");
 	const [errorMsg, setErrorMsg] = useState("");
 	const [activeStep, setActiveStep] = useState(0);
 	const [reportData, setReportData] = useState<{
 		url: string;
+		mode?: ScanMode;
 		categories: Record<string, Category>;
 		lighthouseAvailable: boolean;
+		pagesScanned?: string[];
+		pagesSkipped?: { url: string; reason: string }[];
+		crawlTruncated?: boolean;
 	} | null>(null);
 	const [openPanel, setOpenPanel] = useState<string | null>(null);
+	const [showPageList, setShowPageList] = useState(false);
 
 	// Scanning animation logic
 	useEffect(() => {
 		let timeout: NodeJS.Timeout;
 		if (viewState === "scanning") {
+			const stepCount = scanMode === "site" ? 8 : 7;
+			const tickDelay = scanMode === "site" ? 900 : 480;
 			const tick = (step: number) => {
 				setActiveStep(step);
-				if (step < 6) {
-					timeout = setTimeout(() => tick(step + 1), 480);
+				if (step < stepCount - 1) {
+					timeout = setTimeout(() => tick(step + 1), tickDelay);
 				}
 			};
 			tick(0);
 		}
 		return () => clearTimeout(timeout);
-	}, [viewState]);
+	}, [viewState, scanMode]);
 
 	const runScan = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -51,7 +61,7 @@ export default function Home() {
 			const res = await fetch("/api/analyze", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ url: formattedUrl }),
+				body: JSON.stringify({ url: formattedUrl, mode: scanMode }),
 			});
 			const data = await res.json();
 
@@ -142,6 +152,30 @@ export default function Home() {
 						Paste a URL. We check your SEO, speed, accessibility, and conversion
 						paths — then show you exactly what to fix.
 					</p>
+					<div
+						className="mode-toggle"
+						role="radiogroup"
+						aria-label="Scan mode"
+					>
+						<button
+							type="button"
+							role="radio"
+							aria-checked={scanMode === "single"}
+							className={scanMode === "single" ? "active" : ""}
+							onClick={() => setScanMode("single")}
+						>
+							Single page
+						</button>
+						<button
+							type="button"
+							role="radio"
+							aria-checked={scanMode === "site"}
+							className={scanMode === "site" ? "active" : ""}
+							onClick={() => setScanMode("site")}
+						>
+							Whole site
+						</button>
+					</div>
 					<form className="intake" onSubmit={runScan}>
 						<input
 							type="text"
@@ -151,8 +185,18 @@ export default function Home() {
 							required
 							aria-label="Website URL"
 						/>
-						<button type="submit">Run diagnostic →</button>
+						<button type="submit">
+							{scanMode === "site" ?
+								"Crawl site →"
+							:	"Run diagnostic →"}
+						</button>
 					</form>
+					{scanMode === "site" && (
+						<p className="demo-note">
+							We'll follow internal links (and your sitemap, if there is one)
+							to scan up to 15 pages.
+						</p>
+					)}
 					{errorMsg && (
 						<p className="demo-note error-note show" role="alert">
 							{errorMsg}
@@ -164,17 +208,33 @@ export default function Home() {
 			{viewState === "scanning" && (
 				<section className="scan active">
 					<p className="scan-url">{url}</p>
-					<p className="scan-title">Running diagnostic…</p>
+					<p className="scan-title">
+						{scanMode === "site" ?
+							"Crawling the site…"
+						:	"Running diagnostic…"}
+					</p>
 					<ul className="steps">
-						{[
-							"Reading page structure",
-							"Checking meta tags & schema",
-							"Analyzing robots.txt & sitemaps",
-							"Scanning security headers",
-							"Measuring load & paint timing",
-							"Auditing color contrast & ARIA",
-							"Compiling full report",
-						].map((stepText, i) => (
+						{(scanMode === "site" ?
+							[
+								"Discovering pages (sitemap & links)",
+								"Reading page structure",
+								"Checking meta tags & schema",
+								"Analyzing robots.txt & sitemaps",
+								"Scanning security headers",
+								"Measuring load & paint timing",
+								"Auditing color contrast & ARIA",
+								"Compiling full report",
+							]
+						:	[
+								"Reading page structure",
+								"Checking meta tags & schema",
+								"Analyzing robots.txt & sitemaps",
+								"Scanning security headers",
+								"Measuring load & paint timing",
+								"Auditing color contrast & ARIA",
+								"Compiling full report",
+							]
+						).map((stepText, i) => (
 							<li
 								key={i}
 								className={`${
@@ -193,6 +253,28 @@ export default function Home() {
 			{viewState === "report" && reportData && (
 				<section className="report active">
 					<p className="report-url">{reportData.url}</p>
+					{reportData.mode === "site" && reportData.pagesScanned && (
+						<p className="demo-note">
+							Scanned {reportData.pagesScanned.length} page
+							{reportData.pagesScanned.length === 1 ? "" : "s"}
+							{reportData.crawlTruncated ? " (more pages were found but not scanned — increase the page limit to cover the rest)" : ""}
+							.{" "}
+							<button
+								type="button"
+								className="link-btn"
+								onClick={() => setShowPageList((v) => !v)}
+							>
+								{showPageList ? "Hide list" : "Show list"}
+							</button>
+						</p>
+					)}
+					{showPageList && reportData.pagesScanned && (
+						<ul className="crawled-pages">
+							{reportData.pagesScanned.map((pageUrl) => (
+								<li key={pageUrl}>{pageUrl}</li>
+							))}
+						</ul>
+					)}
 					<div className="report-top">
 						<h2>Diagnostic report</h2>
 						<button className="fix-all" onClick={fixAll} disabled={allResolved}>
@@ -248,6 +330,8 @@ export default function Home() {
 									<div className="card-source">
 										{cat.source === "lighthouse" ?
 											"Google Lighthouse"
+										: cat.pagesAnalyzed && cat.pagesAnalyzed > 1 ?
+											`Live HTML scan · ${cat.pagesAnalyzed} pages`
 										:	"Live HTML scan"}
 									</div>
 								</div>
