@@ -107,6 +107,7 @@ export default function RootLayout({
 					>
 						ArminNX
 					</a>
+					<span>and the community</span>
 				</footer>
 			</body>
 		</html>
