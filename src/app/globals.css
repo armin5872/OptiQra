@@ -14,6 +14,20 @@
 	--accent: #6505ff;
 	--accent-soft: #dcebe6;
 	--radius: 10px;
+
+	/* Issue-severity scale (distinct from the good/warn/critical score
+	   colors above, which grade a 0-100 score rather than a single issue). */
+	--sev-critical: #0a0a0a;
+	--sev-critical-bg: #e7e7e7;
+	--sev-high: #d1332b;
+	--sev-high-bg: #fbe4e2;
+	--sev-medium: #c99a05;
+	--sev-medium-bg: #fdf3d6;
+	--sev-low: #1c64d1;
+	--sev-low-bg: #e2ebfb;
+	--sev-info: #ffffff;
+	--sev-info-bg: var(--surface-2);
+	--sev-info-border: #b9c2bc;
 }
 * {
 	box-sizing: border-box;
@@ -475,6 +489,56 @@ h1 {
 	max-width: 460px;
 	margin-bottom: 32px;
 }
+.crawl-scanner {
+	position: relative;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	height: 30px;
+	margin-bottom: 10px;
+	padding: 0 2px;
+}
+.crawl-scanner-page {
+	color: var(--line);
+	display: flex;
+	animation: crawl-page-visit 1.26s ease-in-out infinite;
+}
+@keyframes crawl-page-visit {
+	0%,
+	100% {
+		color: var(--line);
+		transform: scale(1);
+	}
+	14% {
+		color: var(--accent);
+		transform: scale(1.18);
+	}
+	32% {
+		color: var(--good);
+		transform: scale(1);
+	}
+}
+.crawl-scanner-bot {
+	position: absolute;
+	top: 50%;
+	left: 0;
+	color: var(--accent);
+	background: var(--surface);
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transform: translate(-50%, -50%);
+	animation: crawl-bot-move 1.26s linear infinite;
+}
+@keyframes crawl-bot-move {
+	0% {
+		left: 0%;
+	}
+	100% {
+		left: 100%;
+	}
+}
 .crawl-progress-head {
 	display: flex;
 	justify-content: space-between;
@@ -779,38 +843,116 @@ h1 {
 	border-bottom: none;
 }
 .sev-dot {
-	width: 9px;
-	height: 9px;
+	width: 10px;
+	height: 10px;
 	border-radius: 50%;
 	margin-top: 6px;
 	flex: none;
+	border: 1px solid transparent;
 }
 .sev-critical {
-	background: var(--critical);
+	background: var(--sev-critical);
 }
-.sev-warn {
-	background: var(--warn);
+.sev-high {
+	background: var(--sev-high);
+}
+.sev-medium {
+	background: var(--sev-medium);
+}
+.sev-low {
+	background: var(--sev-low);
+}
+.sev-informational {
+	background: var(--sev-info);
+	border-color: var(--sev-info-border);
 }
 .sev-good {
 	background: var(--good);
 }
+.finding {
+	position: relative;
+}
+.finding::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 0;
+	bottom: 0;
+	width: 3px;
+	border-radius: 2px;
+	background: var(--sev-row, transparent);
+}
+.finding:has(.sev-critical)::before {
+	--sev-row: var(--sev-critical);
+}
+.finding:has(.sev-high)::before {
+	--sev-row: var(--sev-high);
+}
+.finding:has(.sev-medium)::before {
+	--sev-row: var(--sev-medium);
+}
+.finding:has(.sev-low)::before {
+	--sev-row: var(--sev-low);
+}
+.finding:has(.sev-informational)::before {
+	--sev-row: var(--sev-info-border);
+}
 .finding-body {
 	flex: 1;
 }
-.finding-title {
+.sev-badge {
+	display: inline-block;
+	font-family: "IBM Plex Mono", monospace;
+	font-size: 10.5px;
 	font-weight: 600;
-	font-size: 14.5px;
-	margin-bottom: 3px;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	padding: 2px 8px;
+	border-radius: 999px;
+	margin-bottom: 6px;
+	border: 1px solid transparent;
+}
+.sev-badge-critical {
+	background: var(--sev-critical-bg);
+	color: var(--sev-critical);
+	border-color: var(--sev-critical);
+}
+.sev-badge-high {
+	background: var(--sev-high-bg);
+	color: var(--sev-high);
+}
+.sev-badge-medium {
+	background: var(--sev-medium-bg);
+	color: var(--sev-medium);
+}
+.sev-badge-low {
+	background: var(--sev-low-bg);
+	color: var(--sev-low);
+}
+.sev-badge-informational {
+	background: var(--sev-info);
+	color: var(--ink-soft);
+	border-color: var(--sev-info-border);
+}
+.finding-title {
+	font-family: var(--font-plex-sans), "IBM Plex Sans", sans-serif;
+	font-weight: 600;
+	font-size: 15px;
+	letter-spacing: 0.01em;
+	margin-bottom: 4px;
 }
 .finding-detail {
-	font-size: 13.5px;
+	font-family: var(--font-readable), "IBM Plex Sans", sans-serif;
+	font-size: 14px;
 	color: var(--ink-soft);
-	line-height: 1.5;
+	line-height: 1.6;
 	margin-bottom: 8px;
 }
 .finding-fix {
-	font-size: 13px;
+	font-family: var(--font-readable), "IBM Plex Sans", sans-serif;
+	font-size: 13.5px;
 	color: var(--accent);
+	line-height: 1.5;
 }
 .finding.resolved .finding-title {
 	text-decoration: line-through;

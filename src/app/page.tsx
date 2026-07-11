@@ -407,6 +407,50 @@ export default function Home() {
 
 					{scanMode === "site" && crawlProgress && (
 						<div className="crawl-progress">
+							<div className="crawl-scanner" aria-hidden="true">
+								{Array.from({ length: 7 }).map((_, i) => (
+									<span
+										key={i}
+										className="crawl-scanner-page"
+										style={{ animationDelay: `${i * 0.18}s` }}
+									>
+										<svg viewBox="0 0 24 24" width="16" height="16">
+											<path
+												d="M6 2h9l4 4v16H6z"
+												fill="none"
+												stroke="currentColor"
+												strokeWidth="1.6"
+												strokeLinejoin="round"
+											/>
+											<path
+												d="M9 12h7M9 16h7M9 8h3"
+												stroke="currentColor"
+												strokeWidth="1.4"
+												strokeLinecap="round"
+											/>
+										</svg>
+									</span>
+								))}
+								<span className="crawl-scanner-bot">
+									<svg viewBox="0 0 24 24" width="18" height="18">
+										<circle
+											cx="12"
+											cy="12"
+											r="7"
+											fill="none"
+											stroke="currentColor"
+											strokeWidth="1.8"
+										/>
+										<circle cx="12" cy="12" r="2" fill="currentColor" />
+										<path
+											d="M12 2v3M12 19v3"
+											stroke="currentColor"
+											strokeWidth="1.8"
+											strokeLinecap="round"
+										/>
+									</svg>
+								</span>
+							</div>
 							<div className="crawl-progress-head">
 								<span>
 									Scanned {crawlProgress.scanned} of {crawlProgress.total} page
@@ -589,6 +633,11 @@ export default function Home() {
 											className={`sev-dot ${iss.resolved ? "sev-good" : `sev-${iss.severity}`}`}
 										></span>
 										<div className="finding-body">
+											{!iss.resolved && (
+												<span className={`sev-badge sev-badge-${iss.severity}`}>
+													{iss.severity}
+												</span>
+											)}
 											<div className="finding-title">{iss.title}</div>
 											<div className="finding-detail">{iss.detail}</div>
 											<div className="finding-fix">Fix: {iss.fix}</div>

@@ -261,7 +261,6 @@ export function analyzeStructuredData(
 				'One or more <script type="application/ld+json"> tags contain invalid JSON, so search engines will silently ignore them.',
 				"Validate JSON-LD with a linter (or the Rich Results Test) and fix syntax errors like trailing commas or unescaped quotes.",
 				10,
-				"critical",
 			),
 		);
 	}
@@ -315,7 +314,6 @@ export function analyzeStructuredData(
 				'Every JSON-LD node needs an "@type" so search engines know which schema.org vocabulary applies.',
 				'Add an appropriate "@type" (e.g. "Organization", "Article", "Product") to each JSON-LD node.',
 				8,
-				"critical",
 			),
 		);
 	}

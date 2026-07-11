@@ -2,6 +2,7 @@ import {
 	IBM_Plex_Sans,
 	IBM_Plex_Sans_Condensed,
 	IBM_Plex_Mono,
+	Lexend,
 } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
@@ -22,6 +23,15 @@ const plexMono = IBM_Plex_Mono({
 	subsets: ["latin"],
 	weight: ["400", "500"],
 	variable: "--font-plex-mono",
+});
+
+// Used specifically for issue title/detail/fix text in the report — Lexend
+// is tuned for reading proficiency, so long diagnostic copy stays easy to
+// scan even at smaller sizes.
+const readable = Lexend({
+	subsets: ["latin"],
+	weight: ["400", "500", "600"],
+	variable: "--font-readable",
 });
 
 export const metadata = {
@@ -70,7 +80,7 @@ export default function RootLayout({
 	return (
 		<html lang="en">
 			<body
-				className={`${plexSans.variable} ${plexCondensed.variable} ${plexMono.variable} font-sans`}
+				className={`${plexSans.variable} ${plexCondensed.variable} ${plexMono.variable} ${readable.variable} font-sans`}
 			>
 				{/* Google Analytics */}
 				<Script

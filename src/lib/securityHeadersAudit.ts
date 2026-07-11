@@ -91,7 +91,6 @@ export async function analyzeSecurityHeaders(
 				"Failed to establish connection to analyze headers",
 				"Ensure the URL is accessible and not blocked by CORS policies",
 				8,
-				"warn",
 			),
 		);
 		return { issues, passed, headers };
@@ -110,7 +109,6 @@ export async function analyzeSecurityHeaders(
 					config.description,
 					config.recommendation,
 					config.weight,
-					"warn",
 				),
 			);
 		} else {
@@ -131,7 +129,6 @@ export async function analyzeSecurityHeaders(
 							"The Strict-Transport-Security header should include max-age directive",
 							"Ensure max-age is set to at least 31536000 (1 year)",
 							5,
-							"warn",
 						),
 					);
 				}
@@ -146,7 +143,6 @@ export async function analyzeSecurityHeaders(
 							"Content-Security-Policy includes unsafe-inline which reduces XSS protection",
 							"Remove unsafe-inline and use nonces or hashes for inline scripts",
 							8,
-							"warn",
 						),
 					);
 				}
@@ -158,7 +154,6 @@ export async function analyzeSecurityHeaders(
 							"Content-Security-Policy contains overly permissive wildcards",
 							"Use specific domains instead of * in directives",
 							6,
-							"warn",
 						),
 					);
 				}
@@ -176,7 +171,6 @@ export async function analyzeSecurityHeaders(
 				"The website is not served over HTTPS",
 				"Migrate to HTTPS and redirect HTTP traffic to HTTPS",
 				15,
-				"critical",
 			),
 		);
 	}
@@ -190,7 +184,6 @@ export async function analyzeSecurityHeaders(
 				`The X-Powered-By header reveals: ${headers["x-powered-by"]}`,
 				"Remove or obscure the X-Powered-By header to reduce information disclosure",
 				3,
-				"warn",
 			),
 		);
 	}
@@ -206,7 +199,6 @@ export async function analyzeSecurityHeaders(
 					`The Server header reveals: ${serverValue}`,
 					"Remove or minimize the Server header to reduce information disclosure",
 					3,
-					"warn",
 				),
 			);
 		}

@@ -12,7 +12,7 @@ export type Issue = {
 	detail: string;
 	fix?: string;
 	weight: number;
-	severity: "critical" | "warn" | "good";
+	severity: "critical" | "high" | "medium" | "low" | "informational" | "good";
 	resolved: boolean;
 };
 
@@ -464,6 +464,9 @@ export default function CrawlTree({
 											<div key={iss.id} className="finding">
 												<span className={`sev-dot sev-${iss.severity}`} />
 												<div className="finding-body">
+													<span className={`sev-badge sev-badge-${iss.severity}`}>
+														{iss.severity}
+													</span>
 													<div className="finding-title">{iss.title}</div>
 													<div className="finding-detail">{iss.detail}</div>
 													{iss.fix && (

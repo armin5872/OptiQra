@@ -1,4 +1,11 @@
-import type { Issue } from "@/lib/auditUtils";
+import type { Issue, Severity } from "@/lib/auditUtils";
+
+function severityFromAuditScore(auditScore: number): Severity {
+	if (auditScore < 0.2) return "critical";
+	if (auditScore < 0.5) return "high";
+	if (auditScore < 0.7) return "medium";
+	return "low";
+}
 
 const PSI_ENDPOINT =
 	"https://www.googleapis.com/pagespeedonline/v5/runPagespeed";
@@ -51,9 +58,7 @@ function mapCategory(lhr: any, categoryKey: string): PSIReport | null {
 						`Current: ${audit.displayValue}`
 					:	"See details for the specific elements affected.",
 				weight: Math.max(3, weight),
-				severity: (auditScore < 0.5 ? "critical" : "warn") as
-					| "critical"
-					| "warn",
+				severity: severityFromAuditScore(auditScore),
 				resolved: false,
 			});
 		} else if (ref.weight > 0) {

@@ -172,7 +172,6 @@ function analyzeRobotsTxt(targetUrl: string, response: Response, text: string): 
       'User-agent: * includes Disallow: /, which tells search engines not to crawl any pages on the site.',
       'Remove or narrow the blanket Disallow: / rule unless the entire site should stay out of search results.',
       15,
-      'critical',
     ));
   }
 

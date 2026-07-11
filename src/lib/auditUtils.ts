@@ -1,15 +1,27 @@
+export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'informational' | 'good';
+
 export interface Issue {
   id: string;
   title: string;
   detail: string;
   fix?: string;
   weight: number;
-  severity: 'critical' | 'warn' | 'good';
+  severity: Severity;
   resolved: boolean;
 }
 
-export function issue(id: string, title: string, detail: string, fix: string, weight: number, severity?: 'critical' | 'warn'): Issue {
-  return { id, title, detail, fix, weight, severity: severity || (weight >= 11 ? 'critical' : 'warn'), resolved: false };
+/** Buckets an issue's point weight into one of five severity tiers. Used
+ *  whenever a call site doesn't pin an explicit severity. */
+export function severityFromWeight(weight: number): Severity {
+  if (weight >= 14) return 'critical';
+  if (weight >= 9) return 'high';
+  if (weight >= 5) return 'medium';
+  if (weight >= 2) return 'low';
+  return 'informational';
+}
+
+export function issue(id: string, title: string, detail: string, fix: string, weight: number, severity?: Severity): Issue {
+  return { id, title, detail, fix, weight, severity: severity || severityFromWeight(weight), resolved: false };
 }
 
 export function pass(id: string, title: string): Issue {
