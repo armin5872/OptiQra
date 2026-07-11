@@ -101,11 +101,11 @@ export default function RootLayout({
 				<footer className="site-footer">
 					<span>Made by</span>{" "}
 					<a
-						href="https://github.com/armin5872"
+						href="https://github.com/armin5872/OptiQra"
 						target="_blank"
 						rel="noopener noreferrer"
 					>
-						ArminNX
+						ArminNX and the community
 					</a>
 				</footer>
 			</body>
