@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import CrawlTree from "./components/CrawlTree";
 import type { PageNode, Issue } from "./components/CrawlTree";
+import AIProviderSetup from "./components/AIProviderSetup";
+import AIFixButton from "./components/AIFixButton";
 
 type ScanState = "hero" | "scanning" | "report";
 type ScanMode = "single" | "site";
@@ -561,6 +563,8 @@ export default function Home() {
 						</button>
 					</div>
 
+					<AIProviderSetup />
+
 					<div className="overall">
 						<div
 							className="score"
@@ -642,13 +646,12 @@ export default function Home() {
 											<div className="finding-detail">{iss.detail}</div>
 											<div className="finding-fix">Fix: {iss.fix}</div>
 										</div>
-										<button
-											className={`apply-btn ${iss.resolved ? "done" : ""}`}
-											onClick={() => applyFix(key, idx)}
-											disabled={iss.resolved}
-										>
-											{iss.resolved ? "Resolved" : "Mark resolved"}
-										</button>
+										<AIFixButton
+											issue={iss}
+											pageUrl={reportData.url}
+											category={cat.label}
+											onResolve={() => applyFix(key, idx)}
+										/>
 									</div>
 								))}
 							</div>
