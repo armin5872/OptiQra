@@ -131,7 +131,7 @@ The endpoint returns a report with categories such as security, SEO, performance
 
 ### v1.0
 
-- [ ] AI website review
+- [x] AI website review
 - [x] AI generated fixes
 - [ ] Competitor comparison
 - [ ] Historical scan tracking
