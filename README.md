@@ -143,6 +143,6 @@ OptiQra aims to grow from a single-page auditing tool into a complete AI-powered
 
 ## 🤝 Contributing
 
-Contributions are welcome. You could go start working on the next feature on the roadmap or add something something you think would make the app better. If you make changes, please keep the audit output shape consistent and verify the app still builds locally.
+Contributions are welcome. You could go and work on an issue or maybe start working on the next feature on the roadmap or add something something you think would make the app better. If you make changes, please keep the audit output shape consistent and verify the app still builds locally.
 
 ## Made by ArminNX and the community
