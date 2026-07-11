@@ -30,8 +30,8 @@ export const AI_PROVIDERS: Record<AIProviderId, AIProviderConfig> = {
 		id: "google",
 		label: "Google",
 		keyPrefix: "AI",
-		defaultModel: "gemini-3.5-flash",
-		models: ["gemini-3.5-flash", "gemini-3.1-pro"],
+		defaultModel: "gemini-2.5-flash",
+		models: ["gemini-2.5-flash", "gemini-2.5-pro"],
 	},
 };
 
