@@ -5,6 +5,7 @@ import CrawlTree from "./components/CrawlTree";
 import type { PageNode, Issue } from "./components/CrawlTree";
 import AIProviderSetup from "./components/AIProviderSetup";
 import AIFixButton from "./components/AIFixButton";
+import AISiteInsights from "./components/AISiteInsights";
 
 type ScanState = "hero" | "scanning" | "report";
 type ScanMode = "single" | "site";
@@ -582,6 +583,14 @@ export default function Home() {
 							<div className="label">Overall vitals</div>
 						</div>
 					</div>
+
+					<AISiteInsights
+						siteUrl={reportData.url}
+						mode={reportData.mode}
+						pagesScanned={reportData.pagesScanned?.length}
+						overallScore={overall}
+						categories={reportData.categories}
+					/>
 
 					<div className="cards">
 						{Object.entries(reportData.categories).map(([key, cat]) => {

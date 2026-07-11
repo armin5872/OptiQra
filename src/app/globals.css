@@ -1897,3 +1897,49 @@ footer {
 	align-items: center;
 	gap: 10px;
 }
+
+.ai-insights-card {
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	padding: 18px 20px;
+	margin: 0 0 24px;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+.ai-insights-head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 16px;
+	flex-wrap: wrap;
+}
+.ai-insights-head h3 {
+	margin: 0 0 4px;
+	font-size: 15px;
+}
+.ai-insights-subtitle {
+	margin: 0;
+	font-family: var(--font-readable), "IBM Plex Sans", sans-serif;
+	font-size: 12.5px;
+	color: var(--ink-soft);
+	max-width: 46ch;
+}
+.ai-insights-hint {
+	margin: 0;
+	font-family: "IBM Plex Sans", sans-serif;
+	font-size: 12.5px;
+	color: var(--ink-soft);
+}
+.ai-insights-output {
+	font-family: var(--font-readable), "IBM Plex Sans", sans-serif;
+	font-size: 13.5px;
+	line-height: 1.7;
+	white-space: pre-wrap;
+	background: var(--surface-2);
+	border: 1px solid var(--line);
+	border-radius: 8px;
+	padding: 14px 16px;
+	color: var(--ink);
+}
