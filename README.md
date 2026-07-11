@@ -16,6 +16,7 @@ See a live demo via the vercel deployment: https://optiqra.vercel.app
 
 - Crawlers through the site via internal links in the sitemap and analyzes every page
 - Scans a target URL and crawls its associated links and produces a multi-category audit report
+- If the user has entered an api key it will allow the user to generate a fix with AI for each Issue
 - Creates a visual tree of the pages it has crawled with the abilty to hover or cilck each page to see its individual stats
 - Checks SEO metadata, structured data, robots files, and sitemaps
 - Evaluates performance-related HTML and response characteristics
@@ -131,7 +132,7 @@ The endpoint returns a report with categories such as security, SEO, performance
 ### v1.0
 
 - [ ] AI website review
-- [ ] AI generated fixes
+- [x] AI generated fixes
 - [ ] Competitor comparison
 - [ ] Historical scan tracking
 - [ ] CI/CD integration
