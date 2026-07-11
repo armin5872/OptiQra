@@ -36,10 +36,20 @@ type TreeNode = PageNode & {
 };
 
 const CATEGORY_ORDER = ["seo", "speed", "a11y", "conversions"];
-const NODE_GAP_X = 60;
-const LEVEL_GAP_Y = 100;
-const SIDE_PAD = 34;
-const TOP_PAD = 34;
+const NODE_GAP_X = 72;
+const LEVEL_GAP_Y = 116;
+const SIDE_PAD = 44;
+const TOP_PAD = 44;
+
+// Trees bigger than this auto-collapse deep branches on first appearance so
+// a 1,000-page "Full Crawl" doesn't render a thousand DOM nodes + tooltips
+// up front. Users can still expand anything with one click.
+const AUTO_COLLAPSE_THRESHOLD = 60;
+const AUTO_COLLAPSE_DEPTH = 2;
+
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 1.5;
+const ZOOM_STEP = 0.1;
 
 function scoreBand(score: number): "good" | "warn" | "critical" {
 	return (
@@ -88,33 +98,56 @@ function buildTree(pages: PageNode[]): TreeNode | null {
 	return root;
 }
 
-function layoutTree(root: TreeNode): { maxX: number; maxY: number } {
+/** Total descendant count per node, computed once against the *full* tree
+ *  (independent of collapse state) so a collapsed node can show "+N pages". */
+function countDescendants(root: TreeNode): Map<string, number> {
+	const counts = new Map<string, number>();
+	function walk(node: TreeNode): number {
+		let total = 0;
+		for (const c of node.children) total += 1 + walk(c);
+		counts.set(node.url, total);
+		return total;
+	}
+	walk(root);
+	return counts;
+}
+
+type Edge = { parent: TreeNode; child: TreeNode };
+
+/** Lays out only the nodes currently visible (i.e. not hidden behind a
+ *  collapsed ancestor), assigning x/y in place and returning render order
+ *  plus the edges that should actually be drawn. */
+function layoutVisible(
+	root: TreeNode,
+	collapsed: Set<string>,
+): { nodes: TreeNode[]; edges: Edge[]; maxX: number; maxY: number } {
 	let cursor = 0;
 	let maxY = 0;
+	const nodes: TreeNode[] = [];
+	const edges: Edge[] = [];
+
 	function place(node: TreeNode, depth: number) {
 		node.y = depth;
 		maxY = Math.max(maxY, depth);
-		if (node.children.length === 0) {
+		nodes.push(node);
+
+		const isCollapsed = collapsed.has(node.url) && node.children.length > 0;
+		if (node.children.length === 0 || isCollapsed) {
 			node.x = cursor;
 			cursor += 1;
 			return;
 		}
-		node.children.forEach((c) => place(c, depth + 1));
+		node.children.forEach((c) => {
+			edges.push({ parent: node, child: c });
+			place(c, depth + 1);
+		});
 		const first = node.children[0].x;
 		const last = node.children[node.children.length - 1].x;
 		node.x = (first + last) / 2;
 	}
-	place(root, 0);
-	return { maxX: Math.max(0, cursor - 1), maxY };
-}
 
-function flattenTree(root: TreeNode): TreeNode[] {
-	const out: TreeNode[] = [];
-	(function walk(n: TreeNode) {
-		out.push(n);
-		n.children.forEach(walk);
-	})(root);
-	return out;
+	place(root, 0);
+	return { nodes, edges, maxX: Math.max(0, cursor - 1), maxY };
 }
 
 export default function CrawlTree({
@@ -124,17 +157,58 @@ export default function CrawlTree({
 	pages: PageNode[];
 	title?: string;
 }) {
-	const { root, nodes, width, height } = useMemo(() => {
-		const r = buildTree(pages);
-		if (!r) return { root: null, nodes: [] as TreeNode[], width: 0, height: 0 };
-		const { maxX, maxY } = layoutTree(r);
+	const root = useMemo(() => buildTree(pages), [pages]);
+	const descendantCounts = useMemo(
+		() => (root ? countDescendants(root) : new Map<string, number>()),
+		[root],
+	);
+
+	const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+	const autoCollapsedRef = useRef<Set<string>>(new Set());
+
+	// Auto-collapse deep branches the first time they appear (handles both
+	// the initial render of a big finished crawl and pages streaming in
+	// live), without ever re-collapsing something the user has expanded.
+	useEffect(() => {
+		if (!root || pages.length <= AUTO_COLLAPSE_THRESHOLD) return;
+		const toCollapse: string[] = [];
+		(function walk(node: TreeNode, depth: number) {
+			if (
+				depth >= AUTO_COLLAPSE_DEPTH &&
+				node.children.length > 0 &&
+				!autoCollapsedRef.current.has(node.url)
+			) {
+				toCollapse.push(node.url);
+				autoCollapsedRef.current.add(node.url);
+			}
+			node.children.forEach((c) => walk(c, depth + 1));
+		})(root, 0);
+		if (toCollapse.length > 0) {
+			setCollapsed((prev) => {
+				const next = new Set(prev);
+				toCollapse.forEach((u) => next.add(u));
+				return next;
+			});
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [root, pages.length]);
+
+	const { nodes, edges, width, height } = useMemo(() => {
+		if (!root)
+			return {
+				nodes: [] as TreeNode[],
+				edges: [] as Edge[],
+				width: 0,
+				height: 0,
+			};
+		const { nodes: n, edges: e, maxX, maxY } = layoutVisible(root, collapsed);
 		return {
-			root: r,
-			nodes: flattenTree(r),
+			nodes: n,
+			edges: e,
 			width: SIDE_PAD * 2 + maxX * NODE_GAP_X,
 			height: TOP_PAD * 2 + maxY * LEVEL_GAP_Y,
 		};
-	}, [pages]);
+	}, [root, collapsed]);
 
 	const [hover, setHover] = useState<{
 		url: string;
@@ -144,6 +218,7 @@ export default function CrawlTree({
 	const [hoverCat, setHoverCat] = useState<string | null>(null);
 	const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
 	const [modalOpenCat, setModalOpenCat] = useState<string | null>(null);
+	const [zoom, setZoom] = useState(1);
 	const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	const nodeByUrl = useMemo(() => {
@@ -182,6 +257,15 @@ export default function CrawlTree({
 		setHoverCat(null);
 	};
 
+	const toggleCollapse = (url: string) => {
+		setCollapsed((prev) => {
+			const next = new Set(prev);
+			if (next.has(url)) next.delete(url);
+			else next.add(url);
+			return next;
+		});
+	};
+
 	useEffect(() => {
 		function onEsc(e: KeyboardEvent) {
 			if (e.key === "Escape") setSelectedUrl(null);
@@ -192,40 +276,92 @@ export default function CrawlTree({
 
 	if (!root) return null;
 
+	const collapsedCount = pages.length - nodes.length;
+	const canvasW = Math.max(width, 200);
+	const canvasH = Math.max(height, 120);
+
 	return (
 		<div className="crawl-tree-section">
 			<div className="crawl-tree-head">
-				<h3>{title}</h3>
+				<div className="crawl-tree-head-row">
+					<h3>{title}</h3>
+					<div className="crawl-tree-stats">
+						<span>{pages.length} pages mapped</span>
+						{collapsedCount > 0 && (
+							<span className="crawl-tree-stats-dim">
+								· {collapsedCount} collapsed for speed
+							</span>
+						)}
+					</div>
+				</div>
 				<p className="crawl-tree-hint">
 					Hover a page for its overall score, hover a category for the details,
-					or click a page to open its full report.
+					click a page to open its full report, or use <code>+/−</code> on a
+					branch to expand or collapse it.
 				</p>
 			</div>
 
-			<div className="crawl-tree-legend">
-				<span>
-					<i className="dot good" /> 80–100
-				</span>
-				<span>
-					<i className="dot warn" /> 60–79
-				</span>
-				<span>
-					<i className="dot critical" /> below 60
-				</span>
+			<div className="crawl-tree-toolbar">
+				<div className="crawl-tree-legend">
+					<span>
+						<i className="dot good" /> 80–100
+					</span>
+					<span>
+						<i className="dot warn" /> 60–79
+					</span>
+					<span>
+						<i className="dot critical" /> below 60
+					</span>
+				</div>
+
+				<div className="crawl-tree-zoom">
+					<button
+						type="button"
+						className="crawl-tree-zoom-btn"
+						onClick={() =>
+							setZoom((z) => Math.max(ZOOM_MIN, +(z - ZOOM_STEP).toFixed(2)))
+						}
+						aria-label="Zoom out"
+						disabled={zoom <= ZOOM_MIN}
+					>
+						−
+					</button>
+					<button
+						type="button"
+						className="crawl-tree-zoom-reset"
+						onClick={() => setZoom(1)}
+					>
+						{Math.round(zoom * 100)}%
+					</button>
+					<button
+						type="button"
+						className="crawl-tree-zoom-btn"
+						onClick={() =>
+							setZoom((z) => Math.min(ZOOM_MAX, +(z + ZOOM_STEP).toFixed(2)))
+						}
+						aria-label="Zoom in"
+						disabled={zoom >= ZOOM_MAX}
+					>
+						+
+					</button>
+				</div>
 			</div>
 
 			<div className="crawl-tree-scroll">
 				<div
-					className="crawl-tree-canvas"
-					style={{ width: Math.max(width, 200), height: Math.max(height, 120) }}
+					className="crawl-tree-canvas-spacer"
+					style={{ width: canvasW * zoom, height: canvasH * zoom }}
 				>
-					<svg
-						className="crawl-tree-edges"
-						width={Math.max(width, 200)}
-						height={Math.max(height, 120)}
+					<div
+						className="crawl-tree-canvas"
+						style={{
+							width: canvasW,
+							height: canvasH,
+							transform: `scale(${zoom})`,
+						}}
 					>
-						{nodes.map((n) =>
-							n.children.map((c) => {
+						<svg className="crawl-tree-edges" width={canvasW} height={canvasH}>
+							{edges.map(({ parent: n, child: c }, i) => {
 								const x1 = SIDE_PAD + n.x * NODE_GAP_X;
 								const y1 = TOP_PAD + n.y * LEVEL_GAP_Y;
 								const x2 = SIDE_PAD + c.x * NODE_GAP_X;
@@ -234,43 +370,73 @@ export default function CrawlTree({
 								return (
 									<path
 										key={n.url + "->" + c.url}
+										pathLength={1}
 										d={`M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`}
-										className="crawl-edge"
+										className={`crawl-edge ${scoreBand(c.score)}`}
+										style={{ animationDelay: `${Math.min(i * 12, 400)}ms` }}
 									/>
 								);
-							}),
-						)}
-					</svg>
+							})}
+						</svg>
 
-					{nodes.map((n) => {
-						const px = SIDE_PAD + n.x * NODE_GAP_X;
-						const py = TOP_PAD + n.y * LEVEL_GAP_Y;
-						const band = scoreBand(n.score);
-						const isRoot = n === root;
-						return (
-							<button
-								key={n.url}
-								type="button"
-								className={`crawl-node ${band} ${isRoot ? "root" : ""} ${hover?.url === n.url ? "hovered" : ""}`}
-								style={{ left: px, top: py }}
-								onMouseEnter={(e) => openHover(n, e.currentTarget)}
-								onMouseLeave={scheduleClose}
-								onFocus={(e) => openHover(n, e.currentTarget)}
-								onBlur={scheduleClose}
-								onClick={() => {
-									setSelectedUrl(n.url);
-									setModalOpenCat(null);
-								}}
-								title={n.url}
-								aria-label={`${pathOf(n.url)} — score ${n.score} of 100`}
-							>
-								<span className="crawl-node-dot" />
-								<span className="crawl-node-label">
-									{isRoot ? "/" : pathOf(n.url)}
-								</span>
-							</button>
-						);
-					})}
+						{nodes.map((n, i) => {
+							const px = SIDE_PAD + n.x * NODE_GAP_X;
+							const py = TOP_PAD + n.y * LEVEL_GAP_Y;
+							const band = scoreBand(n.score);
+							const isRoot = n === root;
+							const hasChildren = n.children.length > 0;
+							const isCollapsed = collapsed.has(n.url);
+							const hidden = descendantCounts.get(n.url) ?? 0;
+							return (
+								<div
+									key={n.url}
+									className="crawl-node-pos"
+									style={{
+										left: px,
+										top: py,
+										animationDelay: `${Math.min(i * 14, 500)}ms`,
+									}}
+								>
+									<button
+										type="button"
+										className={`crawl-node ${band} ${isRoot ? "root" : ""} ${hover?.url === n.url ? "hovered" : ""}`}
+										onMouseEnter={(e) => openHover(n, e.currentTarget)}
+										onMouseLeave={scheduleClose}
+										onFocus={(e) => openHover(n, e.currentTarget)}
+										onBlur={scheduleClose}
+										onClick={() => {
+											setSelectedUrl(n.url);
+											setModalOpenCat(null);
+										}}
+										title={n.url}
+										aria-label={`${pathOf(n.url)} — score ${n.score} of 100`}
+									>
+										<span className="crawl-node-dot" />
+										<span className="crawl-node-label">
+											{isRoot ? "/" : pathOf(n.url)}
+										</span>
+									</button>
+									{hasChildren && (
+										<button
+											type="button"
+											className={`crawl-node-toggle ${isCollapsed ? "closed" : ""}`}
+											onClick={(e) => {
+												e.stopPropagation();
+												toggleCollapse(n.url);
+											}}
+											aria-label={
+												isCollapsed ?
+													`Expand ${hidden} hidden pages`
+												:	"Collapse this branch"
+											}
+										>
+											{isCollapsed ? `+${hidden}` : "–"}
+										</button>
+									)}
+								</div>
+							);
+						})}
+					</div>
 				</div>
 			</div>
 
@@ -281,7 +447,7 @@ export default function CrawlTree({
 					onMouseEnter={clearCloseTimer}
 					onMouseLeave={scheduleClose}
 				>
-					<div className="crawl-tooltip-head">
+					<div className={`crawl-tooltip-head ${scoreBand(hoveredNode.score)}`}>
 						<span className="crawl-tooltip-path">
 							{pathOf(hoveredNode.url)}
 						</span>
@@ -370,6 +536,9 @@ export default function CrawlTree({
 						aria-label={`Report for ${selectedNode.url}`}
 						onClick={(e) => e.stopPropagation()}
 					>
+						<div
+							className={`crawl-modal-band ${scoreBand(selectedNode.score)}`}
+						/>
 						<div className="crawl-modal-head">
 							<div>
 								<p className="crawl-modal-eyebrow">Page report</p>
@@ -409,7 +578,7 @@ export default function CrawlTree({
 									return (
 										<div
 											key={k}
-											className="card"
+											className={`card ${open ? "active" : ""}`}
 											onClick={() => setModalOpenCat(open ? null : k)}
 										>
 											<div className="card-head">
@@ -464,7 +633,9 @@ export default function CrawlTree({
 											<div key={iss.id} className="finding">
 												<span className={`sev-dot sev-${iss.severity}`} />
 												<div className="finding-body">
-													<span className={`sev-badge sev-badge-${iss.severity}`}>
+													<span
+														className={`sev-badge sev-badge-${iss.severity}`}
+													>
 														{iss.severity}
 													</span>
 													<div className="finding-title">{iss.title}</div>
