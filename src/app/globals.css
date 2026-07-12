@@ -607,6 +607,12 @@ h1 {
 	flex-wrap: wrap;
 	margin-bottom: 8px;
 }
+.report-top-actions {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	flex-wrap: wrap;
+}
 .report-url {
 	font-family: "IBM Plex Mono", monospace;
 	font-size: 13.5px;
@@ -988,6 +994,88 @@ h1 {
 	background: var(--good-bg);
 	color: var(--good);
 	border-color: transparent;
+}
+
+/* ---------- Report download (PDF / DOCX / CSV / TSV / MD / TXT / JSON) ---------- */
+.report-download {
+	position: relative;
+	display: inline-block;
+}
+.report-download-btn {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	border: 1px solid var(--accent);
+	background: var(--accent);
+	color: #fff;
+	font-weight: 600;
+	font-size: 14px;
+	padding: 11px 18px;
+	border-radius: 7px;
+	cursor: pointer;
+	font-family: "IBM Plex Sans", sans-serif;
+	transition: opacity 0.15s ease;
+}
+.report-download-btn:hover {
+	opacity: 0.88;
+}
+.report-download-caret {
+	font-size: 9px;
+}
+.report-download-menu {
+	position: absolute;
+	top: calc(100% + 8px);
+	right: 0;
+	z-index: 20;
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: 10px;
+	box-shadow: 0 12px 32px rgba(18, 33, 28, 0.16);
+	padding: 6px;
+	min-width: 240px;
+	display: flex;
+	flex-direction: column;
+}
+.report-download-item {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 2px;
+	background: none;
+	border: none;
+	border-radius: 6px;
+	padding: 9px 12px;
+	cursor: pointer;
+	text-align: left;
+	font-family: "IBM Plex Sans", sans-serif;
+}
+.report-download-item:hover:not(:disabled) {
+	background: var(--surface-2);
+}
+.report-download-item:disabled {
+	cursor: default;
+	opacity: 0.5;
+}
+.report-download-item-label {
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--ink);
+}
+.report-download-item-hint {
+	font-size: 12px;
+	color: var(--ink-soft);
+}
+.report-download-error {
+	position: absolute;
+	top: calc(100% + 8px);
+	right: 0;
+	z-index: 20;
+	background: var(--critical-bg);
+	color: var(--critical);
+	border-radius: 8px;
+	padding: 10px 14px;
+	font-size: 12.5px;
+	max-width: 280px;
 }
 
 .again {

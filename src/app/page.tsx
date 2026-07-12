@@ -6,6 +6,7 @@ import type { PageNode, Issue } from "./components/CrawlTree";
 import AIProviderSetup from "./components/AIProviderSetup";
 import AIFixButton from "./components/AIFixButton";
 import AISiteInsights from "./components/AISiteInsights";
+import ReportDownload from "./components/ReportDownload";
 
 type ScanState = "hero" | "scanning" | "report";
 type ScanMode = "single" | "site";
@@ -559,9 +560,16 @@ export default function Home() {
 					)}
 					<div className="report-top">
 						<h2>Diagnostic report</h2>
-						<button className="fix-all" onClick={fixAll} disabled={allResolved}>
-							Mark everything resolved
-						</button>
+						<div className="report-top-actions">
+							<ReportDownload reportData={reportData} overallScore={overall} />
+							<button
+								className="fix-all"
+								onClick={fixAll}
+								disabled={allResolved}
+							>
+								Mark everything resolved
+							</button>
+						</div>
 					</div>
 
 					<AIProviderSetup />
