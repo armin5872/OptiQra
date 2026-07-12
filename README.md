@@ -94,7 +94,7 @@ The endpoint returns a report with categories such as security, SEO, performance
 
 - src/app/page.tsx: the main diagnostic UI
 - src/app/api/analyze/route.ts: the analysis orchestration endpoint
-- src/lib: audit modules for Crawler, SEO, speed, accessibility, links, images, security headers, and PageSpeed
+- src/lib: audit modules for Crawler, AI, SEO, speed, accessibility, links, images, duplicate content, broken links, security headers, and PageSpeed
 
 ## 🌱 Roadmap
 
@@ -124,9 +124,9 @@ The endpoint returns a report with categories such as security, SEO, performance
 
 - [x] Whole website crawler
 - [x] Multi-page SEO reports
-- [ ] Duplicate content detection
+- [x] Duplicate content detection
 - [x] Internal linking analysis
-- [ ] Broken link detection
+- [x] Broken link detection
 - [x] Crawl visualization
 
 ### v1.0
