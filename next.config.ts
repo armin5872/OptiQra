@@ -72,10 +72,10 @@ const withPWA = withPWAInit({
 
 const nextConfig: NextConfig = {
 	/* config options here */
-	// next-pwa uses webpack; Next.js 16 defaults to Turbopack, so we need to
-	// opt back into webpack when next-pwa is being used. Turbopack is still
-	// used for everything else (it's not turned off globally), but the build
-	// process will use webpack for PWA support.
+	// next-pwa uses webpack; Next.js 16 defaults to Turbopack. Adding an empty
+	// turbopack config tells Next.js we're aware of this and it's intentional.
+	turbopack: {},
+	// next-pwa's webpack config will be used for service-worker generation.
 	webpack: (config) => config,
 	// Optimize for production and Docker
 	output: process.env.DOCKER_BUILD ? "standalone" : undefined,
