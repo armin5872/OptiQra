@@ -1,0 +1,36 @@
+{
+	"name": "OptiQra Site Vitals",
+	"short_name": "OptiQra",
+	"description": "A powerful, open-source diagnostic tool for analyzing and improving website health across multiple dimensions.",
+	"start_url": "/?source=pwa",
+	"scope": "/",
+	"display": "standalone",
+	"orientation": "any",
+	"background_color": "#0b0f14",
+	"theme_color": "#0b0f14",
+	"icons": [
+		{ "src": "/icons/icon-16.png", "sizes": "16x16", "type": "image/png" },
+		{ "src": "/icons/icon-32.png", "sizes": "32x32", "type": "image/png" },
+		{ "src": "/icons/icon-48.png", "sizes": "48x48", "type": "image/png" },
+		{ "src": "/icons/icon-72.png", "sizes": "72x72", "type": "image/png" },
+		{ "src": "/icons/icon-96.png", "sizes": "96x96", "type": "image/png" },
+		{ "src": "/icons/icon-128.png", "sizes": "128x128", "type": "image/png" },
+		{ "src": "/icons/icon-144.png", "sizes": "144x144", "type": "image/png" },
+		{ "src": "/icons/icon-152.png", "sizes": "152x152", "type": "image/png" },
+		{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+		{ "src": "/icons/icon-256.png", "sizes": "256x256", "type": "image/png" },
+		{ "src": "/icons/icon-384.png", "sizes": "384x384", "type": "image/png" },
+		{ "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+		{ "src": "/icons/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+		{ "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+	],
+	"categories": ["productivity", "developer", "utilities"],
+	"shortcuts": [
+		{
+			"name": "New scan",
+			"short_name": "Scan",
+			"url": "/?source=pwa-shortcut",
+			"icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+		}
+	]
+}

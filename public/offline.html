@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>OptiQra — Offline</title>
+		<style>
+			html,
+			body {
+				margin: 0;
+				height: 100%;
+				background: #0b0f14;
+				color: #f1f3f0;
+				font-family:
+					-apple-system,
+					BlinkMacSystemFont,
+					"Segoe UI",
+					sans-serif;
+			}
+			.wrap {
+				height: 100%;
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				justify-content: center;
+				text-align: center;
+				padding: 24px;
+			}
+			img {
+				width: 64px;
+				height: 64px;
+				border-radius: 14px;
+				margin-bottom: 16px;
+			}
+			h1 {
+				font-size: 20px;
+				margin: 0 0 8px;
+			}
+			p {
+				color: #9aa5a0;
+				font-size: 14px;
+				max-width: 320px;
+				line-height: 1.5;
+			}
+			button {
+				margin-top: 18px;
+				padding: 10px 20px;
+				border-radius: 8px;
+				border: none;
+				background: #6505ff;
+				color: #fff;
+				font-size: 14px;
+				cursor: pointer;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="wrap">
+			<img src="/icons/icon-128.png" alt="" />
+			<h1>You're offline</h1>
+			<p>
+				No connection right now, so a new scan can't run. Your previously
+				saved scans are still available once the app reloads.
+			</p>
+			<button onclick="location.reload()">Try again</button>
+		</div>
+	</body>
+</html>

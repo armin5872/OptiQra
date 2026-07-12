@@ -7,6 +7,17 @@ import AIProviderSetup from "./components/AIProviderSetup";
 import AIFixButton from "./components/AIFixButton";
 import AISiteInsights from "./components/AISiteInsights";
 import ReportDownload from "./components/ReportDownload";
+import {
+	saveScan,
+	getRecentScans,
+	deleteScan as deleteStoredScan,
+	getScan as getStoredScan,
+	type StoredScan,
+} from "@/lib/scanStore";
+import {
+	recordScanInCookie,
+	removeScanFromCookie,
+} from "@/lib/scanCookies";
 
 type ScanState = "hero" | "scanning" | "report";
 type ScanMode = "single" | "site";
@@ -59,6 +70,75 @@ export default function Home() {
 	} | null>(null);
 	const [openPanel, setOpenPanel] = useState<string | null>(null);
 	const [showPageList, setShowPageList] = useState(false);
+	const [recentScans, setRecentScans] = useState<StoredScan[]>([]);
+	const [recentScansLoaded, setRecentScansLoaded] = useState(false);
+	const [activeScanId, setActiveScanId] = useState<string | null>(null);
+
+	const refreshRecentScans = () => {
+		getRecentScans(8)
+			.then(setRecentScans)
+			.catch(() => setRecentScans([]))
+			.finally(() => setRecentScansLoaded(true));
+	};
+
+	// Load past scans from IndexedDB once on mount (client-only — idb needs
+	// window/indexedDB, so this can't run during SSR).
+	useEffect(() => {
+		refreshRecentScans();
+	}, []);
+
+	const overallFromCategories = (categories: Record<string, Category>) => {
+		const keys = Object.keys(categories);
+		if (!keys.length) return 0;
+		const sum = keys.reduce((a, k) => a + categories[k].score, 0);
+		return Math.round(sum / keys.length);
+	};
+
+	// Persists a finished scan to IndexedDB (full report) and to a cookie
+	// (lightweight pointer: id/url/score/time) so scan history is available
+	// both offline and before IndexedDB finishes opening.
+	const persistScan = async (
+		data: NonNullable<typeof reportData>,
+		mode: ScanMode,
+	) => {
+		try {
+			const stored = await saveScan({
+				url: data.url,
+				mode,
+				overallScore: overallFromCategories(data.categories),
+				data,
+			});
+			setActiveScanId(stored.id);
+			recordScanInCookie({
+				id: stored.id,
+				url: stored.url,
+				mode: stored.mode,
+				overallScore: stored.overallScore,
+				createdAt: stored.createdAt,
+			});
+			refreshRecentScans();
+		} catch (err) {
+			// Persistence failing shouldn't block showing the report itself.
+			console.warn("Couldn't save scan locally:", err);
+		}
+	};
+
+	const openStoredScan = async (id: string) => {
+		const stored = await getStoredScan(id);
+		if (!stored) return;
+		setReportData(stored.data as typeof reportData);
+		setUrl(stored.url);
+		setActiveScanId(stored.id);
+		setErrorMsg("");
+		setStoppedNote("");
+		setViewState("report");
+	};
+
+	const deleteScanEverywhere = async (id: string) => {
+		await deleteStoredScan(id);
+		removeScanFromCookie(id);
+		refreshRecentScans();
+	};
 
 	// Site-mode page count comes from the chosen preset, or the custom field
 	// (clamped to 1–1000).
@@ -101,6 +181,7 @@ export default function Home() {
 		const formattedUrl = /^https?:\/\//i.test(url) ? url : `https://${url}`;
 		setUrl(formattedUrl);
 		setViewState("scanning");
+		setActiveScanId(null);
 		setActiveStep(0);
 		setStatusMessage("");
 		setCrawlProgress(
@@ -129,6 +210,7 @@ export default function Home() {
 
 				setReportData(data);
 				setTimeout(() => setViewState("report"), 350);
+				persistScan(data, "single");
 			}
 		} catch (err: any) {
 			if (err?.name === "AbortError") {
@@ -206,6 +288,7 @@ export default function Home() {
 					setCrawlProgress((p) => (p ? { ...p, scanned: p.total } : p));
 					setReportData(evt.data);
 					setTimeout(() => setViewState("report"), 350);
+					persistScan(evt.data, "site");
 					return;
 				} else if (evt.type === "aborted") {
 					setStoppedNote(
@@ -398,6 +481,48 @@ export default function Home() {
 						<p className="demo-note stopped-note show" role="status">
 							{stoppedNote}
 						</p>
+					)}
+
+					{recentScansLoaded && recentScans.length > 0 && (
+						<div className="recent-scans">
+							<div className="recent-scans-head">
+								<p className="recent-scans-title">
+									Recent scans <span className="recent-scans-hint">(saved on this device)</span>
+								</p>
+							</div>
+							<ul className="recent-scans-list">
+								{recentScans.map((scan) => (
+									<li key={scan.id} className="recent-scan-item">
+										<button
+											type="button"
+											className="recent-scan-open"
+											onClick={() => openStoredScan(scan.id)}
+										>
+											<span
+												className={`recent-scan-score ${scoreColorClass(scan.overallScore)}`}
+											>
+												{scan.overallScore}
+											</span>
+											<span className="recent-scan-meta">
+												<span className="recent-scan-url">{scan.url}</span>
+												<span className="recent-scan-sub">
+													{scan.mode === "site" ? "Whole site" : "Single page"} ·{" "}
+													{new Date(scan.createdAt).toLocaleDateString()}
+												</span>
+											</span>
+										</button>
+										<button
+											type="button"
+											className="recent-scan-delete"
+											aria-label={`Delete saved scan of ${scan.url}`}
+											onClick={() => deleteScanEverywhere(scan.id)}
+										>
+											×
+										</button>
+									</li>
+								))}
+							</ul>
+						</div>
 					)}
 				</section>
 			)}

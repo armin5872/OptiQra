@@ -5,6 +5,7 @@ import {
 	Lexend,
 } from "next/font/google";
 import Script from "next/script";
+import PWARegister from "./components/PWARegister";
 import "./globals.css";
 
 const plexSans = IBM_Plex_Sans({
@@ -34,6 +35,14 @@ const readable = Lexend({
 	variable: "--font-readable",
 });
 
+import type { Viewport } from "next";
+
+export const viewport: Viewport = {
+	themeColor: "#0b0f14",
+	width: "device-width",
+	initialScale: 1,
+};
+
 export const metadata = {
 	title: "OptiQra Site Vitals — Website diagnostic scan",
 	description:
@@ -51,6 +60,20 @@ export const metadata = {
 		"audit",
 	],
 	authors: [{ name: "ArminNX", url: "https://optiqra.vercel.app/" }],
+	manifest: "/manifest.json",
+	appleWebApp: {
+		capable: true,
+		statusBarStyle: "black-translucent",
+		title: "OptiQra",
+	},
+	icons: {
+		icon: [
+			{ url: "/icons/icon-32.png", sizes: "32x32", type: "image/png" },
+			{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+			{ url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+		],
+		apple: [{ url: "/icons/icon-180.png", sizes: "180x180", type: "image/png" }],
+	},
 	verification: {
 		google: "9nEQzTfKfm86Xd3dosIFdH--YQMNQXs_hbFjYEI8DXg",
 	},
@@ -97,6 +120,8 @@ export default function RootLayout({
 				</Script>
 
 				{children}
+
+				<PWARegister />
 
 				<footer className="site-footer">
 					<span>Made by</span>{" "}

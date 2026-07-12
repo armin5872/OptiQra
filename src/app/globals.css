@@ -218,6 +218,108 @@ h1 {
 	display: block;
 }
 
+/* ---------- Recent scans (saved locally in IndexedDB) ---------- */
+.recent-scans {
+	margin-top: 28px;
+	text-align: left;
+	border-top: 1px solid var(--line);
+	padding-top: 18px;
+}
+.recent-scans-title {
+	font-family: "IBM Plex Mono", monospace;
+	font-size: 12px;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--ink-soft);
+	margin: 0 0 10px;
+}
+.recent-scans-hint {
+	text-transform: none;
+	letter-spacing: normal;
+	opacity: 0.75;
+}
+.recent-scans-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.recent-scan-item {
+	display: flex;
+	align-items: stretch;
+	gap: 8px;
+}
+.recent-scan-open {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	padding: 8px 12px;
+	cursor: pointer;
+	text-align: left;
+	transition:
+		border-color 0.15s ease,
+		background 0.15s ease;
+}
+.recent-scan-open:hover,
+.recent-scan-open:focus-visible {
+	border-color: var(--accent);
+	outline: none;
+}
+.recent-scan-score {
+	font-family: "IBM Plex Sans Condensed", sans-serif;
+	font-weight: 700;
+	font-size: 20px;
+	min-width: 32px;
+	text-align: center;
+}
+.recent-scan-score.score-good {
+	color: var(--good);
+}
+.recent-scan-score.score-warn {
+	color: var(--warn);
+}
+.recent-scan-score.score-critical {
+	color: var(--critical);
+}
+.recent-scan-meta {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	gap: 2px;
+}
+.recent-scan-url {
+	font-size: 13.5px;
+	color: var(--ink);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.recent-scan-sub {
+	font-family: "IBM Plex Mono", monospace;
+	font-size: 11px;
+	color: var(--ink-soft);
+}
+.recent-scan-delete {
+	width: 34px;
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	background: var(--surface);
+	color: var(--ink-soft);
+	font-size: 16px;
+	line-height: 1;
+	cursor: pointer;
+}
+.recent-scan-delete:hover {
+	border-color: var(--critical);
+	color: var(--critical);
+}
+
 /* ---------- Scan depth presets ---------- */
 .depth-select {
 	display: flex;
