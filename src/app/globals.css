@@ -75,6 +75,16 @@ a {
 header {
 	padding: 28px 0 20px;
 	border-bottom: 1px solid var(--line);
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+.header-actions {
+	display: flex;
+	align-items: center;
+	gap: 10px;
 }
 .brand {
 	display: flex;
@@ -1152,6 +1162,269 @@ h1 {
 	border-color: transparent;
 }
 
+/* ---------- Periodic scan scheduler ---------- */
+.schedule-manager {
+	position: relative;
+	display: inline-block;
+}
+.schedule-manager-btn {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	border: 1px solid var(--line);
+	background: var(--surface);
+	color: var(--ink);
+	font-weight: 600;
+	font-size: 14px;
+	padding: 11px 18px;
+	border-radius: 7px;
+	cursor: pointer;
+	font-family: "IBM Plex Sans", sans-serif;
+	transition: border-color 0.15s ease, background 0.15s ease;
+}
+.schedule-manager-btn:hover {
+	border-color: var(--accent);
+}
+.schedule-manager-btn:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+.schedule-manager-count {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 18px;
+	height: 18px;
+	padding: 0 5px;
+	border-radius: 999px;
+	background: var(--accent);
+	color: #fff;
+	font-size: 11px;
+	font-weight: 700;
+}
+.schedule-panel {
+	position: absolute;
+	top: calc(100% + 8px);
+	right: 0;
+	z-index: 30;
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: 10px;
+	box-shadow: 0 12px 32px rgba(18, 33, 28, 0.16);
+	padding: 16px;
+	width: 340px;
+	max-width: min(340px, calc(100vw - 32px));
+	max-height: 70vh;
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+.schedule-panel-section {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.schedule-list-section {
+	border-top: 1px solid var(--line);
+	padding-top: 12px;
+}
+.schedule-panel-title {
+	font-size: 13px;
+	font-weight: 700;
+	color: var(--ink);
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	margin: 0;
+}
+.schedule-panel-url {
+	font-size: 13px;
+	color: var(--ink-soft);
+	word-break: break-all;
+	margin: 0;
+}
+.schedule-url-input {
+	width: 100%;
+	padding: 9px 11px;
+	border-radius: 7px;
+	border: 1px solid var(--line);
+	font-size: 14px;
+	font-family: "IBM Plex Sans", sans-serif;
+}
+.schedule-mode-toggle {
+	display: flex;
+	gap: 6px;
+}
+.schedule-mode-toggle button {
+	flex: 1;
+	padding: 7px 10px;
+	border-radius: 6px;
+	border: 1px solid var(--line);
+	background: var(--surface);
+	font-size: 13px;
+	cursor: pointer;
+	font-family: "IBM Plex Sans", sans-serif;
+}
+.schedule-mode-toggle button.active {
+	border-color: var(--accent);
+	background: var(--accent-soft);
+	color: var(--accent);
+	font-weight: 600;
+}
+.schedule-field-label {
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--ink-soft);
+}
+.schedule-frequency-select {
+	width: 100%;
+	padding: 8px 10px;
+	border-radius: 7px;
+	border: 1px solid var(--line);
+	font-size: 14px;
+	font-family: "IBM Plex Sans", sans-serif;
+	background: var(--surface);
+	color: var(--ink);
+}
+.schedule-checkbox-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 13px;
+	color: var(--ink);
+	cursor: pointer;
+}
+.schedule-checkbox-row input {
+	flex: none;
+}
+.schedule-note {
+	font-size: 12px;
+	color: var(--ink-soft);
+	margin: 0;
+	line-height: 1.4;
+}
+.schedule-note-warn {
+	color: var(--warn);
+}
+.schedule-note-error {
+	color: var(--critical);
+}
+.schedule-enable-notif {
+	align-self: flex-start;
+	border: 1px solid var(--accent);
+	background: none;
+	color: var(--accent);
+	font-size: 12px;
+	font-weight: 600;
+	padding: 6px 10px;
+	border-radius: 6px;
+	cursor: pointer;
+}
+.schedule-create-btn {
+	border: 1px solid var(--accent);
+	background: var(--accent);
+	color: #fff;
+	font-weight: 600;
+	font-size: 14px;
+	padding: 10px 14px;
+	border-radius: 7px;
+	cursor: pointer;
+	font-family: "IBM Plex Sans", sans-serif;
+}
+.schedule-create-btn:disabled {
+	opacity: 0.6;
+	cursor: default;
+}
+.schedule-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+.schedule-item {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	gap: 8px;
+	padding: 10px;
+	border: 1px solid var(--line);
+	border-radius: 8px;
+}
+.schedule-item-paused {
+	opacity: 0.6;
+}
+.schedule-item-main {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+.schedule-item-url {
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--ink);
+	word-break: break-all;
+}
+.schedule-item-meta {
+	font-size: 11px;
+	color: var(--ink-soft);
+}
+.schedule-item-result {
+	margin-top: 2px;
+}
+.schedule-badge {
+	display: inline-block;
+	font-size: 11px;
+	font-weight: 600;
+	padding: 2px 7px;
+	border-radius: 999px;
+	background: var(--surface-2);
+	color: var(--ink-soft);
+}
+.schedule-badge-good {
+	background: var(--good-bg);
+	color: var(--good);
+}
+.schedule-badge-bad {
+	background: var(--critical-bg);
+	color: var(--critical);
+}
+.schedule-badge-neutral {
+	background: var(--surface-2);
+	color: var(--ink-soft);
+}
+.schedule-badge-pending {
+	background: var(--surface-2);
+	color: var(--ink-soft);
+}
+.schedule-badge-error {
+	background: var(--critical-bg);
+	color: var(--critical);
+}
+.schedule-item-actions {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 4px;
+	flex: none;
+}
+.schedule-item-actions button {
+	border: none;
+	background: none;
+	color: var(--accent);
+	font-size: 11px;
+	font-weight: 600;
+	cursor: pointer;
+	padding: 2px 4px;
+}
+.schedule-item-delete {
+	color: var(--critical) !important;
+	font-size: 16px !important;
+	line-height: 1;
+}
+
 /* ---------- Report download (PDF / DOCX / CSV / TSV / MD / TXT / JSON) ---------- */
 .report-download {
 	position: relative;
@@ -2079,9 +2352,22 @@ footer {
 		align-items: stretch;
 	}
 	.report-download-btn,
+	.schedule-manager-btn,
 	.fix-all {
 		width: 100%;
 		justify-content: center;
+	}
+	.schedule-manager {
+		width: 100%;
+	}
+	.schedule-panel {
+		right: auto;
+		left: 0;
+		width: calc(100vw - 32px);
+	}
+	header {
+		flex-direction: column;
+		align-items: flex-start;
 	}
 }
 @media (prefers-reduced-motion: reduce) {

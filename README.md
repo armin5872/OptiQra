@@ -23,6 +23,7 @@ See a live demo via the vercel deployment: https://optiqra.vercel.app
 - Reviews accessibility issues such as missing labels and contrast problems
 - Audits key security headers and conversion-oriented signals
 - Optionally uses PageSpeed Insights when a PSI API key is configured
+- Schedule periodic re-scans (hourly, daily, weekly, monthly, yearly) that run unattended, compare each result against the previous scan, and can notify you via browser notification when they finish
 
 ## Showcase
 ![showcase](showcase.gif)
@@ -76,8 +77,18 @@ docker compose up --build
 
 The app will be available at http://localhost:3000.
 
-## API
+## Periodic scans
 
+Click **⏱ Schedule this scan** on a report (or **⏱ Scheduled scans** in the header to manage all of them) to have OptiQra re-scan a URL on a recurring cadence — hourly, daily, weekly, monthly, or yearly. Each run:
+
+- Saves a new report to this browser's scan history, same as a manual scan.
+- Optionally compares the new report against the most recent previous scan of that URL — score change, new issues, resolved issues.
+- Optionally fires a browser notification with a one-line summary once it finishes.
+
+**Scope/limitations, to be upfront about them:** this app has no server, database, or user accounts — schedules and their history live entirely in this browser's IndexedDB (`src/lib/scheduleStore.ts`). A background checker (`src/lib/scheduler.ts`) runs while any tab of the app is open (or installed as a PWA) and checks every minute for schedules that are due, so you don't need to keep the report on screen or babysit a scan — but scans only fire while the browser process itself is running somewhere. There's a best-effort attempt to register the [Periodic Background Sync API](https://developer.chrome.com/docs/capabilities/periodic-background-sync) on browsers/installs that support it, which can extend this a little further, but that API has no guaranteed interval and isn't available in most browsers — treat it as a bonus, not a guarantee. For true "runs even when nothing is open" scheduling you'd want a server-side cron job hitting `/api/analyze` instead.
+
+
+## API
 ### POST /api/analyze
 
 Send a JSON body containing a URL:
@@ -95,6 +106,7 @@ The endpoint returns a report with categories such as security, SEO, performance
 - src/app/page.tsx: the main diagnostic UI
 - src/app/api/analyze/route.ts: the analysis orchestration endpoint
 - src/lib: audit modules for Crawler, AI, SEO, speed, accessibility, links, images, duplicate content, broken links, security headers, and PageSpeed
+- src/lib/scheduler.ts, scheduleStore.ts, scanCompare.ts, notifications.ts: periodic re-scan engine (see "Periodic scans" below)
 
 ## 🌱 Roadmap
 
@@ -134,7 +146,8 @@ The endpoint returns a report with categories such as security, SEO, performance
 - [x] AI website review
 - [x] AI generated fixes
 - [ ] Competitor comparison
-- [ ] Historical scan tracking
+- [x] Historical scan tracking
+- [x] Periodic (scheduled) scans with change detection and notifications
 - [ ] CI/CD integration
 - [ ] GitHub pull request fixes
 

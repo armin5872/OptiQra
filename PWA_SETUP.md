@@ -8,6 +8,7 @@ This app now has:
   - `/api/*` → network-only (scans always hit the server live)
   - Everything else (pages) → network-first with a 10s timeout, falling back to cache, then to `public/offline.html`
 - **idb** (`src/lib/scanStore.ts`) — every completed scan (single-page or full-site) is saved in full to an IndexedDB database (`optiqra-scans`), so past reports are viewable offline and survive reloads. A "Recent scans" list on the home screen reads from here.
+- **idb** (`src/lib/scheduleStore.ts`) — periodic scan schedules (frequency, compare-with-previous, notify) live in a second IndexedDB database (`optiqra-schedules`). `src/lib/scheduler.ts` polls it once a minute (while a tab is open) and runs whatever's due — see the "Periodic scans" section in README.md for the full picture, including what it can't do (fire while the browser is fully closed).
 - **Cookies** (`src/lib/scanCookies.ts`) — a lightweight pointer to your scan history (id, url, mode, score, timestamp — not the full report) is also written to a cookie, capped at the last 10 scans (~1KB), since cookies are readable synchronously and server-side, unlike IndexedDB.
 - **Manifest + icons** — `public/manifest.json` and `public/icons/*` (generated from `optiqra.webp`), linked from `src/app/layout.tsx`, so the app is installable.
 

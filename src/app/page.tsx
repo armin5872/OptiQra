@@ -7,6 +7,7 @@ import AIProviderSetup from "./components/AIProviderSetup";
 import AIFixButton from "./components/AIFixButton";
 import AISiteInsights from "./components/AISiteInsights";
 import ReportDownload from "./components/ReportDownload";
+import ScheduleManager from "./components/ScheduleManager";
 import {
 	saveScan,
 	getRecentScans,
@@ -386,6 +387,9 @@ export default function Home() {
 					</span>
 					OptiQra
 				</div>
+				<div className="header-actions">
+					<ScheduleManager />
+				</div>
 			</header>
 
 			{viewState === "hero" && (
@@ -698,6 +702,11 @@ export default function Home() {
 						<h2>Diagnostic report</h2>
 						<div className="report-top-actions">
 							<ReportDownload reportData={reportData} overallScore={overall} />
+							<ScheduleManager
+								url={reportData.url}
+								mode={reportData.mode ?? scanMode}
+								maxPages={resolvedMaxPages}
+							/>
 							<button
 								className="fix-all"
 								onClick={fixAll}
