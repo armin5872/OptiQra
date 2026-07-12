@@ -22,10 +22,11 @@ import {
 	toTxt,
 	toJSON,
 	downloadText,
-	exportReportPdf,
-	exportReportDocx,
 	type SourceReportData,
 } from "@/lib/reportExport";
+// Heavy exporters are dynamically imported on-click to avoid bloating the initial bundle
+import type { exportReportPdf } from "@/lib/reportExport/pdf";
+import type { exportReportDocx } from "@/lib/reportExport/docx";
 
 type Format = "pdf" | "docx" | "csv" | "tsv" | "md" | "txt" | "json";
 
@@ -77,12 +78,16 @@ export default function ReportDownload({
 			const base = reportFileBaseName(model);
 
 			switch (format) {
-				case "pdf":
+				case "pdf": {
+					const { exportReportPdf } = await import("@/lib/reportExport/pdf");
 					await exportReportPdf(model);
 					break;
-				case "docx":
+				}
+				case "docx": {
+					const { exportReportDocx } = await import("@/lib/reportExport/docx");
 					await exportReportDocx(model);
 					break;
+				}
 				case "csv":
 					downloadText(toCSV(model), `${base}.csv`, "text/csv");
 					break;
@@ -100,13 +105,16 @@ export default function ReportDownload({
 					break;
 			}
 			setOpen(false);
-		} catch (err) {
+		} catch (err: any) {
 			console.error(`Report export failed (${format}):`, err);
-			setError(
-				format === "pdf" || format === "docx" ?
-					`Couldn't generate the ${format.toUpperCase()} file. Make sure the "${format === "pdf" ? "jspdf" : "docx"}" package is installed.`
-				:	`Couldn't generate the ${format.toUpperCase()} file.`,
-			);
+			const pkgName = format === "pdf" ? "jspdf" : format === "docx" ? "docx" : null;
+			const msg =
+				err?.message?.includes("not available") ?
+					`Install the missing package: npm install ${pkgName}`
+				: format === "pdf" || format === "docx" ?
+					`Couldn't generate the ${format.toUpperCase()} file (check console for details).`
+				:	`Couldn't generate the ${format.toUpperCase()} file.`;
+			setError(msg);
 		} finally {
 			setPending(null);
 		}

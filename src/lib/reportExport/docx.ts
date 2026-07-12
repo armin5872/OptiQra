@@ -22,19 +22,24 @@ function scoreHex(score: number): string {
 }
 
 export async function exportReportDocx(model: ReportModel): Promise<void> {
-  const {
-    Document,
-    Packer,
-    Paragraph,
-    TextRun,
-    HeadingLevel,
-    Table,
-    TableRow,
-    TableCell,
-    WidthType,
-    ShadingType,
-    BorderStyle,
-  } = await import('docx');
+  let Document: any, Packer: any, Paragraph: any, TextRun: any, HeadingLevel: any, Table: any, TableRow: any, TableCell: any, WidthType: any, ShadingType: any;
+  try {
+    const mod = await import('docx');
+    Document = mod.Document;
+    Packer = mod.Packer;
+    Paragraph = mod.Paragraph;
+    TextRun = mod.TextRun;
+    HeadingLevel = mod.HeadingLevel;
+    Table = mod.Table;
+    TableRow = mod.TableRow;
+    TableCell = mod.TableCell;
+    WidthType = mod.WidthType;
+    ShadingType = mod.ShadingType;
+  } catch (e) {
+    throw new Error(
+      'docx library not available. Please install it: npm install docx',
+    );
+  }
 
   const cell = (text: string, opts: { bold?: boolean; color?: string; shade?: string } = {}) =>
     new TableCell({

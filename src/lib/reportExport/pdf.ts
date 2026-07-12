@@ -24,7 +24,15 @@ function scoreColor(score: number): [number, number, number] {
 }
 
 export async function exportReportPdf(model: ReportModel): Promise<void> {
-  const { jsPDF } = await import('jspdf');
+  let jsPDF: any;
+  try {
+    const mod = await import('jspdf');
+    jsPDF = mod.jsPDF;
+  } catch (e) {
+    throw new Error(
+      'jsPDF library not available. Please install it: npm install jspdf',
+    );
+  }
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
