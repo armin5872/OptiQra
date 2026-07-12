@@ -18,10 +18,11 @@ See a live demo via the vercel deployment: https://optiqra.vercel.app
 - Scans a target URL and crawls its associated links and produces a multi-category audit report
 - If the user has entered an api key it will allow the user to generate a fix with AI for each Issue
 - Creates a visual tree of the pages it has crawled with the abilty to hover or cilck each page to see its individual stats
-- Checks SEO metadata, structured data, robots files, and sitemaps
+- Checks SEO metadata, structured data, links, image metadata, robots files, and sitemaps
 - Evaluates performance-related HTML and response characteristics
 - Reviews accessibility issues such as missing labels and contrast problems
 - Audits key security headers and conversion-oriented signals
+- Gives the option to download the seo report in txt, JSON, pdf, CSV, TSV and docx(word)
 - Optionally uses PageSpeed Insights when a PSI API key is configured
 
 ## Showcase
