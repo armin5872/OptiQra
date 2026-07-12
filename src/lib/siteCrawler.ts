@@ -322,13 +322,24 @@ export async function crawlSite(
 		}
 	}
 
+	// Counts pages pulled off the queue for processing, whether or not their
+	// fetch has completed yet. This — not `pages.length` — must be what's
+	// compared against `maxPages` before dispatching more work: with several
+	// concurrent workers, each can pass a `pages.length < maxPages` check
+	// before any of their *own* in-flight fetches have pushed to `pages`,
+	// letting up to `concurrency - 1` extra pages slip through and overshoot
+	// the cap (e.g. "55 of 50 scanned"). Incrementing `dispatched` here is
+	// race-free — JS runs each worker's synchronous code to completion before
+	// another worker can run — so it keeps total dispatches capped exactly.
+	let dispatched = 0;
+
 	async function worker(): Promise<void> {
 		while (true) {
 			if (signal?.aborted) {
 				aborted = true;
 				return;
 			}
-			if (pages.length >= maxPages) return;
+			if (dispatched >= maxPages) return;
 
 			const item = queue.shift();
 			if (!item) {
@@ -341,6 +352,7 @@ export async function crawlSite(
 				continue;
 			}
 
+			dispatched++;
 			activeWorkers++;
 			await processItem(item);
 			activeWorkers--;

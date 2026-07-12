@@ -278,6 +278,17 @@ export default function Home() {
 
 				if (evt.type === "status") {
 					setStatusMessage(evt.message ?? "");
+					// Once the crawl itself is done, the pipeline moves into
+					// per-site post-processing (broken links, duplicate content,
+					// security headers, PageSpeed Insights) that can take
+					// anywhere from a few seconds to 30+ seconds. That phase has
+					// no per-page `currentUrl` of its own, so without this the
+					// last crawled page's URL stays pinned on screen and the
+					// status messages below never get a chance to show,
+					// making the scan look frozen right after "N of N pages".
+					setCrawlProgress((p) =>
+						p ? { ...p, currentUrl: undefined } : p,
+					);
 				} else if (evt.type === "progress") {
 					setCrawlProgress({
 						scanned: evt.scanned,
