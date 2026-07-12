@@ -278,7 +278,7 @@ export function startScheduler() {
 			.then(async (reg: any) => {
 				if (!reg.periodicSync) return;
 				const status = await (navigator.permissions
-					.query({ name: "periodic-background-sync" } as PermissionDescriptor) as Promise<PermissionStatus>)
+					.query({ name: "periodic-background-sync" } as unknown as PermissionDescriptor) as Promise<PermissionStatus>)
 					.catch(() => null);
 				if (status && status.state === "granted") {
 					await reg.periodicSync
