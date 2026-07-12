@@ -17,6 +17,7 @@ import {
 	HARD_MAX_PAGES,
 } from "@/lib/siteCrawler";
 import { CheerioAPI, load } from "cheerio";
+import { assertSafeUrl, UnsafeUrlError } from "@/lib/urlSafety";
 
 export const runtime = "nodejs";
 // Site scans can now go up to 1000 pages, which won't finish in the default 60s.
@@ -130,19 +131,15 @@ type LinksRequestBody = {
 	checkLinkStatuses?: boolean;
 };
 
-function validateRequestUrl(url: unknown) {
+async function validateRequestUrl(url: unknown) {
 	if (!url || typeof url !== "string") {
 		throw new Error("Missing required 'url' string in request body.");
 	}
-	try {
-		return new URL(url).toString();
-	} catch {
-		throw new Error("Invalid URL.");
-	}
+	return assertSafeUrl(url);
 }
 
 export async function analyzeImagesRequest(body: ImagesRequestBody) {
-	const targetUrl = validateRequestUrl(body?.url);
+	const targetUrl = await validateRequestUrl(body?.url);
 	return analyzeImages(targetUrl, {
 		maxFileSizeBytes:
 			typeof body.maxFileSizeBytes === "number" ?
@@ -154,7 +151,7 @@ export async function analyzeImagesRequest(body: ImagesRequestBody) {
 }
 
 export async function analyzeLinksRequest(body: LinksRequestBody) {
-	const targetUrl = validateRequestUrl(body?.url);
+	const targetUrl = await validateRequestUrl(body?.url);
 	return analyzeLinks(targetUrl, {
 		externalLinkThreshold:
 			typeof body.externalLinkThreshold === "number" ?
@@ -185,12 +182,15 @@ export async function POST(req: NextRequest) {
 		return NextResponse.json({ error: "URL is required" }, { status: 400 });
 	}
 
-	// Validate URL format
+	// Validate URL format and make sure it isn't pointing at an internal/
+	// private address (SSRF guard) before we let the crawler anywhere near it.
 	let targetUrl: string;
 	try {
-		targetUrl = new URL(url).toString();
-	} catch {
-		return NextResponse.json({ error: "Invalid URL format" }, { status: 400 });
+		targetUrl = await assertSafeUrl(url);
+	} catch (err) {
+		const message =
+			err instanceof UnsafeUrlError ? err.message : "Invalid URL format";
+		return NextResponse.json({ error: message }, { status: 400 });
 	}
 
 	if (mode === "site") {
