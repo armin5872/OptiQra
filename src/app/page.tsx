@@ -736,7 +736,16 @@ export default function Home() {
 								<div
 									key={key}
 									className="card"
+									role="button"
+									tabIndex={0}
+									aria-expanded={openPanel === key}
 									onClick={() => setOpenPanel(openPanel === key ? null : key)}
+									onKeyDown={(e) => {
+										if (e.key === "Enter" || e.key === " ") {
+											e.preventDefault();
+											setOpenPanel(openPanel === key ? null : key);
+										}
+									}}
 								>
 									<div className="card-head">
 										<div className="card-name">{cat.label}</div>
