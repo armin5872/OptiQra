@@ -7,7 +7,12 @@ import {
 	analyzeConversions,
 	type Issue,
 } from "@/lib/htmlAudit";
-import { analyzeLinks } from "@/lib/link-analyzer";
+import {
+	analyzeLinks,
+	buildLinkIssues,
+	findBrokenLinksAcrossSite,
+} from "@/lib/link-analyzer";
+import { analyzeDuplicateContent } from "@/lib/duplicateContentAudit";
 import { analyzeImages } from "@/lib/image-analyzer";
 import { analyzeSecurityHeaders } from "@/lib/securityHeadersAudit";
 import { runPageSpeed } from "@/lib/pagespeed";
@@ -351,7 +356,34 @@ async function runSinglePageScan(targetUrl: string, signal: AbortSignal) {
 			};
 		}
 
-		// 7. Run Lighthouse (PageSpeed Insights) if API key is configured
+		// 7. Analyze Links (broken links, duplicate/empty/js hrefs, missing rel=noopener, etc.)
+		try {
+			const linksResult = await analyzeLinks(targetUrl, {
+				checkLinkStatuses: true,
+			});
+			const { issues: linkIssues, passed: linkPassed } =
+				buildLinkIssues(linksResult);
+			const linksScore =
+				100 - linkIssues.reduce((sum, i) => sum + i.weight, 0);
+			categories["links"] = {
+				label: "Links",
+				score: Math.max(20, Math.min(100, linksScore)),
+				issues: linkIssues,
+				passed: linkPassed,
+				source: "link-analyzer",
+			};
+		} catch (error) {
+			console.warn("Link audit failed:", error);
+			categories["links"] = {
+				label: "Links",
+				score: 50,
+				issues: [],
+				passed: [],
+				source: "link-analyzer",
+			};
+		}
+
+		// 8. Run Lighthouse (PageSpeed Insights) if API key is configured
 		try {
 			const psiResult = await runPageSpeed(targetUrl);
 			if (psiResult.speed) {
@@ -650,6 +682,81 @@ function streamSiteCrawl(
 						convPerPage,
 					),
 				};
+
+				// Broken-link detection across the whole crawled site: every link from
+				// every page is deduped by resolved URL first, so a link repeated in a
+				// shared header/footer is only checked once no matter how many pages
+				// reference it.
+				enqueue({
+					type: "status",
+					message: "Checking for broken links across the site...",
+				});
+				try {
+					const siteLinksResult = await findBrokenLinksAcrossSite(
+						crawl.pages.map((p) => ({ url: p.url, html: p.html })),
+					);
+					const linksScore =
+						100 - siteLinksResult.issues.reduce((sum, i) => sum + i.weight, 0);
+					categories["links"] = {
+						label: "Broken Links",
+						score: Math.max(20, Math.min(100, linksScore)),
+						issues: siteLinksResult.issues,
+						passed: siteLinksResult.passed,
+						source: "link-analyzer",
+						pagesAnalyzed: crawl.pages.length,
+					};
+				} catch (error) {
+					console.warn("Site-wide link audit failed:", error);
+					categories["links"] = {
+						label: "Broken Links",
+						score: 50,
+						issues: [],
+						passed: [],
+						source: "link-analyzer",
+						pagesAnalyzed: crawl.pages.length,
+					};
+				}
+
+				if (signal.aborted) {
+					enqueue({ type: "aborted", pagesScanned: crawl.pages.length });
+					return close();
+				}
+
+				// Duplicate-content detection: repeated titles/meta descriptions, and
+				// pages whose main text is identical or highly similar to another page.
+				enqueue({
+					type: "status",
+					message: "Checking for duplicate content...",
+				});
+				try {
+					const duplicateContentResult = analyzeDuplicateContent(
+						crawl.pages.map((p) => ({ url: p.url, html: p.html })),
+					);
+					const duplicateScore =
+						100 -
+						duplicateContentResult.issues.reduce(
+							(sum, i) => sum + i.weight,
+							0,
+						);
+					categories["duplicateContent"] = {
+						label: "Duplicate Content",
+						score: Math.max(20, Math.min(100, duplicateScore)),
+						issues: duplicateContentResult.issues,
+						passed: duplicateContentResult.passed,
+						source: "duplicate-content-audit",
+						pagesAnalyzed: crawl.pages.length,
+					};
+				} catch (error) {
+					console.warn("Duplicate content audit failed:", error);
+					categories["duplicateContent"] = {
+						label: "Duplicate Content",
+						score: 50,
+						issues: [],
+						passed: [],
+						source: "duplicate-content-audit",
+						pagesAnalyzed: crawl.pages.length,
+					};
+				}
 
 				enqueue({ type: "status", message: "Checking security headers..." });
 

@@ -3,6 +3,7 @@
 // npm install cheerio
 
 import * as cheerio from "cheerio";
+import { issue, pass, type Issue } from "@/lib/auditUtils";
 
 export interface RawLink {
   href: string;           // original attribute value, unresolved
@@ -166,7 +167,7 @@ export function extractLinks(html: string, baseUrl: string): RawLink[] {
 }
 
 /** Follows redirects manually (up to maxRedirects) to build a chain and get final status. */
-async function checkLinkStatus(
+export async function checkLinkStatus(
   resolvedUrl: string,
   maxRedirects: number,
   timeoutMs: number,
@@ -300,5 +301,227 @@ export async function analyzeLinks(scannedUrl: string, opts: AnalyzeOptions = {}
     redirectChains,
 
     allChecked: statusResults,
+  };
+}
+
+/** Converts a single-page LinkAnalysisReport into the standard Issue/passed shape
+ *  used by every other auditor, so link results can sit alongside SEO/A11y/etc. */
+export function buildLinkIssues(report: LinkAnalysisReport): { issues: Issue[]; passed: Issue[] } {
+  const issues: Issue[] = [];
+  const passed: Issue[] = [];
+
+  if (report.brokenLinks.length > 0) {
+    const first = report.brokenLinks[0];
+    issues.push(issue(
+      "broken-links",
+      `${report.brokenLinks.length} broken link${report.brokenLinks.length === 1 ? "" : "s"} found`,
+      `${report.brokenLinks.length} link${report.brokenLinks.length === 1 ? "" : "s"} on this page returned an error (e.g. "${first.resolvedUrl}" → ${first.error ?? first.statusCode}).`,
+      "Fix or remove broken links, or update them to point at the correct destination.",
+      12,
+    ));
+  } else if (report.allChecked.length > 0) {
+    passed.push(pass("broken-links", "All checked links resolve successfully"));
+  }
+
+  if (report.duplicateLinks.length > 0) {
+    const first = report.duplicateLinks[0];
+    issues.push(issue(
+      "duplicate-links",
+      `${report.duplicateLinks.length} URL${report.duplicateLinks.length === 1 ? "" : "s"} linked to multiple times on this page`,
+      `For example, "${first.resolvedUrl}" appears ${first.count} times. Not necessarily an error, but excessive repetition can dilute link equity and clutter navigation.`,
+      "Consolidate repeated links where possible, keeping only the most meaningful instance.",
+      2,
+    ));
+  }
+
+  if (report.emptyHrefs.length > 0) {
+    issues.push(issue(
+      "empty-hrefs",
+      `${report.emptyHrefs.length} link${report.emptyHrefs.length === 1 ? "" : "s"} with empty or missing href`,
+      "Anchor tags without a valid href are not real links to crawlers or assistive tech, and often indicate leftover placeholder markup.",
+      "Add a valid href, or use a <button> element if it isn't meant to navigate.",
+      3,
+    ));
+  }
+
+  if (report.javascriptLinks.length > 0) {
+    issues.push(issue(
+      "javascript-links",
+      `${report.javascriptLinks.length} link${report.javascriptLinks.length === 1 ? "" : "s"} use javascript: hrefs`,
+      "javascript: URLs aren't crawlable and often break middle-click/open-in-new-tab behavior.",
+      "Use a real href and attach behavior via an event listener instead.",
+      4,
+    ));
+  }
+
+  if (report.linksWithoutText.length > 0) {
+    issues.push(issue(
+      "links-without-text",
+      `${report.linksWithoutText.length} link${report.linksWithoutText.length === 1 ? "" : "s"} have no accessible text`,
+      "Links with no text, aria-label, title, or alt text on a contained image are announced as just \"link\" by screen readers and provide no context to search engines.",
+      "Add descriptive link text, an aria-label, or alt text on the linked image.",
+      5,
+    ));
+  }
+
+  if (report.missingRelNoopener.length > 0) {
+    issues.push(issue(
+      "missing-rel-noopener",
+      `${report.missingRelNoopener.length} target="_blank" link${report.missingRelNoopener.length === 1 ? "" : "s"} missing rel="noopener"`,
+      "Links that open in a new tab without rel=\"noopener noreferrer\" let the destination page access window.opener, a known tabnabbing risk.",
+      'Add rel="noopener noreferrer" to every target="_blank" link.',
+      4,
+    ));
+  }
+
+  if (report.tooManyExternalLinks) {
+    issues.push(issue(
+      "too-many-external-links",
+      `Page has ${report.externalLinkCount} external links (over the ${report.externalLinkThreshold} threshold)`,
+      "A very high number of external links can dilute page authority and, in extreme cases, resemble a link farm to search engines.",
+      "Review external links and keep only those that add genuine value for readers.",
+      3,
+    ));
+  }
+
+  if (issues.length === 0) {
+    passed.push(pass("link-hygiene", "No broken, empty, or malformed links found"));
+  }
+
+  return { issues, passed };
+}
+
+export interface SiteLinkAnalysisOptions {
+  concurrency?: number;      // default 8
+  maxRedirects?: number;     // default 5
+  fetchTimeoutMs?: number;   // default 8000
+  userAgent?: string;
+  checkExternal?: boolean;   // default true — set false to only verify internal links
+}
+
+export interface BrokenSiteLink {
+  resolvedUrl: string;
+  statusCode: number | null;
+  error: string | null;
+  isExternal: boolean;
+  foundOnPages: string[]; // pages that link to this URL (capped)
+  sampleText: string[];
+}
+
+export interface SiteLinkAnalysisReport {
+  totalUniqueLinks: number;
+  totalInternal: number;
+  totalExternal: number;
+  brokenLinks: BrokenSiteLink[];
+  issues: Issue[];
+  passed: Issue[];
+}
+
+/**
+ * Checks broken links across an entire crawled site instead of one page at a time.
+ * Every checkable link from every crawled page is deduped by resolved URL first, so
+ * a link that appears in a shared header/footer on 200 pages is only fetched once.
+ */
+export async function findBrokenLinksAcrossSite(
+  pages: { url: string; html: string }[],
+  opts: SiteLinkAnalysisOptions = {},
+): Promise<SiteLinkAnalysisReport> {
+  const options = {
+    concurrency: opts.concurrency ?? 8,
+    maxRedirects: opts.maxRedirects ?? 5,
+    fetchTimeoutMs: opts.fetchTimeoutMs ?? 8000,
+    userAgent: opts.userAgent ?? DEFAULTS.userAgent,
+    checkExternal: opts.checkExternal ?? true,
+  };
+
+  const linkInfo = new Map<
+    string,
+    { isExternal: boolean; foundOnPages: Set<string>; sampleText: string[] }
+  >();
+
+  for (const page of pages) {
+    let links: RawLink[];
+    try {
+      links = extractLinks(page.html, page.url);
+    } catch {
+      continue;
+    }
+    for (const link of links) {
+      if (!link.resolvedUrl || link.isAnchorOnly || link.isMailtoOrTel || link.isJavascript) continue;
+      if (link.isExternal && !options.checkExternal) continue;
+
+      const key = link.resolvedUrl;
+      if (!linkInfo.has(key)) {
+        linkInfo.set(key, { isExternal: link.isExternal, foundOnPages: new Set(), sampleText: [] });
+      }
+      const entry = linkInfo.get(key)!;
+      entry.foundOnPages.add(page.url);
+      if (entry.sampleText.length < 3 && link.text) entry.sampleText.push(link.text);
+    }
+  }
+
+  const uniqueUrls = Array.from(linkInfo.keys());
+  const statusResults = await mapLimit(uniqueUrls, options.concurrency, (url) =>
+    checkLinkStatus(url, options.maxRedirects, options.fetchTimeoutMs, options.userAgent),
+  );
+
+  const brokenLinks: BrokenSiteLink[] = [];
+  for (const result of statusResults) {
+    if (result.ok) continue;
+    const info = linkInfo.get(result.resolvedUrl);
+    if (!info) continue;
+    brokenLinks.push({
+      resolvedUrl: result.resolvedUrl,
+      statusCode: result.statusCode,
+      error: result.error,
+      isExternal: info.isExternal,
+      foundOnPages: Array.from(info.foundOnPages).slice(0, 25),
+      sampleText: info.sampleText,
+    });
+  }
+  brokenLinks.sort((a, b) => b.foundOnPages.length - a.foundOnPages.length);
+
+  const internalBroken = brokenLinks.filter((l) => !l.isExternal);
+  const externalBroken = brokenLinks.filter((l) => l.isExternal);
+  const hasInternal = uniqueUrls.some((u) => !linkInfo.get(u)!.isExternal);
+  const hasExternal = uniqueUrls.some((u) => linkInfo.get(u)!.isExternal);
+
+  const issues: Issue[] = [];
+  const passed: Issue[] = [];
+
+  if (internalBroken.length > 0) {
+    const totalRefs = internalBroken.reduce((s, l) => s + l.foundOnPages.length, 0);
+    const first = internalBroken[0];
+    issues.push(issue(
+      "broken-internal-links",
+      `${internalBroken.length} broken internal link${internalBroken.length === 1 ? "" : "s"} found across the site`,
+      `${internalBroken.length} unique internal URL${internalBroken.length === 1 ? "" : "s"} returned an error (e.g. "${first.resolvedUrl}" → ${first.error ?? first.statusCode}), referenced from ${totalRefs} link instance${totalRefs === 1 ? "" : "s"} across the crawled pages.`,
+      "Fix or remove broken internal links, or add redirects for moved pages.",
+      12,
+    ));
+  } else if (hasInternal) {
+    passed.push(pass("broken-internal-links", "No broken internal links found across scanned pages"));
+  }
+
+  if (options.checkExternal && externalBroken.length > 0) {
+    const first = externalBroken[0];
+    issues.push(issue(
+      "broken-external-links",
+      `${externalBroken.length} broken external link${externalBroken.length === 1 ? "" : "s"} found across the site`,
+      `${externalBroken.length} external URL${externalBroken.length === 1 ? "" : "s"} referenced from your pages returned an error or timed out (e.g. "${first.resolvedUrl}" → ${first.error ?? first.statusCode}).`,
+      "Update or remove links to external sites that no longer resolve.",
+      4,
+    ));
+  } else if (options.checkExternal && hasExternal) {
+    passed.push(pass("broken-external-links", "No broken external links found across scanned pages"));
+  }
+
+  return {
+    totalUniqueLinks: uniqueUrls.length,
+    totalInternal: uniqueUrls.filter((u) => !linkInfo.get(u)!.isExternal).length,
+    totalExternal: uniqueUrls.filter((u) => linkInfo.get(u)!.isExternal).length,
+    brokenLinks,
+    issues,
+    passed,
   };
 }
