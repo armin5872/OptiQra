@@ -501,7 +501,11 @@ function streamSiteCrawl(
 
 						try {
 							const result = await analyzeSEO($, page.html, page.url, {
-								includeCrawlFiles: pagesSoFar === 1, // robots.txt / sitemap only need checking once per site
+								// robots.txt / sitemap only need checking once per site. Pages
+								// now fetch concurrently, so completion order no longer
+								// guarantees the seed page finishes first — key off depth
+								// instead of `pagesSoFar === 1`.
+								includeCrawlFiles: page.depth === 0,
 							});
 							const score =
 								100 - result.issues.reduce((sum, iss) => sum + iss.weight, 0);
@@ -605,6 +609,7 @@ function streamSiteCrawl(
 							categoryCount > 0 ? Math.round(pageScore / categoryCount) : 50;
 						pageNodes.push({
 							url: page.url,
+							parentUrl: page.parentUrl,
 							depth: page.depth ?? 0,
 							score: overallScore,
 							categories: pageCategories,

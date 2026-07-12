@@ -10,6 +10,13 @@ export const DEFAULT_MAX_PAGES = 15;
 export const HARD_MAX_PAGES = 1000;
 const DEFAULT_MAX_DEPTH = 3;
 const FETCH_TIMEOUT_MS = 9000;
+/** How many pages we fetch in parallel. Sequential crawling (1 request at a time)
+ *  is by far the biggest speed bottleneck for multi-page scans, since most of the
+ *  wall-clock time is spent waiting on network I/O for the target site. Running
+ *  several requests concurrently lets us overlap that wait time. Kept modest by
+ *  default to avoid hammering smaller sites / triggering rate limits. */
+export const DEFAULT_CONCURRENCY = 6;
+export const MAX_CONCURRENCY = 12;
 
 /** Preset scan depths surfaced in the UI. "custom" lets the user pick any
  *  value between 1 and HARD_MAX_PAGES. */
@@ -29,16 +36,22 @@ export interface CrawledPage {
 	response: Response;
 	elapsedMs: number;
 	depth: number;
+	parentUrl?: string;
 }
 
 export interface CrawlOptions {
 	maxPages?: number;
 	maxDepth?: number;
-	/** Aborting this signal stops the crawl as soon as the in-flight fetch settles. */
+	/** How many pages to fetch in parallel. Defaults to DEFAULT_CONCURRENCY,
+	 *  capped at MAX_CONCURRENCY. */
+	concurrency?: number;
+	/** Aborting this signal stops the crawl as soon as in-flight fetches settle. */
 	signal?: AbortSignal;
-	/** Called right after each page is fetched (in crawl order), before the next
-	 *  fetch starts. Lets the caller run per-page work (e.g. audits) and report
-	 *  progress without waiting for the whole crawl to finish. */
+	/** Called right after each page is fetched, before its child links are queued.
+	 *  With concurrency > 1 this fires in completion order, not queue order — use
+	 *  `page.depth === 0` rather than `pagesSoFar === 1` if you need to identify
+	 *  the seed page specifically. Lets the caller run per-page work (e.g. audits)
+	 *  and report progress without waiting for the whole crawl to finish. */
 	onPage?: (page: CrawledPage, pagesSoFar: number) => void | Promise<void>;
 }
 
@@ -149,24 +162,35 @@ async function discoverUrlsFromSitemap(
 				childSitemaps.push($(el).text().trim());
 			});
 
+			// Fetch the (at most 3) child sitemaps in parallel instead of one at a
+			// time — sitemap indexes are often split across many files and doing
+			// this sequentially adds seconds of pure waiting before the crawl
+			// itself even starts.
 			const collected: string[] = [];
-			for (const childUrl of childSitemaps.slice(0, 3)) {
-				if (collected.length >= limit || signal?.aborted) break;
-				try {
-					const childRes = await fetchWithTimeout(
-						childUrl,
-						FETCH_TIMEOUT_MS,
-						signal,
-					);
-					if (!childRes.ok) continue;
-					const childText = await childRes.text();
-					const $$ = cheerio.load(childText, { xmlMode: true });
-					$$("url > loc").each((_, el) => {
-						collected.push($$(el).text().trim());
-					});
-				} catch {
-					// skip unreachable child sitemap
-				}
+			const childResults = await Promise.all(
+				childSitemaps.slice(0, 3).map(async (childUrl) => {
+					if (signal?.aborted) return [] as string[];
+					try {
+						const childRes = await fetchWithTimeout(
+							childUrl,
+							FETCH_TIMEOUT_MS,
+							signal,
+						);
+						if (!childRes.ok) return [] as string[];
+						const childText = await childRes.text();
+						const $$ = cheerio.load(childText, { xmlMode: true });
+						const locs: string[] = [];
+						$$("url > loc").each((_, el) => {
+							locs.push($$(el).text().trim());
+						});
+						return locs;
+					} catch {
+						return [] as string[];
+					}
+				}),
+			);
+			for (const locs of childResults) {
+				collected.push(...locs);
 			}
 			if (collected.length > 0) {
 				return collected.filter((u) => isCrawlableUrl(u, origin)).slice(0, limit);
@@ -194,6 +218,10 @@ export async function crawlSite(
 		Math.min(options.maxPages ?? DEFAULT_MAX_PAGES, HARD_MAX_PAGES),
 	);
 	const maxDepth = options.maxDepth ?? DEFAULT_MAX_DEPTH;
+	const concurrency = Math.max(
+		1,
+		Math.min(options.concurrency ?? DEFAULT_CONCURRENCY, MAX_CONCURRENCY),
+	);
 	const signal = options.signal;
 	const origin = new URL(startUrl).origin;
 
@@ -204,56 +232,70 @@ export async function crawlSite(
 	const sitemapUrls = await discoverUrlsFromSitemap(origin, maxPages * 2, signal);
 	const usedSitemap = sitemapUrls.length > 0;
 
-	const queue: { url: string; depth: number }[] = [{ url: startUrl, depth: 0 }];
+	type QueueItem = { url: string; depth: number; parentUrl?: string };
+	const queue: QueueItem[] = [{ url: startUrl, depth: 0 }];
 	for (const su of sitemapUrls) {
 		const norm = normalizeForDedup(su);
 		if (!seen.has(norm)) {
 			seen.add(norm);
-			queue.push({ url: su, depth: 1 });
+			queue.push({ url: su, depth: 1, parentUrl: startUrl });
 		}
 	}
 
 	let discoveredExtraLinks = false;
 	let aborted = false;
 
-	while (queue.length > 0 && pages.length < maxPages) {
-		if (signal?.aborted) {
-			aborted = true;
-			break;
-		}
+	// Fetches run concurrently (up to `concurrency` at a time) instead of one
+	// request at a time — most of a crawl's wall-clock time is spent waiting on
+	// the target site's network I/O, so overlapping requests is the single
+	// biggest lever for crawl speed. BFS ordering and the maxPages/maxDepth
+	// limits are still respected; only the *timing* of fetches changes.
+	let activeWorkers = 0;
+	let waiters: Array<() => void> = [];
+	const wakeWaiters = () => {
+		const toWake = waiters;
+		waiters = [];
+		for (const w of toWake) w();
+	};
+	const waitForWork = () => new Promise<void>((resolve) => waiters.push(resolve));
 
-		const next = queue.shift()!;
+	async function processItem(item: QueueItem): Promise<void> {
 		try {
 			const started = Date.now();
-			const res = await fetchWithTimeout(next.url, FETCH_TIMEOUT_MS, signal);
+			const res = await fetchWithTimeout(item.url, FETCH_TIMEOUT_MS, signal);
 			const elapsedMs = Date.now() - started;
 			const contentType = res.headers.get("content-type") || "";
 
 			if (!res.ok) {
-				skipped.push({ url: next.url, reason: `HTTP ${res.status}` });
-				continue;
+				skipped.push({ url: item.url, reason: `HTTP ${res.status}` });
+				return;
 			}
 			if (contentType && !/text\/html/i.test(contentType)) {
-				skipped.push({ url: next.url, reason: "Not an HTML page" });
-				continue;
+				skipped.push({ url: item.url, reason: "Not an HTML page" });
+				return;
 			}
 
 			const html = await res.text();
 			const page: CrawledPage = {
-				url: res.url || next.url,
+				url: res.url || item.url,
 				html,
 				response: res,
 				elapsedMs,
-				depth: next.depth,
+				depth: item.depth,
+				parentUrl: item.parentUrl,
 			};
+			// Pushing to `pages` and reading its length happen synchronously (no
+			// `await` between them), so `pages.length` here is a reliable,
+			// monotonically increasing "completed so far" count even with
+			// several processItem() calls interleaved concurrently.
 			pages.push(page);
 
 			if (options.onPage) {
 				await options.onPage(page, pages.length);
 			}
 
-			if (next.depth < maxDepth && pages.length < maxPages) {
-				const links = extractLinks(html, next.url);
+			if (item.depth < maxDepth && pages.length < maxPages) {
+				const links = extractLinks(html, item.url);
 				for (const link of links) {
 					if (!link.resolvedUrl || link.isExternal) continue;
 					if (!isCrawlableUrl(link.resolvedUrl, origin)) continue;
@@ -261,20 +303,54 @@ export async function crawlSite(
 					if (seen.has(norm)) continue;
 					seen.add(norm);
 					discoveredExtraLinks = true;
-					queue.push({ url: link.resolvedUrl, depth: next.depth + 1 });
+					queue.push({
+						url: link.resolvedUrl,
+						depth: item.depth + 1,
+						parentUrl: page.url,
+					});
 				}
 			}
 		} catch (err: any) {
 			if (signal?.aborted) {
 				aborted = true;
-				break;
+				return;
 			}
 			skipped.push({
-				url: next.url,
+				url: item.url,
 				reason: err?.name === "AbortError" ? "Timed out" : (err?.message ?? "Fetch failed"),
 			});
 		}
 	}
+
+	async function worker(): Promise<void> {
+		while (true) {
+			if (signal?.aborted) {
+				aborted = true;
+				return;
+			}
+			if (pages.length >= maxPages) return;
+
+			const item = queue.shift();
+			if (!item) {
+				// No queued work right now. If nothing else is in flight, no more
+				// work is coming — we're done. Otherwise, another worker's
+				// in-flight fetch may still enqueue child links, so wait to be
+				// woken rather than exiting early.
+				if (activeWorkers === 0) return;
+				await waitForWork();
+				continue;
+			}
+
+			activeWorkers++;
+			await processItem(item);
+			activeWorkers--;
+			wakeWaiters();
+		}
+	}
+
+	await Promise.all(Array.from({ length: concurrency }, () => worker()));
+
+	if (signal?.aborted) aborted = true;
 
 	return {
 		startUrl,
