@@ -8,6 +8,7 @@ import {
 	type Issue,
 } from "@/lib/htmlAudit";
 import { analyzeAEO, analyzeAEOSiteSignals } from "@/lib/aeoAudit";
+import { analyzeGEO } from "@/lib/geoAudit";
 import {
 	analyzeLinks,
 	buildLinkIssues,
@@ -317,6 +318,31 @@ async function runSinglePageScan(targetUrl: string, signal: AbortSignal) {
 			};
 		}
 
+		// 3c. Analyze GEO (Generative Engine Optimization: renderability,
+		// factual density, attribution, and entity grounding for AI tools like
+		// ChatGPT, Gemini, and Perplexity when they synthesize an answer)
+		try {
+			const geoResult = analyzeGEO($, html, targetUrl);
+			const geoScore =
+				100 - geoResult.issues.reduce((sum, i) => sum + i.weight, 0);
+			categories["geo"] = {
+				label: "GEO",
+				score: Math.max(20, Math.min(100, geoScore)),
+				issues: geoResult.issues,
+				passed: geoResult.passed,
+				source: "html-audit",
+			};
+		} catch (error) {
+			console.warn("GEO audit failed:", error);
+			categories["geo"] = {
+				label: "GEO",
+				score: 50,
+				issues: [],
+				passed: [],
+				source: "html-audit",
+			};
+		}
+
 		// 4. Analyze Page Speed (local checks)
 		try {
 			const speedResult = analyzeSpeed($, html, response, elapsedMs);
@@ -533,6 +559,7 @@ function streamSiteCrawl(
 
 				const seoPerPage: PageCategoryResult[] = [];
 				const aeoPerPage: PageCategoryResult[] = [];
+				const geoPerPage: PageCategoryResult[] = [];
 				const speedPerPage: PageCategoryResult[] = [];
 				const a11yPerPage: PageCategoryResult[] = [];
 				const convPerPage: PageCategoryResult[] = [];
@@ -546,6 +573,7 @@ function streamSiteCrawl(
 						const pageCategories: PageNode["categories"] = {
 							seo: { label: "SEO", score: 0, issues: [], passed: [] },
 							aeo: { label: "AEO", score: 0, issues: [], passed: [] },
+							geo: { label: "GEO", score: 0, issues: [], passed: [] },
 							speed: { label: "Performance", score: 0, issues: [], passed: [] },
 							a11y: {
 								label: "Accessibility",
@@ -622,6 +650,29 @@ function streamSiteCrawl(
 							categoryCount++;
 						} catch (error) {
 							console.warn(`AEO audit failed for ${page.url}:`, error);
+						}
+
+						try {
+							const result = analyzeGEO($, page.html, page.url);
+							const score =
+								100 - result.issues.reduce((sum, iss) => sum + iss.weight, 0);
+							const clampedScore = Math.max(20, Math.min(100, score));
+							geoPerPage.push({
+								url: page.url,
+								score: clampedScore,
+								issues: result.issues,
+								passed: result.passed,
+							});
+							pageCategories.geo = {
+								label: "GEO",
+								score: clampedScore,
+								issues: result.issues,
+								passed: result.passed,
+							};
+							pageScore += clampedScore;
+							categoryCount++;
+						} catch (error) {
+							console.warn(`GEO audit failed for ${page.url}:`, error);
 						}
 
 						try {
@@ -739,6 +790,7 @@ function streamSiteCrawl(
 				const categories: Record<string, Category> = {
 					seo: aggregateCategory("SEO", "html-audit", seoPerPage),
 					aeo: aggregateCategory("AEO", "html-audit", aeoPerPage),
+					geo: aggregateCategory("GEO", "html-audit", geoPerPage),
 					speed: aggregateCategory("Performance", "html-audit", speedPerPage),
 					a11y: aggregateCategory("Accessibility", "html-audit", a11yPerPage),
 					conversions: aggregateCategory(
