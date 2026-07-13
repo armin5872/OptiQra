@@ -8,7 +8,7 @@ Rules:
 - Output a short explanation (2-4 sentences) of why this specifically hurts this page, then a code fix.
 - The code fix must be a minimal, copy-pasteable snippet (HTML/CSS/JS as appropriate) — not a full file rewrite.
 - The exact framework/templating isn't known, so give the fix in plain HTML and add a one-line note only if a common framework (React/Next.js) needs different syntax (e.g. className vs class).
-- Do not repeat the issue description back verbatim. Do not pad with disclaimers.
+- Do not repeat the issue description back verbatim. Do not pad with disclaimers. Do not echo back or restate the generic guidance that was already shown to the user.
 - Format: short prose explanation (use **bold** sparingly for the one key term that matters, and inline \`code\` for tag/attribute/selector names), then a fenced code block with a language tag (e.g. \`\`\`html).`;
 
 export function buildFixPrompt({ issue, pageUrl, category }: GenerateFixRequest): {
