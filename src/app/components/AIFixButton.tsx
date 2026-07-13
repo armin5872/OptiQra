@@ -18,6 +18,7 @@ export default function AIFixButton({ issue, pageUrl, category, onResolve }: Pro
 	const [output, setOutput] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [copied, setCopied] = useState(false);
+	const [modalOpen, setModalOpen] = useState(false);
 
 	const handleCopy = async () => {
 		try {
@@ -51,6 +52,7 @@ export default function AIFixButton({ issue, pageUrl, category, onResolve }: Pro
 		setStatus("loading");
 		setOutput("");
 		setError(null);
+		setModalOpen(true); // Open modal immediately when generating
 
 		try {
 			const res = await fetch("/api/ai-fix", {
@@ -100,49 +102,109 @@ export default function AIFixButton({ issue, pageUrl, category, onResolve }: Pro
 		}
 	};
 
+	const closeModal = () => setModalOpen(false);
+	const openModal = () => setModalOpen(true);
+
 	return (
-		<div className="ai-fix-block">
-			{status === "idle" && (
-				<button type="button" className="apply-btn" onClick={handleGenerate}>
-					Generate fix with AI
-				</button>
-			)}
-
-			{status === "loading" && (
-				<button type="button" className="apply-btn" disabled>
-					Generating…
-				</button>
-			)}
-
-			{status === "error" && (
-				<div className="ai-fix-error">
-					{error}
-					<button type="button" className="link-btn" onClick={handleGenerate}>
-						retry
+		<>
+			{/* Main button area */}
+			<div className="ai-fix-block">
+				{status === "idle" && (
+					<button type="button" className="apply-btn" onClick={handleGenerate}>
+						Generate fix with AI
 					</button>
-				</div>
-			)}
+				)}
 
-			{output && (
-				<div className="ai-fix-output">
-					<MarkdownLite text={output} />
-					{status === "loading" && <span className="md-cursor" aria-hidden="true" />}
-				</div>
-			)}
+				{status === "loading" && !output && (
+					<button type="button" className="apply-btn" disabled>
+						Generating…
+					</button>
+				)}
 
-			{status === "done" && (
-				<div className="ai-fix-actions">
-					<button type="button" className="link-btn" onClick={handleCopy}>
-						{copied ? "copied!" : "copy"}
+				{status === "error" && !output && (
+					<div className="ai-fix-error">
+						{error}
+						<button type="button" className="link-btn" onClick={handleGenerate}>
+							retry
+						</button>
+					</div>
+				)}
+
+				{output && status === "done" && (
+					<button type="button" className="apply-btn" onClick={openModal}>
+						Show AI fix
 					</button>
-					<button type="button" className="link-btn" onClick={handleGenerate}>
-						regenerate
-					</button>
-					<button type="button" className="apply-btn" onClick={onResolve}>
-						Mark resolved
-					</button>
-				</div>
+				)}
+			</div>
+
+			{/* Modal overlay and content */}
+			{modalOpen && (
+				<>
+					<div className="modal-overlay" onClick={closeModal} />
+					<div className="modal-container">
+						<div className="modal-header">
+							<h2>AI-Generated Fix</h2>
+							<button
+								type="button"
+								className="modal-close"
+								onClick={closeModal}
+								aria-label="Close modal"
+							>
+								✕
+							</button>
+						</div>
+
+						{status === "loading" && !output && (
+							<div className="modal-body">
+								<p className="modal-loading">Generating fix…</p>
+							</div>
+						)}
+
+						{status === "error" && output === "" && (
+							<div className="modal-body">
+								<div className="modal-error">
+									<p>{error}</p>
+									<button type="button" className="link-btn" onClick={handleGenerate}>
+										retry
+									</button>
+								</div>
+							</div>
+						)}
+
+						{output && (
+							<>
+								<div className="modal-body">
+									<div className="ai-fix-output-modal">
+										<MarkdownLite text={output} />
+										{status === "loading" && <span className="md-cursor" aria-hidden="true" />}
+									</div>
+								</div>
+
+								{status === "done" && (
+									<div className="modal-footer">
+										<button type="button" className="link-btn" onClick={handleCopy}>
+											{copied ? "copied!" : "copy"}
+										</button>
+										<button type="button" className="link-btn" onClick={handleGenerate}>
+											regenerate
+										</button>
+										<button
+											type="button"
+											className="apply-btn"
+											onClick={() => {
+												onResolve();
+												closeModal();
+											}}
+										>
+											Mark resolved
+										</button>
+									</div>
+								)}
+							</>
+						)}
+					</div>
+				</>
 			)}
-		</div>
+		</>
 	);
 }

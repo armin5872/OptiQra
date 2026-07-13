@@ -2702,3 +2702,153 @@ ol.md-list li::before {
 		opacity: 0;
 	}
 }
+
+/* ---- Modal for AI Fix ---- */
+.modal-overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: rgba(0, 0, 0, 0.5);
+	z-index: 999;
+	animation: fade-in 0.2s ease-out;
+}
+
+.modal-container {
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: 12px;
+	box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+	z-index: 1000;
+	display: flex;
+	flex-direction: column;
+	max-width: 720px;
+	width: 90vw;
+	max-height: 85vh;
+	animation: slide-in 0.3s ease-out;
+}
+
+.modal-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 20px 24px;
+	border-bottom: 1px solid var(--line);
+	flex: none;
+}
+
+.modal-header h2 {
+	margin: 0;
+	font-size: 18px;
+	font-weight: 600;
+	color: var(--ink);
+}
+
+.modal-close {
+	background: none;
+	border: none;
+	font-size: 24px;
+	line-height: 1;
+	color: var(--ink-soft);
+	cursor: pointer;
+	padding: 4px 8px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: color 0.2s ease;
+}
+
+.modal-close:hover {
+	color: var(--ink);
+}
+
+.modal-body {
+	flex: 1;
+	overflow-y: auto;
+	padding: 20px 24px;
+}
+
+.modal-loading {
+	text-align: center;
+	color: var(--ink-soft);
+	font-style: italic;
+	margin: 40px 0;
+}
+
+.modal-error {
+	text-align: center;
+}
+
+.modal-error p {
+	color: var(--critical);
+	margin: 0 0 12px;
+}
+
+.ai-fix-output-modal {
+	font-family: var(--font-readable), "IBM Plex Sans", sans-serif;
+	color: var(--ink);
+	line-height: 1.7;
+}
+
+.modal-footer {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 12px;
+	padding: 16px 24px;
+	border-top: 1px solid var(--line);
+	flex: none;
+	flex-wrap: wrap;
+}
+
+@keyframes fade-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+@keyframes slide-in {
+	from {
+		opacity: 0;
+		transform: translate(-50%, -48%);
+	}
+	to {
+		opacity: 1;
+		transform: translate(-50%, -50%);
+	}
+}
+
+/* Responsive modal on smaller screens */
+@media (max-width: 640px) {
+	.modal-container {
+		max-width: 95vw;
+		max-height: 90vh;
+	}
+
+	.modal-header {
+		padding: 16px 16px;
+	}
+
+	.modal-body {
+		padding: 16px 16px;
+	}
+
+	.modal-footer {
+		padding: 12px 16px;
+		gap: 8px;
+	}
+
+	.modal-footer .link-btn,
+	.modal-footer .apply-btn {
+		font-size: 12px;
+		padding: 6px 10px;
+	}
+}
