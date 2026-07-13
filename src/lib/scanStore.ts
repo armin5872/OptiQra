@@ -33,7 +33,11 @@ interface ScanDB extends DBSchema {
 let dbPromise: Promise<IDBPDatabase<ScanDB>> | null = null;
 
 function getDB() {
-	if (typeof window === "undefined") {
+	// IndexedDB is also available inside the service worker (no `window`
+	// there), which matters for the periodicsync-triggered scans in
+	// worker/index.ts. Gate on `indexedDB` itself rather than `window` so
+	// this only actually rejects in a true SSR/Node context.
+	if (typeof indexedDB === "undefined") {
 		return Promise.reject(new Error("IndexedDB is only available in the browser"));
 	}
 	if (!dbPromise) {

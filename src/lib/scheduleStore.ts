@@ -58,7 +58,10 @@ interface ScheduleDB extends DBSchema {
 let dbPromise: Promise<IDBPDatabase<ScheduleDB>> | null = null;
 
 function getDB() {
-	if (typeof window === "undefined") {
+	// Same reasoning as scanStore.ts: IndexedDB exists inside the service
+	// worker too, and that's exactly where periodicsync needs to read/write
+	// schedules from. Gate on `indexedDB` itself, not `window`.
+	if (typeof indexedDB === "undefined") {
 		return Promise.reject(new Error("IndexedDB is only available in the browser"));
 	}
 	if (!dbPromise) {

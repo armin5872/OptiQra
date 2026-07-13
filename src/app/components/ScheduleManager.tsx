@@ -66,7 +66,19 @@ export default function ScheduleManager({ url, mode, maxPages }: Props) {
 
 		const onUpdate = () => refresh();
 		window.addEventListener("optiqra:schedules-updated", onUpdate);
-		return () => window.removeEventListener("optiqra:schedules-updated", onUpdate);
+
+		// A periodicsync-triggered run inside the service worker has no
+		// `window` to dispatch to, so it posts a message to open tabs instead
+		// (see the `finally` block in scheduler.ts's runSchedule).
+		const onSWMessage = (e: MessageEvent) => {
+			if (e.data?.type === "optiqra:schedules-updated") refresh();
+		};
+		navigator.serviceWorker?.addEventListener("message", onSWMessage);
+
+		return () => {
+			window.removeEventListener("optiqra:schedules-updated", onUpdate);
+			navigator.serviceWorker?.removeEventListener("message", onSWMessage);
+		};
 	}, []);
 
 	useEffect(() => {

@@ -239,14 +239,25 @@ async function runSchedule(schedule: ScanSchedule) {
 		runningIds.delete(schedule.id);
 		if (typeof window !== "undefined") {
 			window.dispatchEvent(new CustomEvent("optiqra:schedules-updated"));
+		} else if (typeof (self as unknown as ServiceWorkerGlobalScope).clients !== "undefined") {
+			// Running inside the service worker (periodicsync) — there's no
+			// `window` to dispatch to, but any open tab can still hear about
+			// it via postMessage so its schedule list refreshes.
+			const clientsList = await (self as unknown as ServiceWorkerGlobalScope).clients.matchAll({ type: "window" });
+			for (const client of clientsList) {
+				client.postMessage({ type: "optiqra:schedules-updated" });
+			}
 		}
 	}
 }
 
 /** Checks every schedule and runs whichever are due. Safe to call
- * repeatedly — schedules already running are skipped, not queued twice. */
+ * repeatedly — schedules already running are skipped, not queued twice.
+ * Called both from the foreground checker below (in a tab) and from
+ * worker/index.ts's periodicsync handler (inside the service worker) —
+ * so this must not bail out just because `window` isn't defined. */
 export async function runDueSchedules() {
-	if (typeof window === "undefined") return;
+	if (typeof indexedDB === "undefined") return;
 	const schedules = await getAllSchedules();
 	const now = Date.now();
 	const due = schedules.filter((s) => s.enabled && s.nextRunAt <= now);
