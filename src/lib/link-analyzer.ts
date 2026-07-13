@@ -63,9 +63,9 @@ export interface AnalyzeOptions {
 const DEFAULTS: Required<AnalyzeOptions> = {
   externalLinkThreshold: 50,
   maxRedirects: 5,
-  concurrency: 8,
+  concurrency: 24,
   checkLinkStatuses: true,
-  fetchTimeoutMs: 8000,
+  fetchTimeoutMs: 6000,
   userAgent: "Mozilla/5.0 (compatible; LinkAnalyzerBot/1.0)",
 };
 
@@ -171,8 +171,48 @@ export async function checkLinkStatus(
   resolvedUrl: string,
   maxRedirects: number,
   timeoutMs: number,
-  userAgent: string
+  userAgent: string,
+  trackChain: boolean = true,
 ): Promise<LinkStatusResult> {
+  // Fast path: when the caller doesn't need the hop-by-hop redirect chain
+  // (e.g. site-wide broken-link scans), let fetch follow redirects natively
+  // in a single call instead of making a separate request + timeout per hop.
+  if (!trackChain) {
+    try {
+      const res = await fetch(resolvedUrl, {
+        method: "HEAD",
+        redirect: "follow",
+        signal: AbortSignal.timeout(timeoutMs),
+        headers: { "User-Agent": userAgent },
+      }).then(async (r) => {
+        // Some servers reject HEAD outright — retry once with GET.
+        if (r.status === 405 || r.status === 501) {
+          return fetch(resolvedUrl, {
+            method: "GET",
+            redirect: "follow",
+            signal: AbortSignal.timeout(timeoutMs),
+            headers: { "User-Agent": userAgent },
+          });
+        }
+        return r;
+      });
+
+      const ok = res.status >= 200 && res.status < 400;
+      return {
+        href: resolvedUrl,
+        resolvedUrl,
+        ok,
+        statusCode: res.status,
+        error: ok ? null : `HTTP ${res.status}`,
+        redirectChain: [],
+        finalUrl: res.url || resolvedUrl,
+      };
+    } catch (err: any) {
+      const msg = err?.name === "AbortError" || err?.name === "TimeoutError" ? "Timed out" : (err?.message ?? "Network error");
+      return { href: resolvedUrl, resolvedUrl, ok: false, statusCode: null, error: msg, redirectChain: [], finalUrl: resolvedUrl };
+    }
+  }
+
   const chain: string[] = [];
   let currentUrl = resolvedUrl;
   let hops = 0;
@@ -427,9 +467,9 @@ export async function findBrokenLinksAcrossSite(
   opts: SiteLinkAnalysisOptions = {},
 ): Promise<SiteLinkAnalysisReport> {
   const options = {
-    concurrency: opts.concurrency ?? 8,
+    concurrency: opts.concurrency ?? 30,
     maxRedirects: opts.maxRedirects ?? 5,
-    fetchTimeoutMs: opts.fetchTimeoutMs ?? 8000,
+    fetchTimeoutMs: opts.fetchTimeoutMs ?? 6000,
     userAgent: opts.userAgent ?? DEFAULTS.userAgent,
     checkExternal: opts.checkExternal ?? true,
   };
@@ -462,7 +502,7 @@ export async function findBrokenLinksAcrossSite(
 
   const uniqueUrls = Array.from(linkInfo.keys());
   const statusResults = await mapLimit(uniqueUrls, options.concurrency, (url) =>
-    checkLinkStatus(url, options.maxRedirects, options.fetchTimeoutMs, options.userAgent),
+    checkLinkStatus(url, options.maxRedirects, options.fetchTimeoutMs, options.userAgent, false),
   );
 
   const brokenLinks: BrokenSiteLink[] = [];
