@@ -16,6 +16,17 @@ export default function AIFixButton({ issue, pageUrl, category, onResolve }: Pro
 	const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
 	const [output, setOutput] = useState("");
 	const [error, setError] = useState<string | null>(null);
+	const [copied, setCopied] = useState(false);
+
+	const handleCopy = async () => {
+		try {
+			await navigator.clipboard.writeText(output);
+			setCopied(true);
+			setTimeout(() => setCopied(false), 1500);
+		} catch {
+			// clipboard API unavailable — silently ignore, the text is still selectable
+		}
+	};
 
 	if (issue.resolved) {
 		return (
@@ -115,6 +126,9 @@ export default function AIFixButton({ issue, pageUrl, category, onResolve }: Pro
 
 			{status === "done" && (
 				<div className="ai-fix-actions">
+					<button type="button" className="link-btn" onClick={handleCopy}>
+						{copied ? "copied!" : "copy"}
+					</button>
 					<button type="button" className="link-btn" onClick={handleGenerate}>
 						regenerate
 					</button>

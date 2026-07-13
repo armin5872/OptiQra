@@ -2427,6 +2427,52 @@ footer {
 	color: var(--ink-soft);
 	margin: 10px 0 20px;
 }
+.ai-setup-model-tag {
+	font-family: "IBM Plex Mono", monospace;
+	font-size: 11px;
+	color: var(--ink-soft);
+	background: var(--surface-2);
+	border: 1px solid var(--line);
+	border-radius: 5px;
+	padding: 1px 6px;
+	margin-left: 8px;
+}
+.ai-setup-custom-model {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.ai-setup-custom-model input {
+	flex: 1;
+	font-family: "IBM Plex Mono", monospace;
+	font-size: 13px;
+	padding: 7px 10px;
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	background: var(--bg);
+	color: var(--ink);
+}
+.ai-setup-hint a {
+	color: var(--accent);
+	text-decoration: underline;
+}
+.ai-setup-actions {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+}
+.ai-setup-test {
+	font-family: "IBM Plex Sans", sans-serif;
+	font-size: 12.5px;
+	margin: -2px 0 0;
+}
+.ai-setup-test.ok {
+	color: var(--good);
+}
+.ai-setup-test.error {
+	color: var(--critical);
+}
 .ai-fix-block {
 	display: flex;
 	flex-direction: column;
@@ -2504,4 +2550,7 @@ footer {
 	border-radius: 8px;
 	padding: 14px 16px;
 	color: var(--ink);
+}
+.ai-insights-copy {
+	margin-top: 8px;
 }

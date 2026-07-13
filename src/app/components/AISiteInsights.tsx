@@ -52,10 +52,21 @@ export default function AISiteInsights({ siteUrl, mode, pagesScanned, overallSco
 	const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
 	const [output, setOutput] = useState("");
 	const [error, setError] = useState<string | null>(null);
+	const [copied, setCopied] = useState(false);
 
 	if (!hydrated) return null;
 
 	const scopeLabel = mode === "site" ? "this site" : "this page";
+
+	const handleCopy = async () => {
+		try {
+			await navigator.clipboard.writeText(output);
+			setCopied(true);
+			setTimeout(() => setCopied(false), 1500);
+		} catch {
+			// clipboard API unavailable — silently ignore, the text is still selectable
+		}
+	};
 
 	const handleGenerate = async () => {
 		setStatus("loading");
@@ -147,7 +158,16 @@ export default function AISiteInsights({ siteUrl, mode, pagesScanned, overallSco
 				</div>
 			)}
 
-			{output && <div className="ai-insights-output">{output}</div>}
+			{output && (
+				<>
+					<div className="ai-insights-output">{output}</div>
+					{status === "done" && (
+						<button type="button" className="link-btn ai-insights-copy" onClick={handleCopy}>
+							{copied ? "copied!" : "copy"}
+						</button>
+					)}
+				</>
+			)}
 		</div>
 	);
 }

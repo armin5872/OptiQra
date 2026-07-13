@@ -5,6 +5,7 @@ import { AI_PROVIDERS, type AIProviderId } from "@/lib/aiFix";
 
 const PROVIDER_KEY = "optiqra_ai_provider";
 const API_KEY_PREFIX = "optiqra_ai_key_"; // + providerId, kept separate per provider so switching doesn't clobber keys
+const MODEL_KEY_PREFIX = "optiqra_ai_model_"; // + providerId, so each provider remembers its own last-used model
 
 interface AIProviderState {
 	provider: AIProviderId | null;
@@ -17,7 +18,8 @@ function readState(): AIProviderState {
 
 	const provider = sessionStorage.getItem(PROVIDER_KEY) as AIProviderId | null;
 	const apiKey = provider ? (sessionStorage.getItem(API_KEY_PREFIX + provider) ?? "") : "";
-	const model = provider ? AI_PROVIDERS[provider].defaultModel : "";
+	const storedModel = provider ? sessionStorage.getItem(MODEL_KEY_PREFIX + provider) : null;
+	const model = provider ? storedModel || AI_PROVIDERS[provider].defaultModel : "";
 
 	return { provider, apiKey, model };
 }
@@ -31,19 +33,32 @@ export function useAIProvider() {
 		setHydrated(true);
 	}, []);
 
-	const setProvider = useCallback((provider: AIProviderId, apiKey: string) => {
+	const setProvider = useCallback((provider: AIProviderId, apiKey: string, model?: string) => {
+		const resolvedModel = model || sessionStorage.getItem(MODEL_KEY_PREFIX + provider) || AI_PROVIDERS[provider].defaultModel;
 		sessionStorage.setItem(PROVIDER_KEY, provider);
 		sessionStorage.setItem(API_KEY_PREFIX + provider, apiKey);
-		setState({ provider, apiKey, model: AI_PROVIDERS[provider].defaultModel });
+		sessionStorage.setItem(MODEL_KEY_PREFIX + provider, resolvedModel);
+		setState({ provider, apiKey, model: resolvedModel });
+	}, []);
+
+	const setModel = useCallback((model: string) => {
+		setState((prev) => {
+			if (!prev.provider) return prev;
+			sessionStorage.setItem(MODEL_KEY_PREFIX + prev.provider, model);
+			return { ...prev, model };
+		});
 	}, []);
 
 	const clear = useCallback(() => {
-		if (state.provider) sessionStorage.removeItem(API_KEY_PREFIX + state.provider);
+		if (state.provider) {
+			sessionStorage.removeItem(API_KEY_PREFIX + state.provider);
+			sessionStorage.removeItem(MODEL_KEY_PREFIX + state.provider);
+		}
 		sessionStorage.removeItem(PROVIDER_KEY);
 		setState({ provider: null, apiKey: "", model: "" });
 	}, [state.provider]);
 
 	const isConfigured = hydrated && !!state.provider && !!state.apiKey;
 
-	return { ...state, isConfigured, hydrated, setProvider, clear };
+	return { ...state, isConfigured, hydrated, setProvider, setModel, clear };
 }
