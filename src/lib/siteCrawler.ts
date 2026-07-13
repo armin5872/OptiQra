@@ -7,7 +7,7 @@ import { extractLinks } from "@/lib/link-analyzer";
 
 const CRAWL_USER_AGENT = "SiteVitalsBot/1.0 (+https://example.com/bot)";
 export const DEFAULT_MAX_PAGES = 15;
-export const HARD_MAX_PAGES = 1000;
+export const HARD_MAX_PAGES = Infinity; // Unlimited pages
 const DEFAULT_MAX_DEPTH = 3;
 const FETCH_TIMEOUT_MS = 9000;
 /** How many pages we fetch in parallel. Sequential crawling (1 request at a time)

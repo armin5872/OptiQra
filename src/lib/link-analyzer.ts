@@ -236,6 +236,30 @@ async function checkFast(resolvedUrl: string, timeoutMs: number, userAgent: stri
       finalUrl: res.url || resolvedUrl,
     };
   } catch (err: any) {
+    // Retry once for transient network errors
+    if ((err?.message?.includes("ECONNRESET") || err?.message?.includes("ETIMEDOUT") || err?.name === "TypeError") && timeoutMs < 15000) {
+      await delay(Math.random() * 500 + 200); // Random backoff 200-700ms
+      try {
+        const res = await fetch(resolvedUrl, {
+          method: "GET",
+          redirect: "follow",
+          signal: AbortSignal.timeout(Math.min(timeoutMs * 1.5, 15000)),
+          headers: requestHeaders(userAgent),
+        });
+        const ok = res.status >= 200 && res.status < 400;
+        return {
+          href: resolvedUrl,
+          resolvedUrl,
+          ok,
+          statusCode: res.status,
+          error: ok ? null : `HTTP ${res.status}`,
+          redirectChain: [],
+          finalUrl: res.url || resolvedUrl,
+        };
+      } catch {
+        // Retry failed, fall through to error handling below
+      }
+    }
     const msg = err?.name === "AbortError" || err?.name === "TimeoutError" ? "Timed out" : (err?.message ?? "Network error");
     return { href: resolvedUrl, resolvedUrl, ok: false, statusCode: null, error: msg, redirectChain: [], finalUrl: resolvedUrl };
   }
@@ -298,7 +322,29 @@ async function checkWithChain(resolvedUrl: string, maxRedirects: number, timeout
 
     return { href: resolvedUrl, resolvedUrl, ok: false, statusCode: null, error: `Too many redirects (>${maxRedirects})`, redirectChain: chain, finalUrl: currentUrl };
   } catch (err: any) {
-    const msg = err?.name === "AbortError" ? "Timed out" : (err?.message ?? "Network error");
+    // Retry once for transient network errors
+    if ((err?.message?.includes("ECONNRESET") || err?.message?.includes("ETIMEDOUT") || err?.name === "TypeError") && chain.length < 2) {
+      await delay(Math.random() * 500 + 200); // Random backoff 200-700ms
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), Math.min(timeoutMs * 1.5, 15000));
+        try {
+          const res = await fetch(resolvedUrl, {
+            method: "GET",
+            redirect: "follow",
+            signal: controller.signal,
+            headers: requestHeaders(userAgent),
+          });
+          const ok = res.status >= 200 && res.status < 400;
+          return { href: resolvedUrl, resolvedUrl, ok, statusCode: res.status, error: ok ? null : `HTTP ${res.status}`, redirectChain: chain, finalUrl: res.url || resolvedUrl };
+        } finally {
+          clearTimeout(timeout);
+        }
+      } catch {
+        // Retry failed, fall through to error handling below
+      }
+    }
+    const msg = err?.name === "AbortError" || err?.name === "TimeoutError" ? "Timed out" : (err?.message ?? "Network error");
     return { href: resolvedUrl, resolvedUrl, ok: false, statusCode: null, error: msg, redirectChain: chain, finalUrl: currentUrl };
   }
 }
@@ -549,9 +595,9 @@ export async function findBrokenLinksAcrossSite(
   opts: SiteLinkAnalysisOptions = {},
 ): Promise<SiteLinkAnalysisReport> {
   const options = {
-    concurrency: opts.concurrency ?? 30,
+    concurrency: opts.concurrency ?? 8, // Reduced from 30 to avoid overwhelming servers/triggering rate limits
     maxRedirects: opts.maxRedirects ?? 5,
-    fetchTimeoutMs: opts.fetchTimeoutMs ?? 6000,
+    fetchTimeoutMs: opts.fetchTimeoutMs ?? 12000, // Increased from 6000ms to 12000ms to allow more time for responses
     userAgent: opts.userAgent ?? DEFAULTS.userAgent,
     checkExternal: opts.checkExternal ?? true,
   };

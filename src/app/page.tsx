@@ -32,7 +32,7 @@ const SCAN_DEPTHS = [
 ] as const;
 type ScanDepthId = (typeof SCAN_DEPTHS)[number]["id"];
 const MIN_CUSTOM_PAGES = 1;
-const MAX_CUSTOM_PAGES = 1000;
+const MAX_CUSTOM_PAGES = Infinity; // Unlimited pages
 
 type CrawlProgress = { scanned: number; total: number; currentUrl?: string };
 
@@ -463,7 +463,7 @@ export default function Home() {
 									);
 									setCustomPages(String(n));
 								}}
-								aria-label="Custom number of pages (1-1000)"
+								aria-label="Custom number of pages (unlimited)"
 							/>
 						</div>
 					)}

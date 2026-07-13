@@ -759,6 +759,12 @@ function streamSiteCrawl(
 				try {
 					const siteLinksResult = await findBrokenLinksAcrossSite(
 						crawl.pages.map((p) => ({ url: p.url, html: p.html })),
+						{
+							concurrency: 5, // Conservative concurrency to avoid overwhelming servers
+							maxRedirects: 5,
+							fetchTimeoutMs: 12000, // 12 second timeout for stability
+							checkExternal: true,
+						},
 					);
 					const linksScore =
 						100 - siteLinksResult.issues.reduce((sum, i) => sum + i.weight, 0);
