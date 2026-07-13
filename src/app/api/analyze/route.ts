@@ -7,6 +7,7 @@ import {
 	analyzeConversions,
 	type Issue,
 } from "@/lib/htmlAudit";
+import { analyzeAEO, analyzeAEOSiteSignals } from "@/lib/aeoAudit";
 import {
 	analyzeLinks,
 	buildLinkIssues,
@@ -287,6 +288,35 @@ async function runSinglePageScan(targetUrl: string, signal: AbortSignal) {
 			};
 		}
 
+		// 3b. Analyze AEO (Answer Engine Optimization: how citeable this page is
+		// to AI answer engines like ChatGPT, Perplexity, and Google AI Overviews)
+		try {
+			const [pageAeo, siteAeo] = await Promise.all([
+				Promise.resolve(analyzeAEO($, html, targetUrl)),
+				analyzeAEOSiteSignals(targetUrl),
+			]);
+			const aeoIssues = [...pageAeo.issues, ...siteAeo.issues];
+			const aeoPassed = [...pageAeo.passed, ...siteAeo.passed];
+			const aeoScore =
+				100 - aeoIssues.reduce((sum, i) => sum + i.weight, 0);
+			categories["aeo"] = {
+				label: "AEO",
+				score: Math.max(20, Math.min(100, aeoScore)),
+				issues: aeoIssues,
+				passed: aeoPassed,
+				source: "html-audit",
+			};
+		} catch (error) {
+			console.warn("AEO audit failed:", error);
+			categories["aeo"] = {
+				label: "AEO",
+				score: 50,
+				issues: [],
+				passed: [],
+				source: "html-audit",
+			};
+		}
+
 		// 4. Analyze Page Speed (local checks)
 		try {
 			const speedResult = analyzeSpeed($, html, response, elapsedMs);
@@ -502,6 +532,7 @@ function streamSiteCrawl(
 				});
 
 				const seoPerPage: PageCategoryResult[] = [];
+				const aeoPerPage: PageCategoryResult[] = [];
 				const speedPerPage: PageCategoryResult[] = [];
 				const a11yPerPage: PageCategoryResult[] = [];
 				const convPerPage: PageCategoryResult[] = [];
@@ -514,6 +545,7 @@ function streamSiteCrawl(
 						const $ = load(page.html);
 						const pageCategories: PageNode["categories"] = {
 							seo: { label: "SEO", score: 0, issues: [], passed: [] },
+							aeo: { label: "AEO", score: 0, issues: [], passed: [] },
 							speed: { label: "Performance", score: 0, issues: [], passed: [] },
 							a11y: {
 								label: "Accessibility",
@@ -558,6 +590,38 @@ function streamSiteCrawl(
 							categoryCount++;
 						} catch (error) {
 							console.warn(`SEO audit failed for ${page.url}:`, error);
+						}
+
+						try {
+							const pageAeo = analyzeAEO($, page.html, page.url);
+							// robots.txt AI-crawler rules and llms.txt are site-wide, so
+							// only fetch them once (on the seed page) same as crawl files.
+							const siteAeo =
+								page.depth === 0 ?
+									await analyzeAEOSiteSignals(page.url)
+								:	{ issues: [], passed: [] };
+							const combinedIssues = [...pageAeo.issues, ...siteAeo.issues];
+							const combinedPassed = [...pageAeo.passed, ...siteAeo.passed];
+							const score =
+								100 -
+								combinedIssues.reduce((sum, iss) => sum + iss.weight, 0);
+							const clampedScore = Math.max(20, Math.min(100, score));
+							aeoPerPage.push({
+								url: page.url,
+								score: clampedScore,
+								issues: combinedIssues,
+								passed: combinedPassed,
+							});
+							pageCategories.aeo = {
+								label: "AEO",
+								score: clampedScore,
+								issues: combinedIssues,
+								passed: combinedPassed,
+							};
+							pageScore += clampedScore;
+							categoryCount++;
+						} catch (error) {
+							console.warn(`AEO audit failed for ${page.url}:`, error);
 						}
 
 						try {
@@ -674,6 +738,7 @@ function streamSiteCrawl(
 
 				const categories: Record<string, Category> = {
 					seo: aggregateCategory("SEO", "html-audit", seoPerPage),
+					aeo: aggregateCategory("AEO", "html-audit", aeoPerPage),
 					speed: aggregateCategory("Performance", "html-audit", speedPerPage),
 					a11y: aggregateCategory("Accessibility", "html-audit", a11yPerPage),
 					conversions: aggregateCategory(

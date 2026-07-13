@@ -35,7 +35,7 @@ type TreeNode = PageNode & {
 	y: number;
 };
 
-const CATEGORY_ORDER = ["seo", "speed", "a11y", "conversions"];
+const CATEGORY_ORDER = ["seo", "aeo", "speed", "a11y", "conversions"];
 const NODE_GAP_X = 72;
 const LEVEL_GAP_Y = 116;
 const SIDE_PAD = 44;
