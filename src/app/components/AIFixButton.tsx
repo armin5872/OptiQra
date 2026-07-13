@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Issue } from "@/lib/auditUtils";
 import { useAIProvider } from "@/lib/hooks/useAIProvider";
+import MarkdownLite from "./MarkdownLite";
 
 interface Props {
 	issue: Issue;
@@ -122,7 +123,12 @@ export default function AIFixButton({ issue, pageUrl, category, onResolve }: Pro
 				</div>
 			)}
 
-			{output && <div className="ai-fix-output">{output}</div>}
+			{output && (
+				<div className="ai-fix-output">
+					<MarkdownLite text={output} />
+					{status === "loading" && <span className="md-cursor" aria-hidden="true" />}
+				</div>
+			)}
 
 			{status === "done" && (
 				<div className="ai-fix-actions">

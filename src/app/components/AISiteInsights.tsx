@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Issue } from "./CrawlTree";
 import { useAIProvider } from "@/lib/hooks/useAIProvider";
 import type { InsightsCategorySummary } from "@/lib/aiInsights";
+import MarkdownLite from "./MarkdownLite";
 
 type Category = {
 	label: string;
@@ -160,7 +161,10 @@ export default function AISiteInsights({ siteUrl, mode, pagesScanned, overallSco
 
 			{output && (
 				<>
-					<div className="ai-insights-output">{output}</div>
+					<div className="ai-insights-output">
+						<MarkdownLite text={output} />
+						{status === "loading" && <span className="md-cursor" aria-hidden="true" />}
+					</div>
 					{status === "done" && (
 						<button type="button" className="link-btn ai-insights-copy" onClick={handleCopy}>
 							{copied ? "copied!" : "copy"}

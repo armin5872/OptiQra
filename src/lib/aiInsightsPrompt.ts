@@ -8,7 +8,7 @@ Rules:
 - Then give a prioritized action plan: the highest-impact fixes first, grouped by theme where multiple issues share a root cause (e.g. many pages missing meta descriptions is one fix, not many).
 - Call out quick wins separately if any exist: low-effort, high-value fixes.
 - Be specific and reference actual numbers/scores/page counts given below — never generic textbook advice divorced from this data.
-- Do not use markdown formatting symbols (no #, *, **, backticks, or markdown tables) since this is rendered as plain text. Use plain section labels in capital letters (e.g. "OVERVIEW", "PRIORITY FIXES", "QUICK WINS") and hyphen "-" for bullet points.
+- Format the response as clean, simple markdown so it renders nicely: "## " for each section heading (e.g. "## Overview", "## Priority Fixes", "## Quick Wins"), "- " for bullet points, and **bold** around key numbers, scores, and page counts so they stand out. Do not use backticks or code blocks — this is a narrative readout, not code. No markdown tables.
 - Keep it tight: aim for roughly 200-350 words total. Do not repeat the raw data back verbatim, synthesize it.`;
 
 export function buildInsightsPrompt(req: GenerateInsightsRequest): {
