@@ -16,6 +16,7 @@ export interface RawLink {
   isJavascript: boolean;
   isAnchorOnly: boolean;  // "#" or "#section" same-page anchors
   isMailtoOrTel: boolean;
+  isMalformed: boolean;   // href couldn't be parsed as a URL at all
   hasNoText: boolean;
   missingNoopener: boolean; // target=_blank present, rel noopener/noreferrer missing
 }
@@ -41,6 +42,7 @@ export interface LinkAnalysisReport {
 
   emptyHrefs: RawLink[];
   javascriptLinks: RawLink[];
+  malformedLinks: RawLink[];
   linksWithoutText: RawLink[];
   missingRelNoopener: RawLink[];
   duplicateLinks: { resolvedUrl: string; count: number; sampleText: string[] }[];
@@ -68,6 +70,33 @@ const DEFAULTS: Required<AnalyzeOptions> = {
   fetchTimeoutMs: 6000,
   userAgent: "Mozilla/5.0 (compatible; LinkAnalyzerBot/1.0)",
 };
+
+/** Status codes where a HEAD (or even GET) request is commonly rejected by
+ *  WAFs/anti-bot rules for non-browser-looking traffic even though the page
+ *  is genuinely reachable in a real browser. Worth a fallback attempt with
+ *  more browser-like request headers before trusting the status. */
+const HEAD_FALLBACK_STATUSES = new Set([403, 405, 406, 429, 501, 999]);
+
+/** Status codes that usually reflect a transient or self-inflicted condition
+ *  (rate limiting from our own concurrent checks, momentary overload) rather
+ *  than a genuinely broken link — worth one retry with backoff. */
+const TRANSIENT_RETRY_STATUSES = new Set([429, 503]);
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Headers that look like a real browser request rather than a bare bot UA.
+ *  Some sites 403 requests that are missing Accept/Accept-Language even when
+ *  the User-Agent itself is otherwise accepted — sending them cuts down on
+ *  links being misreported as broken when they're actually fine. */
+function requestHeaders(userAgent: string): Record<string, string> {
+  return {
+    "User-Agent": userAgent,
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+  };
+}
 
 /** Simple concurrency-limited map, no external deps. */
 async function mapLimit<T, R>(
@@ -97,30 +126,36 @@ function classifyHref(href: string, baseUrl: string): {
   isJavascript: boolean;
   isAnchorOnly: boolean;
   isMailtoOrTel: boolean;
+  isMalformed: boolean;
 } {
   const trimmed = (href || "").trim();
 
   if (trimmed === "") {
-    return { resolvedUrl: null, isExternal: false, isEmpty: true, isJavascript: false, isAnchorOnly: false, isMailtoOrTel: false };
+    return { resolvedUrl: null, isExternal: false, isEmpty: true, isJavascript: false, isAnchorOnly: false, isMailtoOrTel: false, isMalformed: false };
   }
   if (/^javascript:/i.test(trimmed)) {
-    return { resolvedUrl: null, isExternal: false, isEmpty: false, isJavascript: true, isAnchorOnly: false, isMailtoOrTel: false };
+    return { resolvedUrl: null, isExternal: false, isEmpty: false, isJavascript: true, isAnchorOnly: false, isMailtoOrTel: false, isMalformed: false };
   }
   if (/^(mailto:|tel:|sms:)/i.test(trimmed)) {
-    return { resolvedUrl: null, isExternal: false, isEmpty: false, isJavascript: false, isAnchorOnly: false, isMailtoOrTel: true };
+    return { resolvedUrl: null, isExternal: false, isEmpty: false, isJavascript: false, isAnchorOnly: false, isMailtoOrTel: true, isMalformed: false };
   }
   if (trimmed.startsWith("#")) {
-    return { resolvedUrl: null, isExternal: false, isEmpty: false, isJavascript: false, isAnchorOnly: true, isMailtoOrTel: false };
+    return { resolvedUrl: null, isExternal: false, isEmpty: false, isJavascript: false, isAnchorOnly: true, isMailtoOrTel: false, isMalformed: false };
   }
 
   try {
     const base = new URL(baseUrl);
     const resolved = new URL(trimmed, base);
     const isExternal = resolved.hostname !== base.hostname;
-    return { resolvedUrl: resolved.toString(), isExternal, isEmpty: false, isJavascript: false, isAnchorOnly: false, isMailtoOrTel: false };
+    return { resolvedUrl: resolved.toString(), isExternal, isEmpty: false, isJavascript: false, isAnchorOnly: false, isMailtoOrTel: false, isMalformed: false };
   } catch {
-    // Unresolvable (e.g. malformed URL) — treat as broken-candidate, not "empty"
-    return { resolvedUrl: null, isExternal: false, isEmpty: false, isJavascript: false, isAnchorOnly: false, isMailtoOrTel: false };
+    // Genuinely unparsable href (e.g. "htt p://broken url"). Previously this
+    // fell through with every flag false and a null resolvedUrl, which meant
+    // it wasn't checkable (no resolvedUrl) AND didn't show up in emptyHrefs,
+    // javascriptLinks, or any other bucket — it just vanished from the
+    // report, silently under-counting real markup problems. Flag it
+    // explicitly so it's surfaced instead of dropped.
+    return { resolvedUrl: null, isExternal: false, isEmpty: false, isJavascript: false, isAnchorOnly: false, isMailtoOrTel: false, isMalformed: true };
   }
 }
 
@@ -158,6 +193,7 @@ export function extractLinks(html: string, baseUrl: string): RawLink[] {
       isJavascript: classified.isJavascript,
       isAnchorOnly: classified.isAnchorOnly,
       isMailtoOrTel: classified.isMailtoOrTel,
+      isMalformed: classified.isMalformed,
       hasNoText: accessibleName.length === 0,
       missingNoopener: target === "_blank" && !hasNoopener,
     });
@@ -166,53 +202,47 @@ export function extractLinks(html: string, baseUrl: string): RawLink[] {
   return links;
 }
 
-/** Follows redirects manually (up to maxRedirects) to build a chain and get final status. */
-export async function checkLinkStatus(
-  resolvedUrl: string,
-  maxRedirects: number,
-  timeoutMs: number,
-  userAgent: string,
-  trackChain: boolean = true,
-): Promise<LinkStatusResult> {
-  // Fast path: when the caller doesn't need the hop-by-hop redirect chain
-  // (e.g. site-wide broken-link scans), let fetch follow redirects natively
-  // in a single call instead of making a separate request + timeout per hop.
-  if (!trackChain) {
-    try {
-      const res = await fetch(resolvedUrl, {
-        method: "HEAD",
-        redirect: "follow",
-        signal: AbortSignal.timeout(timeoutMs),
-        headers: { "User-Agent": userAgent },
-      }).then(async (r) => {
-        // Some servers reject HEAD outright — retry once with GET.
-        if (r.status === 405 || r.status === 501) {
-          return fetch(resolvedUrl, {
-            method: "GET",
-            redirect: "follow",
-            signal: AbortSignal.timeout(timeoutMs),
-            headers: { "User-Agent": userAgent },
-          });
-        }
-        return r;
-      });
+/** Fast path: single fetch that follows redirects natively (no per-hop chain). */
+async function checkFast(resolvedUrl: string, timeoutMs: number, userAgent: string): Promise<LinkStatusResult> {
+  try {
+    const res = await fetch(resolvedUrl, {
+      method: "HEAD",
+      redirect: "follow",
+      signal: AbortSignal.timeout(timeoutMs),
+      headers: requestHeaders(userAgent),
+    }).then(async (r) => {
+      // Some servers reject/misbehave on HEAD (405/501) or block it outright
+      // as bot traffic (403/406/429/999) — retry once with GET, since a real
+      // browser opening the link would get GET treatment and often succeed.
+      if (HEAD_FALLBACK_STATUSES.has(r.status)) {
+        return fetch(resolvedUrl, {
+          method: "GET",
+          redirect: "follow",
+          signal: AbortSignal.timeout(timeoutMs),
+          headers: requestHeaders(userAgent),
+        });
+      }
+      return r;
+    });
 
-      const ok = res.status >= 200 && res.status < 400;
-      return {
-        href: resolvedUrl,
-        resolvedUrl,
-        ok,
-        statusCode: res.status,
-        error: ok ? null : `HTTP ${res.status}`,
-        redirectChain: [],
-        finalUrl: res.url || resolvedUrl,
-      };
-    } catch (err: any) {
-      const msg = err?.name === "AbortError" || err?.name === "TimeoutError" ? "Timed out" : (err?.message ?? "Network error");
-      return { href: resolvedUrl, resolvedUrl, ok: false, statusCode: null, error: msg, redirectChain: [], finalUrl: resolvedUrl };
-    }
+    const ok = res.status >= 200 && res.status < 400;
+    return {
+      href: resolvedUrl,
+      resolvedUrl,
+      ok,
+      statusCode: res.status,
+      error: ok ? null : `HTTP ${res.status}`,
+      redirectChain: [],
+      finalUrl: res.url || resolvedUrl,
+    };
+  } catch (err: any) {
+    const msg = err?.name === "AbortError" || err?.name === "TimeoutError" ? "Timed out" : (err?.message ?? "Network error");
+    return { href: resolvedUrl, resolvedUrl, ok: false, statusCode: null, error: msg, redirectChain: [], finalUrl: resolvedUrl };
   }
+}
 
+/** Follows redirects manually (up to maxRedirects) to build a chain and get final status. */
+async function checkWithChain(resolvedUrl: string, maxRedirects: number, timeoutMs: number, userAgent: string): Promise<LinkStatusResult> {
   const chain: string[] = [];
   let currentUrl = resolvedUrl;
   let hops = 0;
@@ -228,14 +258,14 @@ export async function checkLinkStatus(
           method: "HEAD",
           redirect: "manual",
           signal: controller.signal,
-          headers: { "User-Agent": userAgent },
+          headers: requestHeaders(userAgent),
         });
       } finally {
         clearTimeout(timeout);
       }
 
-      // Some servers reject HEAD (405/501) — retry with GET for this hop.
-      if (res.status === 405 || res.status === 501) {
+      // Some servers reject/block HEAD outright — retry with GET for this hop.
+      if (HEAD_FALLBACK_STATUSES.has(res.status)) {
         const controller2 = new AbortController();
         const timeout2 = setTimeout(() => controller2.abort(), timeoutMs);
         try {
@@ -243,7 +273,7 @@ export async function checkLinkStatus(
             method: "GET",
             redirect: "manual",
             signal: controller2.signal,
-            headers: { "User-Agent": userAgent },
+            headers: requestHeaders(userAgent),
           });
         } finally {
           clearTimeout(timeout2);
@@ -271,6 +301,47 @@ export async function checkLinkStatus(
     const msg = err?.name === "AbortError" ? "Timed out" : (err?.message ?? "Network error");
     return { href: resolvedUrl, resolvedUrl, ok: false, statusCode: null, error: msg, redirectChain: chain, finalUrl: currentUrl };
   }
+}
+
+/**
+ * Checks a single link's status, retrying once (with backoff) when the first
+ * attempt fails for a *transient* reason — a timeout, a network blip, or a
+ * 429/503 that's plausibly our own concurrent checks tripping rate limits
+ * rather than the link actually being dead. This is the main defense against
+ * false "broken link" reports: without it, a page that briefly hiccups under
+ * load gets permanently reported as broken even though it works fine on a
+ * normal, unhurried visit.
+ */
+export async function checkLinkStatus(
+  resolvedUrl: string,
+  maxRedirects: number,
+  timeoutMs: number,
+  userAgent: string,
+  trackChain: boolean = true,
+): Promise<LinkStatusResult> {
+  const MAX_ATTEMPTS = 2;
+  let result: LinkStatusResult;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    result = trackChain
+      ? await checkWithChain(resolvedUrl, maxRedirects, timeoutMs, userAgent)
+      : await checkFast(resolvedUrl, timeoutMs, userAgent);
+
+    if (result.ok) return result;
+
+    const isTransient =
+      (result.statusCode !== null && TRANSIENT_RETRY_STATUSES.has(result.statusCode)) ||
+      result.error === "Timed out" ||
+      result.error === "Network error";
+
+    if (attempt < MAX_ATTEMPTS && isTransient) {
+      await delay(400 * attempt);
+      continue;
+    }
+    return result;
+  }
+
+  return result!;
 }
 
 /** Full pipeline: fetch page, extract links, optionally check statuses, build report. */
@@ -333,6 +404,7 @@ export async function analyzeLinks(scannedUrl: string, opts: AnalyzeOptions = {}
 
     emptyHrefs: links.filter((l) => l.isEmpty),
     javascriptLinks: links.filter((l) => l.isJavascript),
+    malformedLinks: links.filter((l) => l.isMalformed),
     linksWithoutText: links.filter((l) => l.hasNoText),
     missingRelNoopener: links.filter((l) => l.missingNoopener),
     duplicateLinks,
@@ -391,6 +463,16 @@ export function buildLinkIssues(report: LinkAnalysisReport): { issues: Issue[]; 
       "javascript: URLs aren't crawlable and often break middle-click/open-in-new-tab behavior.",
       "Use a real href and attach behavior via an event listener instead.",
       4,
+    ));
+  }
+
+  if (report.malformedLinks.length > 0) {
+    issues.push(issue(
+      "malformed-hrefs",
+      `${report.malformedLinks.length} link${report.malformedLinks.length === 1 ? "" : "s"} with an unparsable href`,
+      "These href values (e.g. containing stray spaces or invalid characters) can't be resolved into a valid URL at all, so browsers, crawlers, and assistive tech may fail to follow them.",
+      "Fix the href so it forms a valid, properly encoded URL.",
+      3,
     ));
   }
 
