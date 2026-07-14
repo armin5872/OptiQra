@@ -816,6 +816,17 @@ function streamSiteCrawl(
 							maxRedirects: 5,
 							fetchTimeoutMs: 12000, // 12 second timeout for stability
 							checkExternal: true,
+							// Link-dense sites (heavy nav/footer, per-item links —
+							// think GitHub) can produce thousands of unique URLs
+							// regardless of how many pages were crawled. Without a
+							// cap and a time budget here, this phase alone could run
+							// past the route's maxDuration and get killed by the
+							// host, dropping the connection instead of finishing
+							// with a graceful result — leaving 90s of headroom for
+							// the duplicate-content, security-header, and PSI checks
+							// that still need to run afterward.
+							maxLinksToCheck: 500,
+							overallTimeoutMs: 90_000,
 						},
 					);
 					const linksScore =

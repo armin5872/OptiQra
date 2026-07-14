@@ -115,17 +115,25 @@ function releaseBody(res: Response): void {
   }
 }
 
-/** Simple concurrency-limited map, no external deps. */
+/** Simple concurrency-limited map, no external deps.
+ *  `deadline` (Date.now()-based epoch ms) is optional: once passed, workers
+ *  stop picking up new items (already in-flight ones still finish normally),
+ *  and any items never started are left as `undefined` in the result array.
+ *  This is what lets a huge batch (e.g. thousands of unique links on a
+ *  link-dense site) wind down within a time budget instead of running until
+ *  every last item is done, however long that takes. */
 async function mapLimit<T, R>(
   items: T[],
   limit: number,
-  fn: (item: T, index: number) => Promise<R>
-): Promise<R[]> {
-  const results: R[] = new Array(items.length);
+  fn: (item: T, index: number) => Promise<R>,
+  deadline: number = Infinity,
+): Promise<(R | undefined)[]> {
+  const results: (R | undefined)[] = new Array(items.length);
   let cursor = 0;
 
   async function worker() {
     while (cursor < items.length) {
+      if (Date.now() > deadline) return;
       const idx = cursor++;
       results[idx] = await fn(items[idx], idx);
     }
@@ -447,9 +455,10 @@ export async function analyzeLinks(scannedUrl: string, opts: AnalyzeOptions = {}
 
   let statusResults: LinkStatusResult[] = [];
   if (options.checkLinkStatuses) {
-    statusResults = await mapLimit(uniqueUrls, options.concurrency, (url) =>
+    const results = await mapLimit(uniqueUrls, options.concurrency, (url) =>
       checkLinkStatus(url, options.maxRedirects, options.fetchTimeoutMs, options.userAgent)
     );
+    statusResults = results.filter((r): r is LinkStatusResult => r !== undefined);
   }
   const statusByUrl = new Map(statusResults.map((r) => [r.resolvedUrl, r]));
 
@@ -602,6 +611,20 @@ export interface SiteLinkAnalysisOptions {
   fetchTimeoutMs?: number;   // default 8000
   userAgent?: string;
   checkExternal?: boolean;   // default true — set false to only verify internal links
+  /** Hard cap on how many unique links get network-checked. Link-dense sites
+   *  (heavy nav, footers, per-item links — GitHub is a good example) can
+   *  produce many thousands of unique URLs across even a modest page count;
+   *  checking every single one isn't bounded by page count at all, and can
+   *  quietly blow past a hosting platform's function time limit, killing the
+   *  whole scan with a raw connection drop instead of finishing gracefully.
+   *  Default 500. */
+  maxLinksToCheck?: number;
+  /** Wall-clock budget (ms) for the whole checking phase. Once passed, no
+   *  new checks are started (in-flight ones still finish); default 90000
+   *  (90s), leaving headroom in a typical 300s route budget for the other
+   *  site-wide audits (duplicate content, security headers, PSI) that run
+   *  after this one. */
+  overallTimeoutMs?: number;
 }
 
 export interface BrokenSiteLink {
@@ -620,6 +643,12 @@ export interface SiteLinkAnalysisReport {
   brokenLinks: BrokenSiteLink[];
   issues: Issue[];
   passed: Issue[];
+  /** How many of totalUniqueLinks were actually network-checked (may be less
+   *  than totalUniqueLinks if maxLinksToCheck or overallTimeoutMs kicked in). */
+  linksChecked: number;
+  /** How many known links were skipped due to the cap or time budget, not
+   *  because they were found to be fine — distinct from "checked and OK". */
+  linksSkippedDueToBudget: number;
 }
 
 /**
@@ -637,6 +666,8 @@ export async function findBrokenLinksAcrossSite(
     fetchTimeoutMs: opts.fetchTimeoutMs ?? 12000, // Increased from 6000ms to 12000ms to allow more time for responses
     userAgent: opts.userAgent ?? DEFAULTS.userAgent,
     checkExternal: opts.checkExternal ?? true,
+    maxLinksToCheck: opts.maxLinksToCheck ?? 500,
+    overallTimeoutMs: opts.overallTimeoutMs ?? 90_000,
   };
 
   const linkInfo = new Map<
@@ -665,10 +696,24 @@ export async function findBrokenLinksAcrossSite(
     }
   }
 
-  const uniqueUrls = Array.from(linkInfo.keys());
-  const statusResults = await mapLimit(uniqueUrls, options.concurrency, (url) =>
-    checkLinkStatus(url, options.maxRedirects, options.fetchTimeoutMs, options.userAgent, false),
+  // Every unique link found, most-referenced first — a link repeated across
+  // many pages (shared nav/footer) affects more visitors than a one-off deep
+  // link, so it's worth checking first if we run out of time/budget before
+  // getting through everything.
+  const allUniqueUrls = Array.from(linkInfo.keys()).sort(
+    (a, b) => linkInfo.get(b)!.foundOnPages.size - linkInfo.get(a)!.foundOnPages.size,
   );
+  const urlsToCheck = allUniqueUrls.slice(0, options.maxLinksToCheck);
+
+  const deadline = Date.now() + options.overallTimeoutMs;
+  const rawResults = await mapLimit(
+    urlsToCheck,
+    options.concurrency,
+    (url) => checkLinkStatus(url, options.maxRedirects, options.fetchTimeoutMs, options.userAgent, false),
+    deadline,
+  );
+  const statusResults = rawResults.filter((r): r is LinkStatusResult => r !== undefined);
+  const linksSkippedDueToBudget = allUniqueUrls.length - statusResults.length;
 
   const brokenLinks: BrokenSiteLink[] = [];
   for (const result of statusResults) {
@@ -688,8 +733,8 @@ export async function findBrokenLinksAcrossSite(
 
   const internalBroken = brokenLinks.filter((l) => !l.isExternal);
   const externalBroken = brokenLinks.filter((l) => l.isExternal);
-  const hasInternal = uniqueUrls.some((u) => !linkInfo.get(u)!.isExternal);
-  const hasExternal = uniqueUrls.some((u) => linkInfo.get(u)!.isExternal);
+  const hasInternal = allUniqueUrls.some((u) => !linkInfo.get(u)!.isExternal);
+  const hasExternal = allUniqueUrls.some((u) => linkInfo.get(u)!.isExternal);
 
   const issues: Issue[] = [];
   const passed: Issue[] = [];
@@ -721,12 +766,23 @@ export async function findBrokenLinksAcrossSite(
     passed.push(pass("broken-external-links", "No broken external links found across scanned pages"));
   }
 
+  if (linksSkippedDueToBudget > 0) {
+    // Informational only (weight 0, via pass()) — this is a scan-coverage
+    // note, not a site defect, so it shouldn't ding the score.
+    passed.push(pass(
+      "link-check-coverage",
+      `Checked ${statusResults.length} of ${allUniqueUrls.length} unique links found (the rest were skipped to stay within the scan's time budget, prioritizing links referenced from the most pages)`,
+    ));
+  }
+
   return {
-    totalUniqueLinks: uniqueUrls.length,
-    totalInternal: uniqueUrls.filter((u) => !linkInfo.get(u)!.isExternal).length,
-    totalExternal: uniqueUrls.filter((u) => linkInfo.get(u)!.isExternal).length,
+    totalUniqueLinks: allUniqueUrls.length,
+    totalInternal: allUniqueUrls.filter((u) => !linkInfo.get(u)!.isExternal).length,
+    totalExternal: allUniqueUrls.filter((u) => linkInfo.get(u)!.isExternal).length,
     brokenLinks,
     issues,
     passed,
+    linksChecked: statusResults.length,
+    linksSkippedDueToBudget,
   };
 }
