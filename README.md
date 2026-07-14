@@ -1,36 +1,98 @@
 # OptiQra
 
-OptiQra is an AI-powered site auditor. Give it a URL and it crawls the site, scores it across SEO, performance, accessibility, security, and conversion signals, and — since generative engines now send as much traffic as search does — checks how well the site is set up to be read, cited, and answered by AI crawlers and chatbots too.
+**Audit your site for both search engines and AI.** OptiQra crawls your entire website and scores it across SEO, performance, accessibility, security, and conversion signals — plus two new categories that matter now: **GEO** (generative engine optimization) and **AEO** (answer engine optimization). ChatGPT, Claude, Perplexity, and Google's AI Overviews now send as much traffic as traditional search. OptiQra tells you if your site is set up to be read, cited, and answered by them.
 
 ![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
-See a live demo via the Vercel deployment: https://optiqra.vercel.app
+**[Live demo](https://optiqra.vercel.app)** · Free, no signup, no accounts
 
 ![OptiQra](optiqra.webp)
 
-## What it does
+## Core audits
 
-- Crawls a site through its sitemap and internal links, analyzing every page it can reach
-- Scans a target URL and produces a multi-category audit report, scored overall and per page
-- Checks SEO metadata, structured data (JSON-LD/schema.org), robots.txt, and sitemaps
-- **GEO audit** — checks how well pages are set up for generative engines: entity grounding via `sameAs` links (Wikipedia, Wikidata, Crunchbase, LinkedIn, GitHub), whether content is visible in raw HTML or hidden behind client-side rendering, and other citation-friendliness signals
-- **AEO audit** — checks whether AI answer-engine crawlers (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, and others) are allowed by robots.txt, plus how well content is structured to be lifted into direct answers
-- Evaluates performance-related HTML and response characteristics, optionally enriched with Google PageSpeed Insights when a PSI API key is configured
-- Reviews accessibility issues such as missing labels, alt text, and contrast problems
-- Audits key security headers and conversion-oriented signals
-- Detects duplicate and near-duplicate content across a crawled site (repeated titles/descriptions, byte-identical or templated pages)
-- Analyzes links (internal/external, broken links) and images (missing alt text, lazy loading, responsive `srcset`/`<picture>` usage)
-- Builds a visual tree of every crawled page — hover or click any node to see that page's individual stats
-- Generates AI-written fixes for individual issues, and a site-wide AI insights summary, using your own API key for any of eight providers: OpenAI, Anthropic, Google, Groq, OpenRouter, Mistral, DeepSeek, or xAI — keys are only ever sent from your browser directly to the provider you pick, never stored on a server
-- Exports any report as PDF, DOCX, Markdown, CSV, TSV, TXT, or JSON
-- Schedules periodic re-scans (hourly, daily, weekly, monthly, yearly) that run unattended, compare each result against the previous scan, and can notify you via browser notification when they finish
-- Installable as a PWA with offline support — past reports stay viewable without a connection
+### 🔍 Site Crawling & Indexing
+- Crawls entire sites through sitemaps and internal links
+- Detects duplicate and near-duplicate content (repeated titles, byte-identical pages, thin/templated content)
+- Analyzes links (broken links, internal/external, redirect chains)
+- Scans images (missing alt text, lazy loading, responsive `srcset`/`<picture>` usage)
+
+### 🎯 SEO Essentials
+- Meta tags (title, description, canonical, Open Graph, Twitter cards)
+- Structured data (JSON-LD, schema.org validation)
+- robots.txt and sitemap analysis
+- Internal linking patterns and anchor text quality
+
+### 🤖 Generative Engine Optimization (GEO)
+- **Entity grounding** — checks for authoritative `sameAs` links (Wikipedia, Wikidata, Crunchbase, LinkedIn, GitHub) that help AI models cite and disambiguate your content
+- **Client-side rendering detection** — flags content hidden behind client-side JavaScript that generative crawlers (GPTBot, ClaudeBot) can't see
+- **Citation-friendliness** — analyzes whether pages are structured to be easily quoted and attributed in AI answers
+
+### 🤖 Answer Engine Optimization (AEO)
+- **Crawler access** — checks whether AI answer-engine crawlers (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, etc.) are allowed or blocked by robots.txt
+- **Answer-liftable content** — detects whether key content is structured to be extracted directly into answers, Q&A format, and featured snippets
+- **Q&A structuring** — validates whether content is formatted to answer common questions about your domain
+
+### ⚡ Performance
+- HTML/response performance characteristics
+- (Optional) Google PageSpeed Insights integration with API key
+
+### ♿ Accessibility
+- Missing alt text, labels, and ARIA attributes
+- Color contrast problems
+- Keyboard navigation and semantic HTML issues
+
+### 🔐 Security
+- Security headers (HSTS, CSP, X-Frame-Options, etc.)
+- Conversion signals and trust badges
+
+### 📊 Reports & Intelligence
+- **AI-generated fixes** — paste an API key (yours to keep) and OptiQra suggests fixes for each issue using OpenAI, Anthropic, Claude, Groq, OpenRouter, Mistral, DeepSeek, or xAI
+- **Site-wide AI insights** — generates a strategic summary reasoning across all categories and pages
+- **Visual crawl tree** — hover/click any page to see individual stats
+- **Export to PDF, DOCX, Markdown, CSV, TSV, TXT, JSON**
+- **Periodic scanning** — schedule re-scans (hourly to yearly), get browser notifications, auto-compare against previous results
+- **PWA + offline** — installable, past reports visible without internet
+
+## How it works
+
+1. **Paste a URL** — any website, any size
+2. **OptiQra crawls it** — follows internal links, scans every page
+3. **See results in seconds** — visual tree of all crawled pages, scores by category, detailed issue list
+4. **Get AI fixes** — (optional) paste an API key and OptiQra generates suggested fixes for each issue using your choice of provider: OpenAI, Anthropic, Claude, Groq, Mistral, DeepSeek, or xAI
+
+Everything runs in your browser. No server sees your data. No account needed.
 
 ## Showcase
 ![showcase](showcase.gif)
+
+## How OptiQra compares
+
+| Feature | OptiQra | Lighthouse | SEMrush | Ahrefs |
+|---------|---------|-----------|---------|--------|
+| **Full-site crawl** | ✅ Free | ❌ Single page | ✅ Paid | ✅ Paid |
+| **GEO/AEO audits** | ✅ Yes | ❌ No | ❌ No | ❌ No |
+| **AI-generated fixes** | ✅ Yes (your API) | ❌ No | ❌ No | ❌ No |
+| **No signup required** | ✅ Yes | ✅ Yes | ❌ No | ❌ No |
+| **Runs in browser** | ✅ Yes | ✅ Yes | ❌ No | ❌ No |
+| **Free forever** | ✅ Yes | ✅ Yes | ❌ No | ❌ No |
+| **Open source** | ✅ Yes | ✅ Yes | ❌ No | ❌ No |
+
+**OptiQra's edge:** Free full-site crawls + AI-native audits (GEO/AEO) + AI-generated fixes, all in your browser. No accounts, no limits, no subscriptions.
+
+## Why this matters
+
+SEO isn't just about Google anymore. **ChatGPT, Claude, Perplexity, and Gemini now generate answers that cite (or don't cite) your site.** Traffic from AI has already surpassed some traditional search channels for content creators. But most auditing tools haven't caught up — they still measure you against Googlebot alone.
+
+OptiQra fills that gap. It tells you:
+- Whether your content is *visible* to AI crawlers (or hidden behind client-side JS)
+- Whether AI models can *cite* you credibly (via entity grounding)
+- Whether your content is *liftable* into direct answers
+- Whether you've *allowed or blocked* AI crawlers in robots.txt
+
+In a world where one well-placed answer-engine citation is worth more traffic than page-two Google rankings, knowing your GEO/AEO score matters.
 
 ## 📚 Tech stack
 
