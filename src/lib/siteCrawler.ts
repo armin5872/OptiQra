@@ -10,6 +10,45 @@ export const DEFAULT_MAX_PAGES = 15;
 export const HARD_MAX_PAGES = Infinity; // Unlimited pages
 const DEFAULT_MAX_DEPTH = 3;
 const FETCH_TIMEOUT_MS = 9000;
+
+/** Time-to-first-byte budget: how long we'll wait for the server to start
+ *  responding (connect + TLS + headers) before giving up. Deliberately
+ *  tighter than the old single 9s timeout — a server that hasn't sent
+ *  headers within this window isn't going to, so failing fast here means
+ *  the worker moves on to the next queued page sooner instead of burning
+ *  its budget on a dead connection. */
+const TTFB_TIMEOUT_MS = 6000;
+
+/** Once headers arrive, the body gets its own *stall* budget: this resets
+ *  on every chunk received, so a large-but-actively-streaming page keeps
+ *  downloading as long as it keeps making progress, while a connection that
+ *  goes silent mid-download is cut loose quickly. This closes a real gap:
+ *  previously the only timeout wrapped the initial fetch() call, which
+ *  resolves as soon as headers arrive — the actual body read via res.text()
+ *  had NO timeout at all, so one hung download could stall a worker
+ *  indefinitely regardless of concurrency. */
+const STALL_TIMEOUT_MS = 5000;
+
+/** Hard cap on bytes read per page. Typical HTML is a few hundred KB; this
+ *  only ever kicks in on pathological/bloated pages, and protects the whole
+ *  crawl's speed from a handful of outliers without needing more workers.
+ *  We keep whatever was read up to the cap rather than discarding the page —
+ *  cheerio parses truncated HTML fine, and a partial page still yields
+ *  useful audit signal. */
+const MAX_BODY_BYTES = 6 * 1024 * 1024; // 6MB
+
+/** Browser-realistic request headers. Sites commonly 403/406 bare bot UAs
+ *  that are missing Accept/Accept-Language even when the User-Agent itself
+ *  is allowed — sending these cuts down on pages being wrongly skipped, and
+ *  the explicit Accept-Encoding gets us compressed (smaller, faster) bodies
+ *  from servers that only compress for clients that advertise support. */
+const PAGE_REQUEST_HEADERS: Record<string, string> = {
+	"User-Agent": CRAWL_USER_AGENT,
+	"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+	"Accept-Language": "en-US,en;q=0.9",
+	"Accept-Encoding": "gzip, deflate, br",
+};
+
 /** How many pages we fetch in parallel. Sequential crawling (1 request at a time)
  *  is by far the biggest speed bottleneck for multi-page scans, since most of the
  *  wall-clock time is spent waiting on network I/O for the target site. Running
@@ -37,6 +76,10 @@ export interface CrawledPage {
 	elapsedMs: number;
 	depth: number;
 	parentUrl?: string;
+	/** True if the body was cut off at MAX_BODY_BYTES or after a stall —
+	 *  the page is still included with whatever was read, but audits reading
+	 *  this should know the HTML may be incomplete. */
+	truncated?: boolean;
 }
 
 export interface CrawlOptions {
@@ -102,6 +145,7 @@ async function fetchWithTimeout(
 	url: string,
 	timeoutMs = FETCH_TIMEOUT_MS,
 	outerSignal?: AbortSignal,
+	headers: Record<string, string> = { "User-Agent": CRAWL_USER_AGENT },
 ) {
 	const controller = new AbortController();
 	const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -111,9 +155,13 @@ async function fetchWithTimeout(
 		else outerSignal.addEventListener("abort", onOuterAbort);
 	}
 	try {
+		// NOTE: this timer only bounds getting a response back (connect + TLS +
+		// headers) — fetch() resolves as soon as headers arrive, before the body
+		// is read. Body-level timing is handled separately by the caller via
+		// readBodyWithLimits, which has its own stall timeout.
 		return await fetch(url, {
 			redirect: "follow",
-			headers: { "User-Agent": CRAWL_USER_AGENT },
+			headers,
 			signal: controller.signal,
 			next: { revalidate: 3600 },
 		});
@@ -121,6 +169,73 @@ async function fetchWithTimeout(
 		clearTimeout(timer);
 		if (outerSignal) outerSignal.removeEventListener("abort", onOuterAbort);
 	}
+}
+
+/**
+ * Reads a response body as text with two protections that `res.text()` alone
+ * doesn't give you:
+ *  - a *stall* timeout that resets on every chunk, so slow-but-progressing
+ *    downloads are allowed to finish while genuinely stuck ones are cut loose
+ *  - a byte cap, so one bloated page can't dominate a worker's time budget
+ * Falls back to plain res.text() if the runtime doesn't expose a streamable
+ * body (e.g. some test/mock Response implementations).
+ */
+async function readBodyWithLimits(
+	res: Response,
+	maxBytes: number,
+	stallTimeoutMs: number,
+): Promise<{ text: string; truncated: boolean }> {
+	if (!res.body) {
+		return { text: await res.text(), truncated: false };
+	}
+
+	const reader = res.body.getReader();
+	const decoder = new TextDecoder();
+	let received = 0;
+	let text = "";
+	let truncated = false;
+
+	try {
+		while (true) {
+			let timer!: ReturnType<typeof setTimeout>;
+			const timedOut = new Promise<"timeout">((resolve) => {
+				timer = setTimeout(() => resolve("timeout"), stallTimeoutMs);
+			});
+
+			const outcome = await Promise.race([reader.read(), timedOut]);
+			clearTimeout(timer);
+
+			if (outcome === "timeout") {
+				truncated = true;
+				break;
+			}
+
+			const { done, value } = outcome;
+			if (done) break;
+
+			received += value.byteLength;
+			if (received > maxBytes) {
+				const overflow = received - maxBytes;
+				const keepLength = value.byteLength - overflow;
+				if (keepLength > 0) {
+					text += decoder.decode(value.subarray(0, keepLength), { stream: true });
+				}
+				truncated = true;
+				break;
+			}
+
+			text += decoder.decode(value, { stream: true });
+		}
+	} finally {
+		text += decoder.decode(); // flush any trailing multi-byte sequence
+		try {
+			await reader.cancel();
+		} catch {
+			// Already closed/errored — nothing to clean up.
+		}
+	}
+
+	return { text, truncated };
 }
 
 /** Looks for a sitemap and pulls out page URLs from it (following one level of sitemap index). */
@@ -262,8 +377,7 @@ export async function crawlSite(
 	async function processItem(item: QueueItem): Promise<void> {
 		try {
 			const started = Date.now();
-			const res = await fetchWithTimeout(item.url, FETCH_TIMEOUT_MS, signal);
-			const elapsedMs = Date.now() - started;
+			const res = await fetchWithTimeout(item.url, TTFB_TIMEOUT_MS, signal, PAGE_REQUEST_HEADERS);
 			const contentType = res.headers.get("content-type") || "";
 
 			if (!res.ok) {
@@ -275,7 +389,12 @@ export async function crawlSite(
 				return;
 			}
 
-			const html = await res.text();
+			const { text: html, truncated } = await readBodyWithLimits(
+				res,
+				MAX_BODY_BYTES,
+				STALL_TIMEOUT_MS,
+			);
+			const elapsedMs = Date.now() - started;
 			const page: CrawledPage = {
 				url: res.url || item.url,
 				html,
@@ -283,6 +402,7 @@ export async function crawlSite(
 				elapsedMs,
 				depth: item.depth,
 				parentUrl: item.parentUrl,
+				truncated,
 			};
 			// Pushing to `pages` and reading its length happen synchronously (no
 			// `await` between them), so `pages.length` here is a reliable,
