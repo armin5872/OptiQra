@@ -95,7 +95,24 @@ function requestHeaders(userAgent: string): Record<string, string> {
     "User-Agent": userAgent,
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
   };
+}
+
+/**
+ * We only ever care about the status code / headers of these responses, never
+ * the body — but fetch responses that are never read or canceled can leave
+ * their underlying socket parked instead of released back to the connection
+ * pool. Across a link check batch (hundreds/thousands of URLs) that adds up
+ * to real slowdown that looks like "the checker gets slower over time," and
+ * has nothing to do with concurrency settings. Always cancel unread bodies.
+ */
+function releaseBody(res: Response): void {
+  if (res.body && !res.bodyUsed) {
+    res.body.cancel().catch(() => {
+      // Already closed/errored — nothing to clean up.
+    });
+  }
 }
 
 /** Simple concurrency-limited map, no external deps. */
@@ -176,7 +193,9 @@ export function extractLinks(html: string, baseUrl: string): RawLink[] {
     const classified = classifyHref(href, baseUrl);
     const relTokens = rel.split(/\s+/).filter(Boolean);
     const hasNoopener = relTokens.includes("noopener") || relTokens.includes("noreferrer");
-    const missingNoopener = target === "_blank" && !hasNoopener && classified.isExternal !== false; // check regardless, external OR internal (best practice either way)
+    // Flagged regardless of internal/external — best practice either way for
+    // any target="_blank" link.
+    const missingNoopener = target === "_blank" && !hasNoopener;
 
     // "No text" only counts if there's also no accessible name via aria-label/title/img-alt
     const imgAlt = $el.find("img[alt]").first().attr("alt")?.trim();
@@ -195,7 +214,7 @@ export function extractLinks(html: string, baseUrl: string): RawLink[] {
       isMailtoOrTel: classified.isMailtoOrTel,
       isMalformed: classified.isMalformed,
       hasNoText: accessibleName.length === 0,
-      missingNoopener: target === "_blank" && !hasNoopener,
+      missingNoopener,
     });
   });
 
@@ -215,6 +234,7 @@ async function checkFast(resolvedUrl: string, timeoutMs: number, userAgent: stri
       // as bot traffic (403/406/429/999) — retry once with GET, since a real
       // browser opening the link would get GET treatment and often succeed.
       if (HEAD_FALLBACK_STATUSES.has(r.status)) {
+        releaseBody(r);
         return fetch(resolvedUrl, {
           method: "GET",
           redirect: "follow",
@@ -226,6 +246,7 @@ async function checkFast(resolvedUrl: string, timeoutMs: number, userAgent: stri
     });
 
     const ok = res.status >= 200 && res.status < 400;
+    releaseBody(res);
     return {
       href: resolvedUrl,
       resolvedUrl,
@@ -247,6 +268,7 @@ async function checkFast(resolvedUrl: string, timeoutMs: number, userAgent: stri
           headers: requestHeaders(userAgent),
         });
         const ok = res.status >= 200 && res.status < 400;
+        releaseBody(res);
         return {
           href: resolvedUrl,
           resolvedUrl,
@@ -272,7 +294,9 @@ async function checkWithChain(resolvedUrl: string, maxRedirects: number, timeout
   let hops = 0;
 
   try {
-    while (hops <= maxRedirects) {
+    // hops < maxRedirects means at most maxRedirects redirects are followed
+    // before giving up (previously "<=" silently allowed maxRedirects + 1).
+    while (hops < maxRedirects) {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -290,6 +314,7 @@ async function checkWithChain(resolvedUrl: string, maxRedirects: number, timeout
 
       // Some servers reject/block HEAD outright — retry with GET for this hop.
       if (HEAD_FALLBACK_STATUSES.has(res.status)) {
+        releaseBody(res);
         const controller2 = new AbortController();
         const timeout2 = setTimeout(() => controller2.abort(), timeoutMs);
         try {
@@ -307,16 +332,24 @@ async function checkWithChain(resolvedUrl: string, maxRedirects: number, timeout
       const isRedirect = res.status >= 300 && res.status < 400;
       if (isRedirect) {
         const location = res.headers.get("location");
+        releaseBody(res);
         if (!location) {
           return { href: resolvedUrl, resolvedUrl, ok: false, statusCode: res.status, error: "Redirect with no Location header", redirectChain: chain, finalUrl: currentUrl };
         }
         chain.push(currentUrl);
-        currentUrl = new URL(location, currentUrl).toString();
+        const nextUrl = new URL(location, currentUrl).toString();
+        if (chain.includes(nextUrl)) {
+          // A→B→A style loop — no point burning the rest of the hop budget
+          // fetching URLs we've already seen; report it clearly instead.
+          return { href: resolvedUrl, resolvedUrl, ok: false, statusCode: res.status, error: "Redirect loop detected", redirectChain: chain, finalUrl: nextUrl };
+        }
+        currentUrl = nextUrl;
         hops++;
         continue;
       }
 
       const ok = res.status >= 200 && res.status < 400;
+      releaseBody(res);
       return { href: resolvedUrl, resolvedUrl, ok, statusCode: res.status, error: ok ? null : `HTTP ${res.status}`, redirectChain: chain, finalUrl: currentUrl };
     }
 
@@ -336,6 +369,7 @@ async function checkWithChain(resolvedUrl: string, maxRedirects: number, timeout
             headers: requestHeaders(userAgent),
           });
           const ok = res.status >= 200 && res.status < 400;
+          releaseBody(res);
           return { href: resolvedUrl, resolvedUrl, ok, statusCode: res.status, error: ok ? null : `HTTP ${res.status}`, redirectChain: chain, finalUrl: res.url || resolvedUrl };
         } finally {
           clearTimeout(timeout);
@@ -394,7 +428,10 @@ export async function checkLinkStatus(
 export async function analyzeLinks(scannedUrl: string, opts: AnalyzeOptions = {}): Promise<LinkAnalysisReport> {
   const options = { ...DEFAULTS, ...opts };
 
-  const pageRes = await fetch(scannedUrl, { headers: { "User-Agent": options.userAgent } });
+  const pageRes = await fetch(scannedUrl, {
+    headers: { "User-Agent": options.userAgent },
+    signal: AbortSignal.timeout(options.fetchTimeoutMs),
+  });
   if (!pageRes.ok) {
     throw new Error(`Failed to fetch page to analyze: HTTP ${pageRes.status}`);
   }
