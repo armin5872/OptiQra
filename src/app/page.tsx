@@ -9,6 +9,7 @@ import AISiteInsights from "./components/AISiteInsights";
 import ReportDownload from "./components/ReportDownload";
 import ScheduleManager from "./components/ScheduleManager";
 import SettingsPanel from "./components/SettingsPanel";
+import MissingFileBanner from "./components/MissingFileBanner";
 import { useSettings } from "@/lib/hooks/useSettings";
 import {
 	saveScan,
@@ -847,6 +848,24 @@ export default function Home() {
 								key={key}
 								className={`panel ${openPanel === key ? "open" : ""}`}
 							>
+								{key === "seo" && (
+									<div key={activeScanId ?? reportData.url}>
+										{cat.issues.some(
+											(i) => i.id === "sitemap-missing" && !i.resolved,
+										) && (
+											<MissingFileBanner
+												kind="sitemap"
+												siteUrl={reportData.url}
+												pagesScanned={reportData.pagesScanned}
+											/>
+										)}
+										{cat.issues.some(
+											(i) => i.id === "robots-missing" && !i.resolved,
+										) && (
+											<MissingFileBanner kind="robots" siteUrl={reportData.url} />
+										)}
+									</div>
+								)}
 								{cat.issues.map((iss, idx) => (
 									<div
 										key={idx}

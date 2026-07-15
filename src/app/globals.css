@@ -1162,6 +1162,98 @@ h1 {
 	border-color: transparent;
 }
 
+/* ---------- Missing sitemap / robots.txt banner ---------- */
+.missing-file-banner {
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+	background: var(--accent-soft);
+	border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--line));
+	border-radius: var(--radius);
+	padding: 14px 40px 14px 16px;
+	margin: 6px 6px 14px;
+	position: relative;
+}
+.missing-file-banner-icon {
+	font-size: 19px;
+	line-height: 1;
+	flex: none;
+	margin-top: 1px;
+}
+.missing-file-banner-body {
+	flex: 1;
+	min-width: 0;
+}
+.missing-file-banner-title {
+	font-family: var(--font-plex-sans), "IBM Plex Sans", sans-serif;
+	font-weight: 600;
+	font-size: 14.5px;
+	color: var(--ink);
+	margin-bottom: 3px;
+}
+.missing-file-banner-detail {
+	font-family: var(--font-readable), "IBM Plex Sans", sans-serif;
+	font-size: 13.5px;
+	color: var(--ink-soft);
+	line-height: 1.55;
+	margin-bottom: 10px;
+}
+.missing-file-banner-actions {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+.missing-file-banner-generate {
+	border: none;
+	background: var(--accent);
+	color: #fff;
+	font-family: "IBM Plex Sans", sans-serif;
+	font-weight: 600;
+	font-size: 12.5px;
+	padding: 8px 14px;
+	border-radius: 6px;
+	cursor: pointer;
+	white-space: nowrap;
+	transition: background 0.15s ease;
+}
+.missing-file-banner-generate:hover {
+	background: var(--accent-hover);
+}
+.missing-file-banner-generate:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+.missing-file-banner-generate.done {
+	background: var(--good);
+}
+.missing-file-banner-hint {
+	font-family: var(--font-readable), "IBM Plex Sans", sans-serif;
+	font-size: 12px;
+	color: var(--ink-soft);
+}
+.missing-file-banner-dismiss {
+	position: absolute;
+	top: 10px;
+	right: 10px;
+	border: none;
+	background: transparent;
+	color: var(--ink-soft);
+	font-size: 14px;
+	line-height: 1;
+	cursor: pointer;
+	padding: 5px 7px;
+	border-radius: 6px;
+}
+.missing-file-banner-dismiss:hover {
+	color: var(--ink);
+	background: rgba(0, 0, 0, 0.06);
+}
+.missing-file-banner-dismiss:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
 /* ---------- Periodic scan scheduler ---------- */
 .schedule-manager {
 	position: relative;
