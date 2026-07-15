@@ -98,7 +98,12 @@ const readableSource = (source: string) => {
   return 'Live HTML scan';
 };
 
-export function buildReportModel(reportData: SourceReportData, overallScore: number): ReportModel {
+export function buildReportModel(
+  reportData: SourceReportData,
+  overallScore: number,
+  options?: { includePassedChecks?: boolean },
+): ReportModel {
+  const includePassedChecks = options?.includePassedChecks ?? true;
   const categories: ReportCategorySummary[] = [];
   const issues: ReportIssueRow[] = [];
   const passedChecks: ReportPassedRow[] = [];
@@ -128,9 +133,11 @@ export function buildReportModel(reportData: SourceReportData, overallScore: num
       });
     });
 
-    cat.passed.forEach((p) => {
-      passedChecks.push({ category: cat.label, title: p.title });
-    });
+    if (includePassedChecks) {
+      cat.passed.forEach((p) => {
+        passedChecks.push({ category: cat.label, title: p.title });
+      });
+    }
   });
 
   // Highest-impact, still-open issues first; resolved issues sink to the bottom.

@@ -6,6 +6,7 @@ import {
 } from "next/font/google";
 import Script from "next/script";
 import PWARegister from "./components/PWARegister";
+import AppearanceEffects from "./components/AppearanceEffects";
 import "./globals.css";
 
 const plexSans = IBM_Plex_Sans({
@@ -105,6 +106,41 @@ export default function RootLayout({
 			<body
 				className={`${plexSans.variable} ${plexCondensed.variable} ${plexMono.variable} ${readable.variable} font-sans`}
 			>
+				{/* Applies the saved theme/accent/density from the settings cookie
+				    mirror (see settingsStore.ts) before first paint, so switching
+				    themes in Settings never causes a flash of the old theme on
+				    reload. Falls back to all defaults if the cookie isn't set yet
+				    (first-ever visit). */}
+				<Script id="theme-init" strategy="beforeInteractive">
+					{`
+						(function () {
+							try {
+								var match = document.cookie.split("; ").find(function (row) {
+									return row.indexOf("optiqra_settings_mirror=") === 0;
+								});
+								var a = match ? JSON.parse(decodeURIComponent(match.split("=").slice(1).join("="))) : {};
+								var theme = a.theme || "system";
+								var resolved = theme === "system"
+									? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+									: theme;
+								var root = document.documentElement;
+								root.setAttribute("data-theme", resolved);
+								root.setAttribute("data-density", a.density || "comfortable");
+								root.setAttribute("data-font-scale", a.fontScale || "default");
+								if (a.reduceMotion) root.classList.add("reduce-motion");
+								var accent = a.accentColor || "#6505ff";
+								root.style.setProperty("--accent", accent);
+								root.style.setProperty("--accent-hover", "color-mix(in srgb, " + accent + " 85%, black)");
+								root.style.setProperty("--accent-soft", resolved === "dark"
+									? "color-mix(in srgb, " + accent + " 22%, black)"
+									: "color-mix(in srgb, " + accent + " 14%, white)");
+							} catch (e) {
+								// Cookie missing/corrupt — defaults from globals.css already apply.
+							}
+						})();
+					`}
+				</Script>
+
 				{/* Google Analytics */}
 				<Script
 					src="https://www.googletagmanager.com/gtag/js?id=G-MTPEEM6L09"
@@ -118,6 +154,8 @@ export default function RootLayout({
 						gtag('config', 'G-MTPEEM6L09');
 					`}
 				</Script>
+
+				<AppearanceEffects />
 
 				{children}
 

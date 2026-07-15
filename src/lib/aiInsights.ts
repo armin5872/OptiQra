@@ -24,4 +24,6 @@ export interface GenerateInsightsRequest {
 	pagesScanned?: number;
 	overallScore: number;
 	categories: InsightsCategorySummary[];
+	/** From Settings → AI Assistant. Defaults to "detailed" when omitted. */
+	tone?: "concise" | "detailed";
 }

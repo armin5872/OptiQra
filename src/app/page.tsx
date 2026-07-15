@@ -8,6 +8,8 @@ import AIFixButton from "./components/AIFixButton";
 import AISiteInsights from "./components/AISiteInsights";
 import ReportDownload from "./components/ReportDownload";
 import ScheduleManager from "./components/ScheduleManager";
+import SettingsPanel from "./components/SettingsPanel";
+import { useSettings } from "@/lib/hooks/useSettings";
 import {
 	saveScan,
 	getRecentScans,
@@ -46,6 +48,8 @@ type Category = {
 };
 
 export default function Home() {
+	const { settings, hydrated: settingsHydrated } = useSettings();
+	const appliedDefaultsRef = useRef(false);
 	const [viewState, setViewState] = useState<ScanState>("hero");
 	const [url, setUrl] = useState("");
 	const [scanMode, setScanMode] = useState<ScanMode>("single");
@@ -88,6 +92,17 @@ export default function Home() {
 		refreshRecentScans();
 	}, []);
 
+	// Settings → Scanning defaults. Applied once, only while still on the hero
+	// screen untouched — never clobbers a choice the person already made.
+	useEffect(() => {
+		if (!settingsHydrated || appliedDefaultsRef.current || viewState !== "hero") return;
+		appliedDefaultsRef.current = true;
+		setScanMode(settings.scanning.defaultMode);
+		setScanDepth(settings.scanning.defaultDepth);
+		setCustomPages(String(settings.scanning.defaultCustomPages));
+		setShowPageList(settings.scanning.autoShowPageList);
+	}, [settingsHydrated, settings.scanning, viewState]);
+
 	const overallFromCategories = (categories: Record<string, Category>) => {
 		const keys = Object.keys(categories);
 		if (!keys.length) return 0;
@@ -102,6 +117,7 @@ export default function Home() {
 		data: NonNullable<typeof reportData>,
 		mode: ScanMode,
 	) => {
+		if (!settings.privacy.saveScanHistory) return;
 		try {
 			const stored = await saveScan({
 				url: data.url,
@@ -240,6 +256,8 @@ export default function Home() {
 				url: formattedUrl,
 				mode: "site",
 				maxPages: resolvedMaxPages,
+				concurrency: settings.crawler.concurrency,
+				maxDepth: settings.crawler.maxLinkDepth,
 			}),
 			signal,
 		});
@@ -369,6 +387,34 @@ export default function Home() {
 			)
 		:	false;
 
+	// Settings → Analyzer lets people hide category cards they don't care
+	// about. This only affects what's displayed — the overall score above is
+	// always computed from every category, filtered or not.
+	const CATEGORY_GROUP: Record<string, keyof typeof settings.analyzer.visibleCategories> = {
+		seo: "seo",
+		"psi-seo": "seo",
+		speed: "speed",
+		"psi-speed": "speed",
+		a11y: "a11y",
+		"psi-a11y": "a11y",
+		"psi-bp": "security",
+		aeo: "aeo",
+		geo: "geo",
+		conversions: "conversions",
+		security: "security",
+		links: "links",
+		duplicateContent: "duplicateContent",
+	};
+	const visibleCategories: Record<string, any> =
+		reportData ?
+			Object.fromEntries(
+				Object.entries(reportData.categories).filter(([key]) => {
+					const group = CATEGORY_GROUP[key];
+					return group ? settings.analyzer.visibleCategories[group] : true;
+				}),
+			)
+		:	{};
+
 	return (
 		<div className="wrap">
 			<header>
@@ -389,6 +435,7 @@ export default function Home() {
 				</div>
 				<div className="header-actions">
 					<ScheduleManager />
+					<SettingsPanel />
 				</div>
 			</header>
 
@@ -742,11 +789,13 @@ export default function Home() {
 						mode={reportData.mode}
 						pagesScanned={reportData.pagesScanned?.length}
 						overallScore={overall}
-						categories={reportData.categories}
+						categories={visibleCategories}
+						autoGenerate={settings.ai.autoGenerateInsights}
+						tone={settings.ai.insightsTone}
 					/>
 
 					<div className="cards">
-						{Object.entries(reportData.categories).map(([key, cat]) => {
+						{Object.entries(visibleCategories).map(([key, cat]) => {
 							const openIssues = cat.issues.filter((i) => !i.resolved).length;
 							const color =
 								cat.score >= 80 ? "var(--good)"
@@ -794,7 +843,7 @@ export default function Home() {
 					</div>
 
 					<div id="panels-container">
-						{Object.entries(reportData.categories).map(([key, cat]) => (
+						{Object.entries(visibleCategories).map(([key, cat]) => (
 							<div
 								key={key}
 								className={`panel ${openPanel === key ? "open" : ""}`}

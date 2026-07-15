@@ -1,0 +1,740 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { useSettings } from "@/lib/hooks/useSettings";
+import { useAIProvider } from "@/lib/hooks/useAIProvider";
+import {
+	ACCENT_PRESETS,
+	exportSettingsAsJSON,
+	parseImportedSettings,
+	getStorageEstimate,
+	type OptiqraSettings,
+} from "@/lib/settingsStore";
+import { clearScans, getAllScans } from "@/lib/scanStore";
+import { clearScanCookies } from "@/lib/scanCookies";
+import {
+	getNotificationPermission,
+	requestNotificationPermission,
+	type NotificationPermissionState,
+} from "@/lib/notifications";
+
+type TabId =
+	| "appearance"
+	| "scanning"
+	| "crawler"
+	| "analyzer"
+	| "ai"
+	| "notifications"
+	| "reports"
+	| "privacy";
+
+const TABS: { id: TabId; label: string; icon: string }[] = [
+	{ id: "appearance", label: "Appearance", icon: "🎨" },
+	{ id: "scanning", label: "Scanning", icon: "🔍" },
+	{ id: "crawler", label: "Crawler", icon: "🕸️" },
+	{ id: "analyzer", label: "Analyzer", icon: "📊" },
+	{ id: "ai", label: "AI Assistant", icon: "✨" },
+	{ id: "notifications", label: "Notifications", icon: "🔔" },
+	{ id: "reports", label: "Reports", icon: "📄" },
+	{ id: "privacy", label: "Privacy & data", icon: "🛡️" },
+];
+
+const CATEGORY_LABELS: Record<keyof OptiqraSettings["analyzer"]["visibleCategories"], string> = {
+	seo: "SEO",
+	aeo: "AEO",
+	geo: "GEO",
+	speed: "Performance",
+	a11y: "Accessibility",
+	conversions: "Conversions",
+	security: "Security headers",
+	links: "Broken links",
+	duplicateContent: "Duplicate content",
+};
+
+function Switch({ on, onToggle, label }: { on: boolean; onToggle: () => void; label: string }) {
+	return (
+		<button
+			type="button"
+			className={`settings-switch ${on ? "on" : ""}`}
+			role="switch"
+			aria-checked={on}
+			aria-label={label}
+			onClick={onToggle}
+		/>
+	);
+}
+
+export default function SettingsPanel() {
+	const [open, setOpen] = useState(false);
+	const [tab, setTab] = useState<TabId>("appearance");
+	const { settings, hydrated, update, replaceAll, reset } = useSettings();
+	const { provider, model, isConfigured, hydrated: aiHydrated } = useAIProvider();
+	const panelRef = useRef<HTMLDivElement>(null);
+	const fileInputRef = useRef<HTMLInputElement>(null);
+
+	const [permission, setPermission] = useState<NotificationPermissionState>("default");
+	const [scanCount, setScanCount] = useState<number | null>(null);
+	const [storage, setStorage] = useState<{ usageBytes: number; quotaBytes: number } | null>(null);
+	const [toast, setToast] = useState("");
+
+	useEffect(() => {
+		if (!open) return;
+		setPermission(getNotificationPermission());
+		getAllScans()
+			.then((s) => setScanCount(s.length))
+			.catch(() => setScanCount(0));
+		getStorageEstimate().then(setStorage);
+	}, [open]);
+
+	useEffect(() => {
+		if (!open) return;
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === "Escape") setOpen(false);
+		};
+		document.addEventListener("keydown", onKey);
+		return () => document.removeEventListener("keydown", onKey);
+	}, [open]);
+
+	const flashToast = (msg: string) => {
+		setToast(msg);
+		setTimeout(() => setToast(""), 2200);
+	};
+
+	const handleClearHistory = async () => {
+		await clearScans();
+		clearScanCookies();
+		setScanCount(0);
+		flashToast("Scan history cleared");
+	};
+
+	const handleExport = () => {
+		const blob = new Blob([exportSettingsAsJSON(settings)], { type: "application/json" });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement("a");
+		a.href = url;
+		a.download = "optiqra-settings.json";
+		a.click();
+		URL.revokeObjectURL(url);
+		flashToast("Settings exported");
+	};
+
+	const handleImportFile = async (file: File) => {
+		const text = await file.text();
+		const parsed = parseImportedSettings(text);
+		if (!parsed) {
+			flashToast("Couldn't read that file");
+			return;
+		}
+		replaceAll(parsed);
+		flashToast("Settings imported");
+	};
+
+	const handleEnableNotifications = async () => {
+		const result = await requestNotificationPermission();
+		setPermission(result);
+	};
+
+	if (!hydrated) return null;
+	const a = settings.appearance;
+
+	return (
+		<>
+			<button
+				type="button"
+				className="settings-trigger-btn"
+				onClick={() => setOpen(true)}
+				aria-haspopup="dialog"
+				aria-expanded={open}
+			>
+				<svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+					<circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
+					<path
+						d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+						stroke="currentColor"
+						strokeWidth="1.6"
+					/>
+				</svg>
+				Settings
+			</button>
+
+			{open && (
+				<div className="settings-overlay" onClick={() => setOpen(false)}>
+					<div
+						className="settings-panel"
+						role="dialog"
+						aria-label="Settings"
+						ref={panelRef}
+						onClick={(e) => e.stopPropagation()}
+					>
+						<nav className="settings-nav">
+							<div className="settings-nav-title">⚙️ Settings</div>
+							{TABS.map((t) => (
+								<button
+									key={t.id}
+									type="button"
+									className={`settings-nav-btn ${tab === t.id ? "active" : ""}`}
+									onClick={() => setTab(t.id)}
+								>
+									<span className="settings-nav-icon">{t.icon}</span>
+									{t.label}
+								</button>
+							))}
+						</nav>
+
+						<div className="settings-main">
+							<div className="settings-header">
+								<div className="settings-header-title">
+									<h2>{TABS.find((t) => t.id === tab)?.label}</h2>
+									<p>Changes save automatically, right on this device.</p>
+								</div>
+								<button
+									type="button"
+									className="modal-close"
+									onClick={() => setOpen(false)}
+									aria-label="Close settings"
+								>
+									×
+								</button>
+							</div>
+
+							<div className="settings-body">
+								{tab === "appearance" && (
+									<>
+										<p className="settings-section-desc">
+											Make OptiQra look and feel like yours. These apply instantly, everywhere.
+										</p>
+										<div className="settings-group">
+											<div className="settings-row">
+												<div className="settings-row-label">
+													<strong>Theme</strong>
+													<span>Light, dark, or match your system</span>
+												</div>
+												<div className="settings-row-control">
+													<div className="settings-segmented">
+														{(["system", "light", "dark"] as const).map((v) => (
+															<button
+																key={v}
+																type="button"
+																className={a.theme === v ? "active" : ""}
+																onClick={() => update("appearance", { theme: v })}
+															>
+																{v === "system" ? "Auto" : v[0].toUpperCase() + v.slice(1)}
+															</button>
+														))}
+													</div>
+												</div>
+											</div>
+											<div className="settings-row">
+												<div className="settings-row-label">
+													<strong>Accent color</strong>
+													<span>Colors links, buttons, and highlights</span>
+												</div>
+												<div className="settings-row-control">
+													<div className="settings-swatches">
+														{ACCENT_PRESETS.map((p) => (
+															<button
+																key={p.id}
+																type="button"
+																className={`settings-swatch ${a.accentColor === p.value ? "active" : ""}`}
+																style={{ background: p.value }}
+																title={p.label}
+																aria-label={p.label}
+																onClick={() => update("appearance", { accentColor: p.value })}
+															/>
+														))}
+													</div>
+												</div>
+											</div>
+											<div className="settings-row">
+												<div className="settings-row-label">
+													<strong>Density</strong>
+													<span>How much breathing room cards & lists get</span>
+												</div>
+												<div className="settings-row-control">
+													<div className="settings-segmented">
+														{(["comfortable", "compact"] as const).map((v) => (
+															<button
+																key={v}
+																type="button"
+																className={a.density === v ? "active" : ""}
+																onClick={() => update("appearance", { density: v })}
+															>
+																{v === "comfortable" ? "Comfortable" : "Compact"}
+															</button>
+														))}
+													</div>
+												</div>
+											</div>
+											<div className="settings-row">
+												<div className="settings-row-label">
+													<strong>Text size</strong>
+													<span>Scales all body text</span>
+												</div>
+												<div className="settings-row-control">
+													<div className="settings-segmented">
+														{(["small", "default", "large"] as const).map((v) => (
+															<button
+																key={v}
+																type="button"
+																className={a.fontScale === v ? "active" : ""}
+																onClick={() => update("appearance", { fontScale: v })}
+															>
+																{v === "default" ? "Default" : v[0].toUpperCase() + v.slice(1)}
+															</button>
+														))}
+													</div>
+												</div>
+											</div>
+											<div className="settings-row">
+												<div className="settings-row-label">
+													<strong>Reduce motion</strong>
+													<span>Turns off animations &amp; transitions</span>
+												</div>
+												<Switch
+													on={a.reduceMotion}
+													label="Reduce motion"
+													onToggle={() => update("appearance", { reduceMotion: !a.reduceMotion })}
+												/>
+											</div>
+										</div>
+									</>
+								)}
+
+								{tab === "scanning" && (
+									<>
+										<p className="settings-section-desc">
+											What a fresh visit to OptiQra starts with. You can still change scan mode or
+											depth per-scan — this just sets the starting point.
+										</p>
+										<div className="settings-group">
+											<div className="settings-row">
+												<div className="settings-row-label">
+													<strong>Default scan mode</strong>
+													<span>Single page or whole-site crawl</span>
+												</div>
+												<div className="settings-row-control">
+													<div className="settings-segmented">
+														{(["single", "site"] as const).map((v) => (
+															<button
+																key={v}
+																type="button"
+																className={settings.scanning.defaultMode === v ? "active" : ""}
+																onClick={() => update("scanning", { defaultMode: v })}
+															>
+																{v === "single" ? "Single page" : "Whole site"}
+															</button>
+														))}
+													</div>
+												</div>
+											</div>
+											<div className="settings-row">
+												<div className="settings-row-label">
+													<strong>Default scan depth</strong>
+													<span>Used when scan mode is "Whole site"</span>
+												</div>
+												<div className="settings-row-control">
+													<select
+														value={settings.scanning.defaultDepth}
+														onChange={(e) =>
+															update("scanning", {
+																defaultDepth: e.target.value as OptiqraSettings["scanning"]["defaultDepth"],
+															})
+														}
+													>
+														<option value="quick">Quick (15 pages)</option>
+														<option value="standard">Standard (50 pages)</option>
+														<option value="full">Full site (100 pages)</option>
+														<option value="crawl">Full crawl (250 pages)</option>
+														<option value="custom">Custom</option>
+													</select>
+												</div>
+											</div>
+											{settings.scanning.defaultDepth === "custom" && (
+												<div className="settings-row">
+													<div className="settings-row-label">
+														<strong>Custom page count</strong>
+														<span>Default number of pages for custom depth</span>
+													</div>
+													<div className="settings-row-control">
+														<input
+															type="number"
+															min={1}
+															value={settings.scanning.defaultCustomPages}
+															onChange={(e) =>
+																update("scanning", {
+																	defaultCustomPages: Math.max(1, Number(e.target.value) || 1),
+																})
+															}
+														/>
+													</div>
+												</div>
+											)}
+											<div className="settings-row">
+												<div className="settings-row-label">
+													<strong>Auto-expand crawled page list</strong>
+													<span>Show every scanned URL by default on site reports</span>
+												</div>
+												<Switch
+													on={settings.scanning.autoShowPageList}
+													label="Auto-expand crawled page list"
+													onToggle={() =>
+														update("scanning", { autoShowPageList: !settings.scanning.autoShowPageList })
+													}
+												/>
+											</div>
+										</div>
+									</>
+								)}
+
+								{tab === "crawler" && (
+									<>
+										<p className="settings-section-desc">
+											Tune how the crawler behaves on whole-site scans. Higher concurrency finishes
+											faster but is heavier on the target server — keep it modest for smaller sites.
+										</p>
+										<div className="settings-group">
+											<div className="settings-slider-row">
+												<div className="settings-slider-head">
+													<strong>Concurrency</strong>
+													<span className="settings-slider-value">
+														{settings.crawler.concurrency} parallel requests
+													</span>
+												</div>
+												<input
+													type="range"
+													min={1}
+													max={12}
+													value={settings.crawler.concurrency}
+													onChange={(e) => update("crawler", { concurrency: Number(e.target.value) })}
+												/>
+											</div>
+											<div className="settings-slider-row">
+												<div className="settings-slider-head">
+													<strong>Max link depth</strong>
+													<span className="settings-slider-value">
+														{settings.crawler.maxLinkDepth} hop{settings.crawler.maxLinkDepth === 1 ? "" : "s"}
+													</span>
+												</div>
+												<input
+													type="range"
+													min={1}
+													max={10}
+													value={settings.crawler.maxLinkDepth}
+													onChange={(e) => update("crawler", { maxLinkDepth: Number(e.target.value) })}
+												/>
+											</div>
+										</div>
+										<p className="settings-footer-note">
+											The crawler always checks sitemap.xml first, respects your page-count limit, and
+											skips non-HTML files (images, PDFs, scripts) automatically.
+										</p>
+									</>
+								)}
+
+								{tab === "analyzer" && (
+									<>
+										<p className="settings-section-desc">
+											Choose which categories show up as cards in your reports. Turning one off just
+											hides it from view — handy if some checks aren't relevant to your site.
+										</p>
+										<div className="settings-cat-grid">
+											{(Object.keys(CATEGORY_LABELS) as (keyof typeof CATEGORY_LABELS)[]).map((key) => {
+												const on = settings.analyzer.visibleCategories[key];
+												return (
+													<label key={key} className={`settings-cat-chip ${on ? "on" : ""}`}>
+														<input
+															type="checkbox"
+															checked={on}
+															onChange={() =>
+																update("analyzer", {
+																	visibleCategories: {
+																		...settings.analyzer.visibleCategories,
+																		[key]: !on,
+																	},
+																})
+															}
+														/>
+														{CATEGORY_LABELS[key]}
+													</label>
+												);
+											})}
+										</div>
+										<div className="settings-group" style={{ marginTop: 16 }}>
+											<div className="settings-row">
+												<div className="settings-row-label">
+													<strong>Show passed checks</strong>
+													<span>Include checks that already passed in exported reports, not just issues</span>
+												</div>
+												<Switch
+													on={settings.analyzer.showPassedChecks}
+													label="Show passed checks"
+													onToggle={() =>
+														update("analyzer", { showPassedChecks: !settings.analyzer.showPassedChecks })
+													}
+												/>
+											</div>
+										</div>
+									</>
+								)}
+
+								{tab === "ai" && (
+									<>
+										<p className="settings-section-desc">
+											Controls how the AI assistant behaves once it's connected. Set up your
+											provider and API key from the AI section on a report page — that stays
+											separate from these preferences.
+										</p>
+										<div className="settings-group">
+											<div className="settings-row">
+												<div className="settings-row-label">
+													<strong>Connection status</strong>
+													<span>
+														{aiHydrated && isConfigured ?
+															`Connected — ${provider} (${model})`
+														:	"Not connected yet"}
+													</span>
+												</div>
+											</div>
+											<div className="settings-row">
+												<div className="settings-row-label">
+													<strong>Auto-generate insights</strong>
+													<span>Runs AI insights automatically when a report finishes, if connected</span>
+												</div>
+												<Switch
+													on={settings.ai.autoGenerateInsights}
+													label="Auto-generate insights"
+													onToggle={() =>
+														update("ai", { autoGenerateInsights: !settings.ai.autoGenerateInsights })
+													}
+												/>
+											</div>
+											<div className="settings-row">
+												<div className="settings-row-label">
+													<strong>Insight style</strong>
+													<span>How long and detailed the AI readout is</span>
+												</div>
+												<div className="settings-row-control">
+													<div className="settings-segmented">
+														{(["concise", "detailed"] as const).map((v) => (
+															<button
+																key={v}
+																type="button"
+																className={settings.ai.insightsTone === v ? "active" : ""}
+																onClick={() => update("ai", { insightsTone: v })}
+															>
+																{v === "concise" ? "Concise" : "Detailed"}
+															</button>
+														))}
+													</div>
+												</div>
+											</div>
+										</div>
+									</>
+								)}
+
+								{tab === "notifications" && (
+									<>
+										<p className="settings-section-desc">
+											Get a browser notification when a scan finishes — especially useful for
+											scheduled scans that run while you're away. Set up schedules from the
+											"Scheduled scans" button on any report.
+										</p>
+										<div className="settings-group">
+											<div className="settings-row">
+												<div className="settings-row-label">
+													<strong>Scan-complete notifications</strong>
+													<span>
+														Browser permission:{" "}
+														{permission === "granted" ? "granted"
+														: permission === "denied" ? "blocked — check your browser settings"
+														: permission === "unsupported" ? "not supported in this browser"
+														: "not requested yet"}
+													</span>
+												</div>
+												<div className="settings-row-control">
+													{permission !== "granted" && permission !== "unsupported" && (
+														<button
+															type="button"
+															className="settings-btn-outline"
+															onClick={handleEnableNotifications}
+														>
+															Enable
+														</button>
+													)}
+													<Switch
+														on={settings.notifications.enabled}
+														label="Scan-complete notifications"
+														onToggle={() =>
+															update("notifications", { enabled: !settings.notifications.enabled })
+														}
+													/>
+												</div>
+											</div>
+										</div>
+									</>
+								)}
+
+								{tab === "reports" && (
+									<>
+										<p className="settings-section-desc">
+											Defaults for the "Download report" button on a finished scan. Whichever
+											format you pick here is listed first in the download menu.
+										</p>
+										<div className="settings-group">
+											<div className="settings-row">
+												<div className="settings-row-label">
+													<strong>Default export format</strong>
+													<span>Pinned to the top of the download menu</span>
+												</div>
+												<div className="settings-row-control">
+													<div className="settings-segmented">
+														{(["pdf", "docx", "json"] as const).map((v) => (
+															<button
+																key={v}
+																type="button"
+																className={settings.reports.defaultExportFormat === v ? "active" : ""}
+																onClick={() => update("reports", { defaultExportFormat: v })}
+															>
+																{v.toUpperCase()}
+															</button>
+														))}
+													</div>
+												</div>
+											</div>
+											<div className="settings-row">
+												<div className="settings-row-label">
+													<strong>Include passed checks</strong>
+													<span>Also controls whether exported reports list passed checks, not just issues</span>
+												</div>
+												<Switch
+													on={settings.analyzer.showPassedChecks}
+													label="Include passed checks in exports"
+													onToggle={() =>
+														update("analyzer", { showPassedChecks: !settings.analyzer.showPassedChecks })
+													}
+												/>
+											</div>
+										</div>
+									</>
+								)}
+
+								{tab === "privacy" && (
+									<>
+										<p className="settings-section-desc">
+											Everything OptiQra stores lives only in this browser — nothing is sent to a
+											server for storage. Manage or wipe it here at any time.
+										</p>
+										<div className="settings-group">
+											<div className="settings-row">
+												<div className="settings-row-label">
+													<strong>Save scan history</strong>
+													<span>Keep past reports in this browser so you can revisit them</span>
+												</div>
+												<Switch
+													on={settings.privacy.saveScanHistory}
+													label="Save scan history"
+													onToggle={() =>
+														update("privacy", { saveScanHistory: !settings.privacy.saveScanHistory })
+													}
+												/>
+											</div>
+											<div className="settings-danger-row">
+												<div className="settings-row-label">
+													<strong>Scan history</strong>
+													<span>
+														{scanCount === null ? "Loading…" : `${scanCount} saved scan${scanCount === 1 ? "" : "s"}`}
+													</span>
+												</div>
+												<button type="button" className="settings-btn-danger" onClick={handleClearHistory}>
+													Clear history
+												</button>
+											</div>
+											{storage && storage.quotaBytes > 0 && (
+												<div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
+													<div className="settings-row-label">
+														<strong>Storage used</strong>
+														<span>
+															{(storage.usageBytes / 1024 / 1024).toFixed(1)} MB of{" "}
+															{(storage.quotaBytes / 1024 / 1024 / 1024).toFixed(1)} GB available
+														</span>
+													</div>
+													<div className="settings-storage-bar">
+														<div
+															className="settings-storage-fill"
+															style={{
+																width: `${Math.min(100, (storage.usageBytes / storage.quotaBytes) * 100)}%`,
+															}}
+														/>
+													</div>
+												</div>
+											)}
+										</div>
+
+										<div className="settings-group">
+											<div className="settings-danger-row">
+												<div className="settings-row-label">
+													<strong>Export settings</strong>
+													<span>Save your preferences as a JSON file</span>
+												</div>
+												<button type="button" className="settings-btn-outline" onClick={handleExport}>
+													Export
+												</button>
+											</div>
+											<div className="settings-danger-row">
+												<div className="settings-row-label">
+													<strong>Import settings</strong>
+													<span>Load preferences from a previously exported file</span>
+												</div>
+												<button
+													type="button"
+													className="settings-btn-outline"
+													onClick={() => fileInputRef.current?.click()}
+												>
+													Import
+												</button>
+												<input
+													ref={fileInputRef}
+													type="file"
+													accept="application/json"
+													style={{ display: "none" }}
+													onChange={(e) => {
+														const file = e.target.files?.[0];
+														if (file) handleImportFile(file);
+														e.target.value = "";
+													}}
+												/>
+											</div>
+											<div className="settings-danger-row">
+												<div className="settings-row-label">
+													<strong>Reset everything</strong>
+													<span>Restore all settings on this page back to defaults</span>
+												</div>
+												<button
+													type="button"
+													className="settings-btn-danger"
+													onClick={() => {
+														reset();
+														flashToast("Settings reset to defaults");
+													}}
+												>
+													Reset to defaults
+												</button>
+											</div>
+										</div>
+									</>
+								)}
+							</div>
+
+							<div className="settings-footer">
+								<span className="settings-footer-note">
+									Stored locally in this browser (IndexedDB) — nothing leaves your device.
+								</span>
+								{toast && <span className="settings-toast">✓ {toast}</span>}
+							</div>
+						</div>
+					</div>
+				</div>
+			)}
+		</>
+	);
+}

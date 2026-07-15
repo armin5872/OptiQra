@@ -1,6 +1,6 @@
 import type { GenerateInsightsRequest } from "@/lib/aiInsights";
 
-const SYSTEM_PROMPT = `You are a senior SEO & web performance consultant giving a client a spoken-style executive readout of an automated site audit.
+const BASE_SYSTEM_PROMPT = `You are a senior SEO & web performance consultant giving a client a spoken-style executive readout of an automated site audit.
 
 Rules:
 - You're given aggregated, site-wide findings across categories (SEO, Performance, Accessibility, Conversions, Security, etc). Each issue already states how many of the scanned pages it affects — use that to distinguish sitewide/systemic problems (templates, headers, robots.txt) from one-off page problems.
@@ -8,14 +8,21 @@ Rules:
 - Then give a prioritized action plan: the highest-impact fixes first, grouped by theme where multiple issues share a root cause (e.g. many pages missing meta descriptions is one fix, not many).
 - Call out quick wins separately if any exist: low-effort, high-value fixes.
 - Be specific and reference actual numbers/scores/page counts given below — never generic textbook advice divorced from this data.
-- Format the response as clean, simple markdown so it renders nicely: "## " for each section heading (e.g. "## Overview", "## Priority Fixes", "## Quick Wins"), "- " for bullet points, and **bold** around key numbers, scores, and page counts so they stand out. Do not use backticks or code blocks — this is a narrative readout, not code. No markdown tables.
-- Keep it tight: aim for roughly 200-350 words total. Do not repeat the raw data back verbatim, synthesize it.`;
+- Format the response as clean, simple markdown so it renders nicely: "## " for each section heading (e.g. "## Overview", "## Priority Fixes", "## Quick Wins"), "- " for bullet points, and **bold** around key numbers, scores, and page counts so they stand out. Do not use backticks or code blocks — this is a narrative readout, not code. No markdown tables.`;
+
+const TONE_INSTRUCTIONS: Record<"concise" | "detailed", string> = {
+	concise:
+		" Keep it short: aim for roughly 90-150 words total, favoring tight bullets over prose. Skip minor caveats and background — just overview + prioritized fixes.",
+	detailed:
+		" Aim for roughly 200-350 words total. Do not repeat the raw data back verbatim, synthesize it.",
+};
 
 export function buildInsightsPrompt(req: GenerateInsightsRequest): {
 	system: string;
 	user: string;
 } {
-	const { siteUrl, mode, pagesScanned, overallScore, categories } = req;
+	const { siteUrl, mode, pagesScanned, overallScore, categories, tone } = req;
+	const SYSTEM_PROMPT = BASE_SYSTEM_PROMPT + TONE_INSTRUCTIONS[tone ?? "detailed"];
 
 	const lines: string[] = [
 		`Site: ${siteUrl}`,

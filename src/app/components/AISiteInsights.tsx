@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Issue } from "./CrawlTree";
 import { useAIProvider } from "@/lib/hooks/useAIProvider";
 import type { InsightsCategorySummary } from "@/lib/aiInsights";
@@ -21,6 +21,11 @@ interface Props {
 	pagesScanned?: number;
 	overallScore: number;
 	categories: Record<string, Category>;
+	/** From Settings → AI Assistant. When true, generates insights automatically
+	 *  as soon as a provider is configured, instead of waiting for a click. */
+	autoGenerate?: boolean;
+	/** From Settings → AI Assistant. Defaults to "detailed". */
+	tone?: "concise" | "detailed";
 }
 
 const MAX_ISSUES_PER_CATEGORY = 6;
@@ -48,26 +53,21 @@ function summarizeCategories(categories: Record<string, Category>): InsightsCate
 		});
 }
 
-export default function AISiteInsights({ siteUrl, mode, pagesScanned, overallScore, categories }: Props) {
+export default function AISiteInsights({
+	siteUrl,
+	mode,
+	pagesScanned,
+	overallScore,
+	categories,
+	autoGenerate,
+	tone,
+}: Props) {
 	const { provider, apiKey, model, isConfigured, hydrated } = useAIProvider();
 	const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
 	const [output, setOutput] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [copied, setCopied] = useState(false);
-
-	if (!hydrated) return null;
-
-	const scopeLabel = mode === "site" ? "this site" : "this page";
-
-	const handleCopy = async () => {
-		try {
-			await navigator.clipboard.writeText(output);
-			setCopied(true);
-			setTimeout(() => setCopied(false), 1500);
-		} catch {
-			// clipboard API unavailable — silently ignore, the text is still selectable
-		}
-	};
+	const autoFiredRef = useRef(false);
 
 	const handleGenerate = async () => {
 		setStatus("loading");
@@ -87,6 +87,7 @@ export default function AISiteInsights({ siteUrl, mode, pagesScanned, overallSco
 					pagesScanned,
 					overallScore,
 					categories: summarizeCategories(categories),
+					tone,
 				}),
 			});
 
@@ -116,6 +117,32 @@ export default function AISiteInsights({ siteUrl, mode, pagesScanned, overallSco
 		} catch (err: any) {
 			setError(err?.message ?? "Failed to generate insights");
 			setStatus("error");
+		}
+	};
+
+	// Settings → AI Assistant → "Auto-generate insights". Fires once per report,
+	// as soon as a provider is configured — never overrides a manual regenerate.
+	// Declared before the hydration early-return below so hooks always run in
+	// the same order across renders.
+	useEffect(() => {
+		if (!hydrated || !autoGenerate || autoFiredRef.current) return;
+		if (!isConfigured || status !== "idle") return;
+		autoFiredRef.current = true;
+		handleGenerate();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [hydrated, autoGenerate, isConfigured, status]);
+
+	if (!hydrated) return null;
+
+	const scopeLabel = mode === "site" ? "this site" : "this page";
+
+	const handleCopy = async () => {
+		try {
+			await navigator.clipboard.writeText(output);
+			setCopied(true);
+			setTimeout(() => setCopied(false), 1500);
+		} catch {
+			// clipboard API unavailable — silently ignore, the text is still selectable
 		}
 	};
 

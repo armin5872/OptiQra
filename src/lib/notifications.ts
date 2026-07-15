@@ -50,6 +50,17 @@ export async function showScanNotification(title: string, body: string, url?: st
 	if (!inWorker && (typeof window === "undefined" || !("Notification" in window))) return;
 	if (!inWorker && Notification.permission !== "granted") return;
 
+	// Settings → Notifications. Works from the service worker too, since
+	// IndexedDB (unlike window/localStorage) is available in that scope.
+	try {
+		const { getSettings } = await import("./settingsStore");
+		const settings = await getSettings();
+		if (!settings.notifications.enabled) return;
+	} catch {
+		// If settings can't be read, default to showing the notification —
+		// permission was already granted, so this stays opt-in overall.
+	}
+
 	const options: NotificationOptions = {
 		body,
 		icon: "/icons/icon-192.png",

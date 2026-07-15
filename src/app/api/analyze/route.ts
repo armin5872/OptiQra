@@ -175,9 +175,13 @@ function throwIfAborted(signal?: AbortSignal) {
 }
 
 export async function POST(req: NextRequest) {
-	let url: unknown, mode: unknown, maxPages: unknown;
+	let url: unknown,
+		mode: unknown,
+		maxPages: unknown,
+		concurrency: unknown,
+		maxDepth: unknown;
 	try {
-		({ url, mode, maxPages } = await req.json());
+		({ url, mode, maxPages, concurrency, maxDepth } = await req.json());
 	} catch {
 		return NextResponse.json(
 			{ error: "Invalid request body" },
@@ -205,6 +209,8 @@ export async function POST(req: NextRequest) {
 			targetUrl,
 			typeof maxPages === "number" ? maxPages : undefined,
 			req.signal,
+			typeof concurrency === "number" ? concurrency : undefined,
+			typeof maxDepth === "number" ? maxDepth : undefined,
 		);
 	}
 
@@ -524,11 +530,23 @@ function streamSiteCrawl(
 	targetUrl: string,
 	requestedMaxPages: number | undefined,
 	signal: AbortSignal,
+	requestedConcurrency?: number,
+	requestedMaxDepth?: number,
 ) {
 	const maxPages = Math.max(
 		1,
 		Math.min(requestedMaxPages ?? DEFAULT_MAX_PAGES, HARD_MAX_PAGES),
 	);
+	// User-tunable via Settings → Crawler. Clamped defensively even though the
+	// client already clamps, since this is a public API route.
+	const concurrency =
+		typeof requestedConcurrency === "number" ?
+			Math.max(1, Math.min(Math.round(requestedConcurrency), 12))
+		:	undefined;
+	const maxDepth =
+		typeof requestedMaxDepth === "number" ?
+			Math.max(1, Math.min(Math.round(requestedMaxDepth), 10))
+		:	undefined;
 
 	const stream = new ReadableStream<Uint8Array>({
 		async start(controller) {
@@ -567,6 +585,8 @@ function streamSiteCrawl(
 
 				const crawl = await crawlSite(targetUrl, {
 					maxPages,
+					...(concurrency ? { concurrency } : {}),
+					...(maxDepth ? { maxDepth } : {}),
 					signal,
 					onPage: async (page, pagesSoFar) => {
 						const $ = load(page.html);

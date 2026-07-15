@@ -24,6 +24,7 @@ import {
 	downloadText,
 	type SourceReportData,
 } from "@/lib/reportExport";
+import { useSettings } from "@/lib/hooks/useSettings";
 // Heavy exporters are dynamically imported on-click to avoid bloating the initial bundle
 import type { exportReportPdf } from "@/lib/reportExport/pdf";
 import type { exportReportDocx } from "@/lib/reportExport/docx";
@@ -51,6 +52,16 @@ export default function ReportDownload({
 	const [pending, setPending] = useState<Format | null>(null);
 	const [error, setError] = useState("");
 	const menuRef = useRef<HTMLDivElement>(null);
+	const { settings, hydrated } = useSettings();
+
+	const orderedFormats =
+		hydrated ?
+			[...FORMATS].sort((a, b) =>
+				a.id === settings.reports.defaultExportFormat ? -1
+				: b.id === settings.reports.defaultExportFormat ? 1
+				: 0,
+			)
+		:	FORMATS;
 
 	useEffect(() => {
 		if (!open) return;
@@ -74,7 +85,9 @@ export default function ReportDownload({
 		setError("");
 		setPending(format);
 		try {
-			const model = buildReportModel(reportData, overallScore);
+			const model = buildReportModel(reportData, overallScore, {
+				includePassedChecks: settings.analyzer.showPassedChecks,
+			});
 			const base = reportFileBaseName(model);
 
 			switch (format) {
@@ -134,7 +147,7 @@ export default function ReportDownload({
 
 			{open && (
 				<div className="report-download-menu" role="menu">
-					{FORMATS.map((f) => (
+					{orderedFormats.map((f) => (
 						<button
 							key={f.id}
 							role="menuitem"
@@ -144,6 +157,11 @@ export default function ReportDownload({
 						>
 							<span className="report-download-item-label">
 								{pending === f.id ? "Preparing…" : f.label}
+								{hydrated && f.id === settings.reports.defaultExportFormat && (
+									<span className="settings-slider-value" style={{ marginLeft: 8 }}>
+										default
+									</span>
+								)}
 							</span>
 							<span className="report-download-item-hint">{f.hint}</span>
 						</button>
