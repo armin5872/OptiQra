@@ -6,6 +6,7 @@ import type { PageNode, Issue } from "./components/CrawlTree";
 import AIProviderSetup from "./components/AIProviderSetup";
 import AIFixButton from "./components/AIFixButton";
 import AISiteInsights from "./components/AISiteInsights";
+import AIEngineTest from "./components/AIEngineTest";
 import ReportDownload from "./components/ReportDownload";
 import ScheduleManager from "./components/ScheduleManager";
 import SettingsPanel from "./components/SettingsPanel";
@@ -1015,6 +1016,14 @@ export default function Home() {
 											<MissingFileBanner kind="robots" siteUrl={reportData.url} />
 										)}
 									</div>
+								)}
+								{(key === "aeo" || key === "geo") && (
+									<AIEngineTest
+										key={`${key}-${activeScanId ?? reportData.url}`}
+										url={reportData.url}
+										mode={key}
+										siteWide={reportData.mode === "site"}
+									/>
 								)}
 								{cat.issues.map((iss, idx) => (
 									<div
