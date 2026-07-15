@@ -25,8 +25,12 @@ import {
 } from "@/lib/siteCrawler";
 import { CheerioAPI, load } from "cheerio";
 import { assertSafeUrl, UnsafeUrlError } from "@/lib/urlSafety";
-import { registerScan, unregisterScan, type ScanControl } from "@/lib/scanControl";
-import { randomUUID } from "crypto";
+import {
+	aggregateCategory,
+	type Category,
+	type PageCategoryResult,
+	type PageNode,
+} from "@/lib/reportAggregate";
 
 export const runtime = "nodejs";
 // Site scans can now go up to 1000 pages, which won't finish in the default 60s.
@@ -34,99 +38,6 @@ export const runtime = "nodejs";
 // by the platform regardless of what's set here. Long custom scans are still
 // "best effort" within whatever the hosting plan allows.
 export const maxDuration = 300;
-
-type Category = {
-	label: string;
-	score: number;
-	issues: Issue[];
-	passed: Issue[];
-	source: string;
-	pagesAnalyzed?: number;
-};
-
-type PageCategoryResult = {
-	url: string;
-	score: number;
-	issues: Issue[];
-	passed: Issue[];
-};
-
-type PageNode = {
-	url: string;
-	parentUrl?: string;
-	depth: number;
-	score: number;
-	categories: Record<
-		string,
-		{ label: string; score: number; issues: Issue[]; passed: Issue[] }
-	>;
-};
-
-/** Merges the same category (e.g. "SEO") computed across many pages into one card:
- *  score is the average across pages, issues are grouped by id with the list of
- *  pages each one showed up on, and passed checks are deduped. */
-function aggregateCategory(
-	label: string,
-	source: string,
-	perPage: PageCategoryResult[],
-): Category {
-	if (perPage.length === 0) {
-		return {
-			label,
-			score: 50,
-			issues: [],
-			passed: [],
-			source,
-			pagesAnalyzed: 0,
-		};
-	}
-
-	const avgScore = Math.round(
-		perPage.reduce((sum, p) => sum + p.score, 0) / perPage.length,
-	);
-
-	const issueGroups = new Map<string, Issue & { affectedPages: string[] }>();
-	for (const p of perPage) {
-		for (const iss of p.issues) {
-			const existing = issueGroups.get(iss.id);
-			if (existing) {
-				existing.affectedPages.push(p.url);
-			} else {
-				issueGroups.set(iss.id, { ...iss, affectedPages: [p.url] });
-			}
-		}
-	}
-
-	const passed: Issue[] = [];
-	const passedSeen = new Set<string>();
-	for (const p of perPage) {
-		for (const ps of p.passed) {
-			if (issueGroups.has(ps.id) || passedSeen.has(ps.id)) continue;
-			passedSeen.add(ps.id);
-			passed.push(ps);
-		}
-	}
-
-	const issues = Array.from(issueGroups.values())
-		.sort((a, b) => b.weight - a.weight)
-		.map((iss) => {
-			const pageCount = iss.affectedPages.length;
-			const suffix =
-				pageCount > 1 ?
-					` (found on ${pageCount} of ${perPage.length} pages scanned)`
-				:	"";
-			return { ...iss, detail: `${iss.detail}${suffix}` };
-		});
-
-	return {
-		label,
-		score: Math.max(20, Math.min(100, avgScore)),
-		issues,
-		passed,
-		source,
-		pagesAnalyzed: perPage.length,
-	};
-}
 
 type ImagesRequestBody = {
 	url: string;
@@ -182,8 +93,18 @@ export async function POST(req: NextRequest) {
 		maxPages: unknown,
 		concurrency: unknown,
 		maxDepth: unknown;
+	let excludeUrls: unknown;
+	let priorPageNodes: unknown;
 	try {
-		({ url, mode, maxPages, concurrency, maxDepth } = await req.json());
+		({
+			url,
+			mode,
+			maxPages,
+			concurrency,
+			maxDepth,
+			excludeUrls,
+			priorPageNodes,
+		} = await req.json());
 	} catch {
 		return NextResponse.json(
 			{ error: "Invalid request body" },
@@ -213,6 +134,10 @@ export async function POST(req: NextRequest) {
 			req.signal,
 			typeof concurrency === "number" ? concurrency : undefined,
 			typeof maxDepth === "number" ? maxDepth : undefined,
+			Array.isArray(excludeUrls) ?
+				excludeUrls.filter((u): u is string => typeof u === "string")
+			:	undefined,
+			Array.isArray(priorPageNodes) ? (priorPageNodes as PageNode[]) : undefined,
 		);
 	}
 
@@ -520,15 +445,20 @@ function ndjson(obj: unknown): Uint8Array {
 }
 
 /** Streams a whole-site scan as newline-delimited JSON so the client can render
- *  a live progress bar and offer a "stop scan" control instead of waiting on a
- *  single request/response round trip. Each line is one JSON object:
- *   - {type:"scanId", scanId}                            sent first — pass to POST /api/analyze/stop to soft-stop
+ *  a live progress bar and offer pause/cancel/create-report controls instead
+ *  of waiting on a single request/response round trip. Each line is one JSON
+ *  object:
  *   - {type:"status", message}                          general phase updates
- *   - {type:"progress", scanned, total, currentUrl}      after each page is crawled + audited
+ *   - {type:"progress", scanned, total, currentUrl, pageNode}  after each page is crawled + audited
  *   - {type:"linkProgress", checked, total}              during the post-crawl broken-link check
- *   - {type:"done", data}                                final report; data.partial is true if stopped early
- *   - {type:"aborted", pagesScanned}                     the connection itself was aborted (hard stop / cancel)
+ *   - {type:"done", data}                                final report, same shape the old JSON endpoint returned
+ *   - {type:"aborted", pagesScanned}                     user hit "cancel"/"pause" before the crawl finished
  *   - {type:"error", message}                            unrecoverable failure
+ *
+ *  `excludeUrls` + `priorPageNodes` let the client resume a paused scan: pages
+ *  in `excludeUrls` are skipped by the crawler (already scanned last time),
+ *  and `priorPageNodes` seeds the running per-page results so the eventual
+ *  `done` report covers the whole site, not just the pages from this request.
  */
 function streamSiteCrawl(
 	targetUrl: string,
@@ -536,6 +466,8 @@ function streamSiteCrawl(
 	signal: AbortSignal,
 	requestedConcurrency?: number,
 	requestedMaxDepth?: number,
+	excludeUrls?: string[],
+	priorPageNodes?: PageNode[],
 ) {
 	const maxPages = Math.max(
 		1,
@@ -552,9 +484,6 @@ function streamSiteCrawl(
 			Math.max(1, Math.min(Math.round(requestedMaxDepth), 10))
 		:	undefined;
 
-	const scanId = randomUUID();
-	const scanControl: ScanControl = registerScan(scanId);
-
 	const stream = new ReadableStream<Uint8Array>({
 		async start(controller) {
 			let closed = false;
@@ -569,7 +498,6 @@ function streamSiteCrawl(
 			const close = () => {
 				if (closed) return;
 				closed = true;
-				unregisterScan(scanId);
 				try {
 					controller.close();
 				} catch {
@@ -578,11 +506,6 @@ function streamSiteCrawl(
 			};
 
 			try {
-				// Sent first so the client can reference this crawl in a later
-				// `/api/analyze/stop` call (e.g. the "Create report" stop-menu
-				// option) without needing to abort this connection.
-				enqueue({ type: "scanId", scanId });
-
 				enqueue({
 					type: "status",
 					message: `Discovering pages (up to ${maxPages})...`,
@@ -596,12 +519,27 @@ function streamSiteCrawl(
 				const convPerPage: PageCategoryResult[] = [];
 				const pageNodes: PageNode[] = [];
 
+				// Resuming a paused scan: seed everything already scanned before the
+				// pause so the eventual report covers the whole site, and tell the
+				// crawler to skip those URLs instead of re-fetching them.
+				if (priorPageNodes && priorPageNodes.length > 0) {
+					for (const node of priorPageNodes) {
+						pageNodes.push(node);
+						if (node.categories.seo) seoPerPage.push({ url: node.url, ...node.categories.seo });
+						if (node.categories.aeo) aeoPerPage.push({ url: node.url, ...node.categories.aeo });
+						if (node.categories.geo) geoPerPage.push({ url: node.url, ...node.categories.geo });
+						if (node.categories.speed) speedPerPage.push({ url: node.url, ...node.categories.speed });
+						if (node.categories.a11y) a11yPerPage.push({ url: node.url, ...node.categories.a11y });
+						if (node.categories.conversions) convPerPage.push({ url: node.url, ...node.categories.conversions });
+					}
+				}
+
 				const crawl = await crawlSite(targetUrl, {
 					maxPages,
 					...(concurrency ? { concurrency } : {}),
 					...(maxDepth ? { maxDepth } : {}),
+					...(excludeUrls && excludeUrls.length > 0 ? { seedSeen: excludeUrls } : {}),
 					signal,
-					shouldStop: () => scanControl.stopRequested,
 					onPage: async (page, pagesSoFar) => {
 						const $ = load(page.html);
 						const pageCategories: PageNode["categories"] = {
@@ -788,28 +726,30 @@ function streamSiteCrawl(
 
 						const overallScore =
 							categoryCount > 0 ? Math.round(pageScore / categoryCount) : 50;
-						pageNodes.push({
+						const pageNode: PageNode = {
 							url: page.url,
 							parentUrl: page.parentUrl,
 							depth: page.depth ?? 0,
 							score: overallScore,
 							categories: pageCategories,
-						});
+						};
+						pageNodes.push(pageNode);
 
 						enqueue({
 							type: "progress",
-							scanned: pagesSoFar,
-							total: maxPages,
+							scanned: (priorPageNodes?.length ?? 0) + pagesSoFar,
+							total: maxPages + (priorPageNodes?.length ?? 0),
 							currentUrl: page.url,
+							pageNode,
 						});
 					},
 				});
 
-				if (crawl.pages.length === 0) {
+				if (pageNodes.length === 0) {
 					enqueue({
 						type: "error",
 						message:
-							crawl.aborted || crawl.stoppedEarly ?
+							crawl.aborted ?
 								"Scan stopped before any pages could be analyzed."
 							:	"Couldn't reach any pages on that site. Check the URL and make sure the site is publicly accessible.",
 					});
@@ -817,7 +757,7 @@ function streamSiteCrawl(
 				}
 
 				if (crawl.aborted) {
-					enqueue({ type: "aborted", pagesScanned: crawl.pages.length });
+					enqueue({ type: "aborted", pagesScanned: pageNodes.length });
 					return close();
 				}
 
@@ -833,32 +773,6 @@ function streamSiteCrawl(
 						convPerPage,
 					),
 				};
-
-				// User asked the crawl to stop and just get a report of what's been
-				// scanned so far ("Create report" in the stop menu) — skip the
-				// remaining site-wide checks (broken links, duplicate content,
-				// security headers, Lighthouse) entirely and ship the report
-				// immediately with what we already have.
-				if (crawl.stoppedEarly || scanControl.stopRequested) {
-					enqueue({
-						type: "done",
-						data: {
-							url: targetUrl,
-							mode: "site",
-							categories,
-							lighthouseAvailable: false,
-							pagesScanned: crawl.pages.map((p) => p.url),
-							pagesSkipped: crawl.skipped,
-							crawlSource: crawl.source,
-							crawlTruncated: true,
-							maxPages,
-							timestamp: new Date().toISOString(),
-							pages: pageNodes,
-							partial: true,
-						},
-					});
-					return close();
-				}
 
 				// Broken-link detection across the whole crawled site: every link from
 				// every page is deduped by resolved URL first, so a link repeated in a
@@ -1045,7 +959,7 @@ function streamSiteCrawl(
 						mode: "site",
 						categories,
 						lighthouseAvailable,
-						pagesScanned: crawl.pages.map((p) => p.url),
+						pagesScanned: pageNodes.map((p) => p.url),
 						pagesSkipped: crawl.skipped,
 						crawlSource: crawl.source,
 						crawlTruncated: crawl.truncated,

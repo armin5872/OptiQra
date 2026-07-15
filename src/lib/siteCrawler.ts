@@ -90,12 +90,10 @@ export interface CrawlOptions {
 	concurrency?: number;
 	/** Aborting this signal stops the crawl as soon as in-flight fetches settle. */
 	signal?: AbortSignal;
-	/** Polled between dispatches. When it returns true, the crawl stops handing
-	 *  out new pages (already in-flight fetches are left to finish) and returns
-	 *  normally with `stoppedEarly: true` — unlike `signal`, this doesn't throw
-	 *  or tear the connection down, so the caller can still build a report from
-	 *  whatever pages were collected so far. */
-	shouldStop?: () => boolean;
+	/** URLs to treat as already crawled — skipped instantly if the seed URL,
+	 *  sitemap, or discovered links point at them. Used to resume a paused
+	 *  scan without re-fetching pages it already has. */
+	seedSeen?: string[];
 	/** Called right after each page is fetched, before its child links are queued.
 	 *  With concurrency > 1 this fires in completion order, not queue order — use
 	 *  `page.depth === 0` rather than `pagesSoFar === 1` if you need to identify
@@ -111,9 +109,6 @@ export interface CrawlSummary {
 	source: "sitemap" | "links" | "mixed";
 	truncated: boolean;
 	aborted: boolean;
-	/** True when the crawl was wound down early via `shouldStop` rather than
-	 *  aborted (connection torn down) or finishing naturally. */
-	stoppedEarly: boolean;
 }
 
 function normalizeForDedup(rawUrl: string): string {
@@ -352,12 +347,30 @@ export async function crawlSite(
 	const pages: CrawledPage[] = [];
 	const skipped: { url: string; reason: string }[] = [];
 	const seen = new Set<string>([normalizeForDedup(startUrl)]);
+	for (const su of options.seedSeen ?? []) {
+		seen.add(normalizeForDedup(su));
+	}
 
 	const sitemapUrls = await discoverUrlsFromSitemap(origin, maxPages * 2, signal);
 	const usedSitemap = sitemapUrls.length > 0;
 
-	type QueueItem = { url: string; depth: number; parentUrl?: string };
-	const queue: QueueItem[] = [{ url: startUrl, depth: 0 }];
+	type QueueItem = {
+		url: string;
+		depth: number;
+		parentUrl?: string;
+		/** Fetched only to harvest its links, not counted as a scanned page —
+		 *  used when resuming a paused crawl with no sitemap: the queue itself
+		 *  isn't persisted across the pause, so re-walking the seed URL is the
+		 *  cheapest way to rediscover a starting set of links to continue from. */
+		discoveryOnly?: boolean;
+	};
+	const startAlreadySeeded = (options.seedSeen ?? []).some(
+		(su) => normalizeForDedup(su) === normalizeForDedup(startUrl),
+	);
+	const queue: QueueItem[] =
+		startAlreadySeeded ?
+			[{ url: startUrl, depth: 0, discoveryOnly: true }]
+		:	[{ url: startUrl, depth: 0 }];
 	for (const su of sitemapUrls) {
 		const norm = normalizeForDedup(su);
 		if (!seen.has(norm)) {
@@ -368,7 +381,6 @@ export async function crawlSite(
 
 	let discoveredExtraLinks = false;
 	let aborted = false;
-	let stoppedEarly = false;
 
 	// Fetches run concurrently (up to `concurrency` at a time) instead of one
 	// request at a time — most of a crawl's wall-clock time is spent waiting on
@@ -414,14 +426,17 @@ export async function crawlSite(
 				parentUrl: item.parentUrl,
 				truncated,
 			};
-			// Pushing to `pages` and reading its length happen synchronously (no
-			// `await` between them), so `pages.length` here is a reliable,
-			// monotonically increasing "completed so far" count even with
-			// several processItem() calls interleaved concurrently.
-			pages.push(page);
 
-			if (options.onPage) {
-				await options.onPage(page, pages.length);
+			if (!item.discoveryOnly) {
+				// Pushing to `pages` and reading its length happen synchronously (no
+				// `await` between them), so `pages.length` here is a reliable,
+				// monotonically increasing "completed so far" count even with
+				// several processItem() calls interleaved concurrently.
+				pages.push(page);
+
+				if (options.onPage) {
+					await options.onPage(page, pages.length);
+				}
 			}
 
 			if (item.depth < maxDepth && pages.length < maxPages) {
@@ -435,7 +450,7 @@ export async function crawlSite(
 					discoveredExtraLinks = true;
 					queue.push({
 						url: link.resolvedUrl,
-						depth: item.depth + 1,
+						depth: item.discoveryOnly ? 1 : item.depth + 1,
 						parentUrl: page.url,
 					});
 				}
@@ -469,10 +484,6 @@ export async function crawlSite(
 				aborted = true;
 				return;
 			}
-			if (options.shouldStop?.()) {
-				stoppedEarly = true;
-				return;
-			}
 			if (dispatched >= maxPages) return;
 
 			const item = queue.shift();
@@ -503,8 +514,7 @@ export async function crawlSite(
 		pages,
 		skipped,
 		source: usedSitemap ? (discoveredExtraLinks ? "mixed" : "sitemap") : "links",
-		truncated: !aborted && (stoppedEarly || queue.length > 0),
+		truncated: !aborted && queue.length > 0,
 		aborted,
-		stoppedEarly,
 	};
 }

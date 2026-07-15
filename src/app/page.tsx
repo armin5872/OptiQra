@@ -23,6 +23,7 @@ import {
 	recordScanInCookie,
 	removeScanFromCookie,
 } from "@/lib/scanCookies";
+import { aggregateCategoriesFromPageNodes } from "@/lib/reportAggregate";
 
 type ScanState = "hero" | "scanning" | "report";
 type ScanMode = "single" | "site";
@@ -65,9 +66,19 @@ export default function Home() {
 	);
 	const [statusMessage, setStatusMessage] = useState("");
 	const abortRef = useRef<AbortController | null>(null);
-	const liveScanIdRef = useRef<string | null>(null);
-	const [stopMenuOpen, setStopMenuOpen] = useState(false);
-	const [finishingUp, setFinishingUp] = useState(false);
+	const scanUrlRef = useRef<string>("");
+	/** Every PageNode audited so far in the current site scan, across any
+	 *  pause/resume cycles — this is what "Pause"/"Create report now" have
+	 *  available to build a report from without needing anything else from
+	 *  the server. */
+	const pageNodesRef = useRef<PageNode[]>([]);
+	/** Set right before we deliberately abort the live connection (pause /
+	 *  create-report-now / cancel), so the stream-reading code below knows
+	 *  whether an AbortError means "the user cancelled, go back to the start
+	 *  screen" or "this abort was expected, the click handler already updated
+	 *  the UI — do nothing more." */
+	const stopIntentRef = useRef<"cancel" | "pause" | "report" | null>(null);
+	const [isPaused, setIsPaused] = useState(false);
 	const [linkCheckProgress, setLinkCheckProgress] = useState<{
 		checked: number;
 		total: number;
@@ -207,6 +218,7 @@ export default function Home() {
 
 		const formattedUrl = /^https?:\/\//i.test(url) ? url : `https://${url}`;
 		setUrl(formattedUrl);
+		scanUrlRef.current = formattedUrl;
 		setViewState("scanning");
 		setActiveScanId(null);
 		setActiveStep(0);
@@ -214,17 +226,19 @@ export default function Home() {
 		setCrawlProgress(
 			scanMode === "site" ? { scanned: 0, total: resolvedMaxPages } : null,
 		);
-		setStopMenuOpen(false);
-		setFinishingUp(false);
 		setLinkCheckProgress(null);
-		liveScanIdRef.current = null;
+		setIsPaused(false);
+		pageNodesRef.current = [];
+		stopIntentRef.current = null;
 
 		const controller = new AbortController();
 		abortRef.current = controller;
 
 		try {
 			if (scanMode === "site") {
-				await runSiteScanStream(formattedUrl, controller.signal);
+				await runSiteScanStream(formattedUrl, controller.signal, {
+					maxPages: resolvedMaxPages,
+				});
 			} else {
 				const res = await fetch("/api/analyze", {
 					method: "POST",
@@ -245,23 +259,42 @@ export default function Home() {
 			}
 		} catch (err: any) {
 			if (err?.name === "AbortError") {
-				setStoppedNote("Scan stopped.");
-				setViewState("hero");
+				// Cancel is the only path that lands here on purpose (pause and
+				// create-report-now handle their own UI transitions before
+				// aborting) — anything else means the connection dropped
+				// unexpectedly, which should still send the user back rather
+				// than leaving them stuck on a frozen scanning screen.
+				if (stopIntentRef.current === "cancel" || stopIntentRef.current === null) {
+					setStoppedNote(
+						pageNodesRef.current.length > 0 ?
+							`Scan stopped — ${pageNodesRef.current.length} page${pageNodesRef.current.length === 1 ? "" : "s"} were analyzed before you stopped it.`
+						:	"Scan stopped.",
+					);
+					setViewState("hero");
+				}
 			} else {
 				setErrorMsg(err.message);
 				setViewState("hero");
 			}
 		} finally {
 			abortRef.current = null;
+			stopIntentRef.current = null;
 		}
 	};
 
 	// Reads the /api/analyze NDJSON stream for a site (multi-page) scan, updating
 	// live progress as each page comes in and resolving once the final report
-	// ("done") line arrives.
+	// ("done") line arrives. Also used to resume a paused scan: pass
+	// `excludeUrls`/`priorPageNodes` (already-scanned pages to skip / seed the
+	// report with) and `maxPages` set to the *remaining* page budget.
 	const runSiteScanStream = async (
 		formattedUrl: string,
 		signal: AbortSignal,
+		opts: {
+			maxPages: number;
+			excludeUrls?: string[];
+			priorPageNodes?: PageNode[];
+		},
 	) => {
 		const res = await fetch("/api/analyze", {
 			method: "POST",
@@ -269,9 +302,11 @@ export default function Home() {
 			body: JSON.stringify({
 				url: formattedUrl,
 				mode: "site",
-				maxPages: resolvedMaxPages,
+				maxPages: opts.maxPages,
 				concurrency: settings.crawler.concurrency,
 				maxDepth: settings.crawler.maxLinkDepth,
+				excludeUrls: opts.excludeUrls,
+				priorPageNodes: opts.priorPageNodes,
 			}),
 			signal,
 		});
@@ -309,9 +344,7 @@ export default function Home() {
 					continue;
 				}
 
-				if (evt.type === "scanId") {
-					liveScanIdRef.current = evt.scanId ?? null;
-				} else if (evt.type === "status") {
+				if (evt.type === "status") {
 					setStatusMessage(evt.message ?? "");
 					// Once the crawl itself is done, the pipeline moves into
 					// per-site post-processing (broken links, duplicate content,
@@ -328,6 +361,7 @@ export default function Home() {
 					// previous phase no longer applies.
 					setLinkCheckProgress(null);
 				} else if (evt.type === "progress") {
+					if (evt.pageNode) pageNodesRef.current.push(evt.pageNode);
 					setCrawlProgress({
 						scanned: evt.scanned,
 						total: evt.total,
@@ -337,18 +371,22 @@ export default function Home() {
 					setLinkCheckProgress({ checked: evt.checked, total: evt.total });
 				} else if (evt.type === "done") {
 					setCrawlProgress((p) => (p ? { ...p, scanned: p.total } : p));
-					setFinishingUp(false);
 					setReportData(evt.data);
 					setTimeout(() => setViewState("report"), 350);
 					persistScan(evt.data, "site");
 					return;
 				} else if (evt.type === "aborted") {
-					setStoppedNote(
-						evt.pagesScanned ?
-							`Scan stopped — ${evt.pagesScanned} page${evt.pagesScanned === 1 ? "" : "s"} were analyzed before you stopped it.`
-						:	"Scan stopped.",
-					);
-					setViewState("hero");
+					// Only a plain Cancel should redirect home from here — pause
+					// and create-report-now already set the UI they want before
+					// triggering this same abort.
+					if (stopIntentRef.current !== "pause" && stopIntentRef.current !== "report") {
+						setStoppedNote(
+							evt.pagesScanned ?
+								`Scan stopped — ${evt.pagesScanned} page${evt.pagesScanned === 1 ? "" : "s"} were analyzed before you stopped it.`
+							:	"Scan stopped.",
+						);
+						setViewState("hero");
+					}
 					return;
 				} else if (evt.type === "error") {
 					throw new Error(
@@ -359,61 +397,100 @@ export default function Home() {
 		}
 	};
 
-	// Site scans get a "stop" menu with three real choices instead of an
-	// instant kill: Resume (just closes the menu, the scan was never actually
-	// interrupted), Cancel (abort outright, back to the start screen — the old
-	// "stop scan" behavior), or Create report (stop the crawler dead — no more
-	// pages fetched — and build the report right here from whatever was
-	// already scanned). Single-page scans have no meaningful "partial report"
-	// to build, so they keep the old one-click stop.
-	const openStopMenu = () => {
-		if (scanMode === "site") {
-			setStopMenuOpen(true);
-		} else {
-			stopScan();
+	// Pause: stop the crawler dead (abort the connection — there's no way to
+	// truly suspend a live request without tearing it down) but keep every
+	// page audited so far, and flip the button to "Resume".
+	const pauseScan = () => {
+		stopIntentRef.current = "pause";
+		abortRef.current?.abort();
+		setIsPaused(true);
+	};
+
+	// Resume: starts a *new* crawl request, telling the server which pages are
+	// already done (skip them) and seeding it with their results (so the
+	// eventual report still covers the whole site), capped to whatever's left
+	// of the original page budget.
+	const resumeScan = async () => {
+		setIsPaused(false);
+		stopIntentRef.current = null;
+		const already = pageNodesRef.current;
+		const remaining = Math.max(1, resolvedMaxPages - already.length);
+
+		const controller = new AbortController();
+		abortRef.current = controller;
+		try {
+			await runSiteScanStream(scanUrlRef.current, controller.signal, {
+				maxPages: remaining,
+				excludeUrls: already.map((p) => p.url),
+				priorPageNodes: already,
+			});
+		} catch (err: any) {
+			if (err?.name === "AbortError") {
+				if (stopIntentRef.current === "cancel" || stopIntentRef.current === null) {
+					setStoppedNote(
+						already.length > 0 ?
+							`Scan stopped — ${already.length} page${already.length === 1 ? "" : "s"} were analyzed before you stopped it.`
+						:	"Scan stopped.",
+					);
+					setViewState("hero");
+				}
+			} else {
+				setErrorMsg(err.message);
+				setViewState("hero");
+			}
+		} finally {
+			abortRef.current = null;
+			stopIntentRef.current = null;
 		}
 	};
 
-	const resumeScan = () => setStopMenuOpen(false);
-
+	// Cancel: stop for good and go back to the start screen. Works whether
+	// the scan is actively running or currently paused.
 	const cancelScan = () => {
-		setStopMenuOpen(false);
-		stopScan();
+		stopIntentRef.current = "cancel";
+		if (abortRef.current) {
+			abortRef.current.abort();
+		} else {
+			// Already paused (no live connection to abort) — reset directly.
+			setStoppedNote(
+				pageNodesRef.current.length > 0 ?
+					`Scan stopped — ${pageNodesRef.current.length} page${pageNodesRef.current.length === 1 ? "" : "s"} were analyzed before you stopped it.`
+				:	"Scan stopped.",
+			);
+			setViewState("hero");
+		}
 	};
 
-	const stopScan = () => {
-		abortRef.current?.abort();
-	};
-
-	// Tells the server to stop dispatching new page fetches and immediately
-	// ship back a report built from whatever pages it already scanned. This
-	// is a *separate* request from the streaming scan connection — aborting
-	// that connection directly would kill the crawl before it could send
-	// anything back.
-	const createReportNow = async () => {
-		setStopMenuOpen(false);
-		const scanId = liveScanIdRef.current;
-		if (!scanId) {
-			// No scan id yet (stopped before the server even sent one) — nothing
-			// to report on, fall back to a plain cancel.
-			stopScan();
+	// Create report now: stop the crawler dead and build the report right
+	// here from whatever pages were already scanned — no extra site-wide
+	// checks (broken links, duplicate content, etc.), no trip back to the
+	// landing page. Works whether actively scanning or paused, since the
+	// report is built entirely from what's already in `pageNodesRef`.
+	const createReportNow = () => {
+		const nodes = pageNodesRef.current;
+		if (nodes.length === 0) {
+			cancelScan();
 			return;
 		}
-		setFinishingUp(true);
-		try {
-			await fetch("/api/analyze/stop", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ scanId }),
-			});
-			// The stream is still open — the "done" event (with partial: true)
-			// will arrive shortly and take over from here.
-		} catch {
-			// Couldn't reach the stop endpoint — fall back to a hard cancel
-			// rather than leaving the user stuck on the scanning screen.
-			setFinishingUp(false);
-			stopScan();
-		}
+
+		const categories = aggregateCategoriesFromPageNodes(nodes);
+		const data = {
+			url: scanUrlRef.current,
+			mode: "site" as ScanMode,
+			categories,
+			lighthouseAvailable: false,
+			pagesScanned: nodes.map((n) => n.url),
+			pagesSkipped: [],
+			crawlTruncated: true,
+			pages: nodes,
+			partial: true,
+		};
+
+		stopIntentRef.current = "report";
+		abortRef.current?.abort();
+		setReportData(data);
+		setViewState("report");
+		persistScan(data, "site");
 	};
 
 	const applyFix = (catKey: string, issueIdx: number) => {
@@ -745,7 +822,9 @@ export default function Home() {
 								/>
 							</div>
 							<p className="crawl-current-url">
-								{crawlProgress.currentUrl ||
+								{isPaused ?
+									"⏸ Paused — press Resume to keep going."
+								:	crawlProgress.currentUrl ||
 									statusMessage ||
 									"Getting started…"}
 							</p>
@@ -813,43 +892,36 @@ export default function Home() {
 						</ul>
 					)}
 
-					{finishingUp ?
-						<p className="finishing-up-note" role="status">
-							Wrapping up your report from the pages already scanned…
-						</p>
-					: stopMenuOpen ?
-						<div className="stop-menu" role="group" aria-label="Stop scan options">
-							<p className="stop-menu-prompt">Stop this scan?</p>
-							<div className="stop-menu-actions">
-								<button
-									type="button"
-									className="stop-menu-btn stop-menu-resume"
-									onClick={resumeScan}
-								>
-									Resume
-								</button>
-								<button
-									type="button"
-									className="stop-menu-btn stop-menu-report"
-									onClick={createReportNow}
-								>
-									Create report now
-								</button>
-								<button
-									type="button"
-									className="stop-menu-btn stop-menu-cancel"
-									onClick={cancelScan}
-								>
-									Cancel scan
-								</button>
-							</div>
-						</div>
-					:	<button type="button" className="stop-btn" onClick={openStopMenu}>
-							Stop scan
+					<div className="stop-menu-actions">
+						{scanMode === "site" && (
+							<button
+								type="button"
+								className="stop-menu-btn stop-menu-resume"
+								onClick={isPaused ? resumeScan : pauseScan}
+							>
+								{isPaused ? "Resume" : "Pause"}
+							</button>
+						)}
+						{scanMode === "site" && (
+							<button
+								type="button"
+								className="stop-menu-btn stop-menu-report"
+								onClick={createReportNow}
+							>
+								Create report now
+							</button>
+						)}
+						<button
+							type="button"
+							className="stop-menu-btn stop-menu-cancel"
+							onClick={cancelScan}
+						>
+							Cancel scan
 						</button>
-					}
+					</div>
 				</section>
 			)}
+
 
 			{viewState === "report" && reportData && (
 				<section className="report active">
