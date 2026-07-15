@@ -41,6 +41,7 @@ export interface OptiqraSettings {
 	crawler: {
 		concurrency: number; // 1-12, parallel page fetches
 		maxLinkDepth: number; // 1-10, how many link-hops deep to follow
+		renderJs: boolean; // execute each page's JavaScript before auditing (slower, more accurate for SPAs)
 	};
 	analyzer: {
 		visibleCategories: {
@@ -112,6 +113,7 @@ export const DEFAULT_SETTINGS: OptiqraSettings = {
 	crawler: {
 		concurrency: 6,
 		maxLinkDepth: 3,
+		renderJs: false,
 	},
 	analyzer: {
 		visibleCategories: {

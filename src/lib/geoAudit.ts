@@ -70,8 +70,17 @@ function sameAsList(node: any): string[] {
 }
 
 /** Checks whether the page's visible text is likely present in the raw HTML
- *  a non-executing crawler would fetch, as opposed to being injected client-side. */
-function analyzeRenderability($: CheerioAPI, html: string): AuditResult {
+ *  a non-executing crawler would fetch, as opposed to being injected client-side.
+ *
+ *  When `renderedText` is supplied (from actually executing the page's
+ *  JavaScript via lib/jsRenderer), this upgrades from a heuristic guess to a
+ *  measurement: it compares real rendered word count against raw word count
+ *  instead of only inferring from script-tag count and app-shell markers. */
+function analyzeRenderability(
+	$: CheerioAPI,
+	html: string,
+	renderedText?: string,
+): AuditResult {
 	const issues: Issue[] = [];
 	const passed: Issue[] = [];
 
@@ -83,12 +92,44 @@ function analyzeRenderability($: CheerioAPI, html: string): AuditResult {
 		lowerHtml.includes(m),
 	);
 
+	if (renderedText !== undefined) {
+		const renderedWordCount = renderedText ? renderedText.split(" ").length : 0;
+		// A page that gains a lot of words only after JS runs is confirmed
+		// (not just suspected) to depend on client-side rendering for its
+		// primary content.
+		const gainedSubstantialContent =
+			renderedWordCount >= 40 &&
+			renderedWordCount > wordCount * 2 &&
+			renderedWordCount - wordCount >= 30;
+
+		if (gainedSubstantialContent) {
+			issues.push(
+				issue(
+					"geo-js-rendered-content",
+					"Page content requires JavaScript to render",
+					`Confirmed by actually rendering the page: the raw HTML has about ${wordCount} word${wordCount === 1 ? "" : "s"} of text, but ${renderedWordCount} words are present after JavaScript runs. Most generative-engine crawlers (GPTBot, ClaudeBot, PerplexityBot, Google-Extended) fetch raw HTML and do not execute JavaScript, so the content that only appears after hydration is effectively invisible to them, even though a browser visitor sees it fine.`,
+					"Server-render (or statically generate/prerender) the primary content so it's present in the initial HTML response, not just after client-side JavaScript runs.",
+					10,
+				),
+			);
+		} else {
+			passed.push(
+				pass(
+					"geo-js-rendered-content",
+					`Page's main content is present without relying on client-side JavaScript (confirmed by rendering: ${wordCount} words raw vs ${renderedWordCount} rendered)`,
+				),
+			);
+		}
+
+		return { issues, passed };
+	}
+
 	if (wordCount < 40 && (externalScripts >= 3 || hasAppShellMarker)) {
 		issues.push(
 			issue(
 				"geo-js-rendered-content",
 				"Page content appears to require JavaScript to render",
-				`Only about ${wordCount} word${wordCount === 1 ? "" : "s"} of text are present in the raw HTML, alongside ${externalScripts} external script tag${externalScripts === 1 ? "" : "s"}${hasAppShellMarker ? " and a client-rendered app-shell marker" : ""}. Most generative-engine crawlers (GPTBot, ClaudeBot, PerplexityBot, Google-Extended) fetch raw HTML and do not execute JavaScript, so content that only appears after hydration is effectively invisible to them, even though a browser visitor sees it fine.`,
+				`Only about ${wordCount} word${wordCount === 1 ? "" : "s"} of text are present in the raw HTML, alongside ${externalScripts} external script tag${externalScripts === 1 ? "" : "s"}${hasAppShellMarker ? " and a client-rendered app-shell marker" : ""}. Most generative-engine crawlers (GPTBot, ClaudeBot, PerplexityBot, Google-Extended) fetch raw HTML and do not execute JavaScript, so content that only appears after hydration is effectively invisible to them, even though a browser visitor sees it fine. Turn on "Render JavaScript" in scan options to confirm this rather than estimate it.`,
 				"Server-render (or statically generate/prerender) the primary content so it's present in the initial HTML response, not just after client-side JavaScript runs.",
 				10,
 			),
@@ -293,6 +334,7 @@ export function analyzeGEO(
 	$: CheerioAPI,
 	html: string,
 	_targetUrl: string,
+	options?: { renderedText?: string },
 ): { issues: Issue[]; passed: Issue[] } {
 	const issues: Issue[] = [];
 	const passed: Issue[] = [];
@@ -300,7 +342,7 @@ export function analyzeGEO(
 	const jsonLdNodes = collectJsonLdNodes($);
 
 	const results = [
-		analyzeRenderability($, html),
+		analyzeRenderability($, html, options?.renderedText),
 		analyzeStatisticalDensity($),
 		analyzeAttributedQuotes($),
 		analyzeEntityGrounding(jsonLdNodes),

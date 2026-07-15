@@ -9,6 +9,7 @@ import {
 } from "@/lib/htmlAudit";
 import { analyzeAEO, analyzeAEOSiteSignals } from "@/lib/aeoAudit";
 import { analyzeGEO } from "@/lib/geoAudit";
+import { renderPageJs, analyzeJsRendering } from "@/lib/jsRenderer";
 import {
 	analyzeLinks,
 	buildLinkIssues,
@@ -92,7 +93,8 @@ export async function POST(req: NextRequest) {
 		mode: unknown,
 		maxPages: unknown,
 		concurrency: unknown,
-		maxDepth: unknown;
+		maxDepth: unknown,
+		renderJs: unknown;
 	let excludeUrls: unknown;
 	let priorPageNodes: unknown;
 	try {
@@ -104,6 +106,7 @@ export async function POST(req: NextRequest) {
 			maxDepth,
 			excludeUrls,
 			priorPageNodes,
+			renderJs,
 		} = await req.json());
 	} catch {
 		return NextResponse.json(
@@ -127,6 +130,8 @@ export async function POST(req: NextRequest) {
 		return NextResponse.json({ error: message }, { status: 400 });
 	}
 
+	const shouldRenderJs = renderJs === true;
+
 	if (mode === "site") {
 		return streamSiteCrawl(
 			targetUrl,
@@ -138,13 +143,18 @@ export async function POST(req: NextRequest) {
 				excludeUrls.filter((u): u is string => typeof u === "string")
 			:	undefined,
 			Array.isArray(priorPageNodes) ? (priorPageNodes as PageNode[]) : undefined,
+			shouldRenderJs,
 		);
 	}
 
-	return runSinglePageScan(targetUrl, req.signal);
+	return runSinglePageScan(targetUrl, req.signal, shouldRenderJs);
 }
 
-async function runSinglePageScan(targetUrl: string, signal: AbortSignal) {
+async function runSinglePageScan(
+	targetUrl: string,
+	signal: AbortSignal,
+	renderJs = false,
+) {
 	try {
 		const categories: Record<string, Category> = {};
 		let lighthouseAvailable = false;
@@ -176,6 +186,39 @@ async function runSinglePageScan(targetUrl: string, signal: AbortSignal) {
 
 		throwIfAborted(signal);
 
+		// 1b. Optionally execute the page's JavaScript in a sandboxed DOM so the
+		// content-based audits below see the same fully-hydrated page a real
+		// visitor would, instead of only the raw server response. `$`/`html`
+		// stay pointed at the raw fetch throughout — analyzeGEO's renderability
+		// check specifically needs the *raw* baseline to compare rendered
+		// content against, so only a separate `$rendered`/`renderedHtml` pair
+		// gets swapped in for the other, content-hungry audits.
+		let $rendered: CheerioAPI | undefined;
+		let renderedHtml: string | undefined;
+		let renderedText: string | undefined;
+		if (renderJs) {
+			try {
+				const renderResult = await renderPageJs(targetUrl, html, { signal });
+				renderedHtml = renderResult.html;
+				renderedText = renderResult.text;
+				$rendered = load(renderResult.html);
+				const jsRenderAudit = analyzeJsRendering(renderResult);
+				const jsRenderScore =
+					100 - jsRenderAudit.issues.reduce((sum, i) => sum + i.weight, 0);
+				categories["jsRendering"] = {
+					label: "JavaScript Rendering",
+					score: Math.max(20, Math.min(100, jsRenderScore)),
+					issues: jsRenderAudit.issues,
+					passed: jsRenderAudit.passed,
+					source: "js-renderer",
+				};
+			} catch (error) {
+				console.warn("JavaScript rendering failed:", error);
+			}
+		}
+		const $active = $rendered ?? $;
+		const htmlActive = renderedHtml ?? html;
+
 		// 2. Analyze Security Headers
 		try {
 			const securityResult = await analyzeSecurityHeaders(targetUrl);
@@ -201,7 +244,7 @@ async function runSinglePageScan(targetUrl: string, signal: AbortSignal) {
 
 		// 3. Analyze SEO
 		try {
-			const seoResult = await analyzeSEO($, html, targetUrl);
+			const seoResult = await analyzeSEO($active, htmlActive, targetUrl);
 			const seoScore =
 				100 - seoResult.issues.reduce((sum, i) => sum + i.weight, 0);
 			categories["seo"] = {
@@ -226,7 +269,7 @@ async function runSinglePageScan(targetUrl: string, signal: AbortSignal) {
 		// to AI answer engines like ChatGPT, Perplexity, and Google AI Overviews)
 		try {
 			const [pageAeo, siteAeo] = await Promise.all([
-				Promise.resolve(analyzeAEO($, html, targetUrl)),
+				Promise.resolve(analyzeAEO($active, htmlActive, targetUrl)),
 				analyzeAEOSiteSignals(targetUrl),
 			]);
 			const aeoIssues = [...pageAeo.issues, ...siteAeo.issues];
@@ -255,7 +298,7 @@ async function runSinglePageScan(targetUrl: string, signal: AbortSignal) {
 		// factual density, attribution, and entity grounding for AI tools like
 		// ChatGPT, Gemini, and Perplexity when they synthesize an answer)
 		try {
-			const geoResult = analyzeGEO($, html, targetUrl);
+			const geoResult = analyzeGEO($, html, targetUrl, { renderedText });
 			const geoScore =
 				100 - geoResult.issues.reduce((sum, i) => sum + i.weight, 0);
 			categories["geo"] = {
@@ -278,7 +321,7 @@ async function runSinglePageScan(targetUrl: string, signal: AbortSignal) {
 
 		// 4. Analyze Page Speed (local checks)
 		try {
-			const speedResult = analyzeSpeed($, html, response, elapsedMs);
+			const speedResult = analyzeSpeed($active, htmlActive, response, elapsedMs);
 			const speedScore =
 				100 - speedResult.issues.reduce((sum, i) => sum + i.weight, 0);
 			categories["speed"] = {
@@ -301,7 +344,7 @@ async function runSinglePageScan(targetUrl: string, signal: AbortSignal) {
 
 		// 5. Analyze A11y
 		try {
-			const a11yResult = analyzeA11y($);
+			const a11yResult = analyzeA11y($active);
 			const a11yScore =
 				100 - a11yResult.issues.reduce((sum, i) => sum + i.weight, 0);
 			categories["a11y"] = {
@@ -324,7 +367,7 @@ async function runSinglePageScan(targetUrl: string, signal: AbortSignal) {
 
 		// 6. Analyze Conversions
 		try {
-			const convResult = analyzeConversions($, html);
+			const convResult = analyzeConversions($active, htmlActive);
 			const convScore =
 				100 - convResult.issues.reduce((sum, i) => sum + i.weight, 0);
 			categories["conversions"] = {
@@ -423,6 +466,7 @@ async function runSinglePageScan(targetUrl: string, signal: AbortSignal) {
 			url: targetUrl,
 			categories,
 			lighthouseAvailable,
+			renderJsApplied: Boolean($rendered),
 			timestamp: new Date().toISOString(),
 		});
 	} catch (error: any) {
@@ -468,6 +512,7 @@ function streamSiteCrawl(
 	requestedMaxDepth?: number,
 	excludeUrls?: string[],
 	priorPageNodes?: PageNode[],
+	renderJs = false,
 ) {
 	const maxPages = Math.max(
 		1,
@@ -517,6 +562,7 @@ function streamSiteCrawl(
 				const speedPerPage: PageCategoryResult[] = [];
 				const a11yPerPage: PageCategoryResult[] = [];
 				const convPerPage: PageCategoryResult[] = [];
+				const jsRenderingPerPage: PageCategoryResult[] = [];
 				const pageNodes: PageNode[] = [];
 
 				// Resuming a paused scan: seed everything already scanned before the
@@ -531,6 +577,7 @@ function streamSiteCrawl(
 						if (node.categories.speed) speedPerPage.push({ url: node.url, ...node.categories.speed });
 						if (node.categories.a11y) a11yPerPage.push({ url: node.url, ...node.categories.a11y });
 						if (node.categories.conversions) convPerPage.push({ url: node.url, ...node.categories.conversions });
+						if (node.categories.jsRendering) jsRenderingPerPage.push({ url: node.url, ...node.categories.jsRendering });
 					}
 				}
 
@@ -542,6 +589,39 @@ function streamSiteCrawl(
 					signal,
 					onPage: async (page, pagesSoFar) => {
 						const $ = load(page.html);
+
+						// Same raw-vs-rendered split as the single-page scan: `$`/
+						// `page.html` stay raw (GEO's renderability check needs that
+						// baseline), while `$active`/`htmlActive` point at the
+						// rendered DOM for every other, content-hungry audit.
+						let $rendered: CheerioAPI | undefined;
+						let renderedHtml: string | undefined;
+						let renderedText: string | undefined;
+						if (renderJs) {
+							try {
+								const renderResult = await renderPageJs(page.url, page.html, {
+									signal,
+								});
+								renderedHtml = renderResult.html;
+								renderedText = renderResult.text;
+								$rendered = load(renderResult.html);
+								const jsRenderAudit = analyzeJsRendering(renderResult);
+								const score =
+									100 -
+									jsRenderAudit.issues.reduce((sum, iss) => sum + iss.weight, 0);
+								jsRenderingPerPage.push({
+									url: page.url,
+									score: Math.max(20, Math.min(100, score)),
+									issues: jsRenderAudit.issues,
+									passed: jsRenderAudit.passed,
+								});
+							} catch (error) {
+								console.warn(`JavaScript rendering failed for ${page.url}:`, error);
+							}
+						}
+						const $active = $rendered ?? $;
+						const htmlActive = renderedHtml ?? page.html;
+
 						const pageCategories: PageNode["categories"] = {
 							seo: { label: "SEO", score: 0, issues: [], passed: [] },
 							aeo: { label: "AEO", score: 0, issues: [], passed: [] },
@@ -564,7 +644,7 @@ function streamSiteCrawl(
 						let categoryCount = 0;
 
 						try {
-							const result = await analyzeSEO($, page.html, page.url, {
+							const result = await analyzeSEO($active, htmlActive, page.url, {
 								// robots.txt / sitemap only need checking once per site. Pages
 								// now fetch concurrently, so completion order no longer
 								// guarantees the seed page finishes first — key off depth
@@ -593,7 +673,7 @@ function streamSiteCrawl(
 						}
 
 						try {
-							const pageAeo = analyzeAEO($, page.html, page.url);
+							const pageAeo = analyzeAEO($active, htmlActive, page.url);
 							// robots.txt AI-crawler rules and llms.txt are site-wide, so
 							// only fetch them once (on the seed page) same as crawl files.
 							const siteAeo =
@@ -625,7 +705,9 @@ function streamSiteCrawl(
 						}
 
 						try {
-							const result = analyzeGEO($, page.html, page.url);
+							const result = analyzeGEO($, page.html, page.url, {
+								renderedText,
+							});
 							const score =
 								100 - result.issues.reduce((sum, iss) => sum + iss.weight, 0);
 							const clampedScore = Math.max(20, Math.min(100, score));
@@ -649,8 +731,8 @@ function streamSiteCrawl(
 
 						try {
 							const result = analyzeSpeed(
-								$,
-								page.html,
+								$active,
+								htmlActive,
 								page.response,
 								page.elapsedMs,
 							);
@@ -676,7 +758,7 @@ function streamSiteCrawl(
 						}
 
 						try {
-							const result = analyzeA11y($);
+							const result = analyzeA11y($active);
 							const score =
 								100 - result.issues.reduce((sum, iss) => sum + iss.weight, 0);
 							const clampedScore = Math.max(20, Math.min(100, score));
@@ -702,7 +784,7 @@ function streamSiteCrawl(
 						}
 
 						try {
-							const result = analyzeConversions($, page.html);
+							const result = analyzeConversions($active, htmlActive);
 							const score =
 								100 - result.issues.reduce((sum, iss) => sum + iss.weight, 0);
 							const clampedScore = Math.max(20, Math.min(100, score));
@@ -772,6 +854,15 @@ function streamSiteCrawl(
 						"html-audit",
 						convPerPage,
 					),
+					...(jsRenderingPerPage.length > 0 ?
+						{
+							jsRendering: aggregateCategory(
+								"JavaScript Rendering",
+								"js-renderer",
+								jsRenderingPerPage,
+							),
+						}
+					:	{}),
 				};
 
 				// Broken-link detection across the whole crawled site: every link from

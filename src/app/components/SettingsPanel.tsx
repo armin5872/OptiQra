@@ -600,6 +600,23 @@ export default function SettingsPanel() {
 													onChange={(e) => update("crawler", { maxLinkDepth: Number(e.target.value) })}
 												/>
 											</div>
+											<div className="settings-row">
+												<div className="settings-row-label">
+													<strong>Render JavaScript</strong>
+													<span>
+														Execute each page&apos;s scripts in a sandboxed browser-like
+														environment before auditing, so client-rendered (SPA) content is
+														seen — slower per page, and only recommended for sites you trust.
+													</span>
+												</div>
+												<Switch
+													on={settings.crawler.renderJs}
+													label="Render JavaScript"
+													onToggle={() =>
+														update("crawler", { renderJs: !settings.crawler.renderJs })
+													}
+												/>
+											</div>
 										</div>
 										<p className="settings-footer-note">
 											The crawler always checks sitemap.xml first, respects your page-count limit, and

@@ -243,7 +243,11 @@ export default function Home() {
 				const res = await fetch("/api/analyze", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ url: formattedUrl, mode: scanMode }),
+					body: JSON.stringify({
+						url: formattedUrl,
+						mode: scanMode,
+						renderJs: settings.crawler.renderJs,
+					}),
 					signal: controller.signal,
 				});
 				const data = await res.json();
@@ -305,6 +309,7 @@ export default function Home() {
 				maxPages: opts.maxPages,
 				concurrency: settings.crawler.concurrency,
 				maxDepth: settings.crawler.maxLinkDepth,
+				renderJs: settings.crawler.renderJs,
 				excludeUrls: opts.excludeUrls,
 				priorPageNodes: opts.priorPageNodes,
 			}),
