@@ -20,6 +20,16 @@ import {
 import CustomRulesPanel from "./CustomRulesPanel";
 import { runCustomJS } from "@/lib/customCode";
 
+// Simple debounce for slider inputs so we don't update 60x/second
+function useDebounced<T>(value: T, ms: number): T {
+	const [debouncedValue, setDebouncedValue] = useState(value);
+	useEffect(() => {
+		const timer = setTimeout(() => setDebouncedValue(value), ms);
+		return () => clearTimeout(timer);
+	}, [value, ms]);
+	return debouncedValue;
+}
+
 type TabId =
 	| "appearance"
 	| "layout"
@@ -87,6 +97,12 @@ export default function SettingsPanel() {
 	const [storage, setStorage] = useState<{ usageBytes: number; quotaBytes: number } | null>(null);
 	const [toast, setToast] = useState("");
 	const [jsRunResult, setJsRunResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+	// Show brief "Applied" feedback when appearance/layout/typography settings change
+	useEffect(() => {
+		if (!hydrated) return;
+		flashToast("✓ Applied");
+	}, [hydrated, settings.appearance, settings.layout, settings.typography, settings.advanced.customCSS]);
 
 	useEffect(() => {
 		if (!open) return;

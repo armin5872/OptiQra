@@ -33,6 +33,33 @@ export default function CustomRulesPanel() {
 		refresh().finally(() => setLoaded(true));
 	}, []);
 
+	// Auto-run all enabled rules against the latest scan whenever rules change
+	useEffect(() => {
+		if (!loaded) return;
+		const runEnabledRules = async () => {
+			const recent = await getRecentScans(1);
+			const latest = recent[0];
+			if (!latest) {
+				setRunState({});
+				return;
+			}
+			const newRunState: Record<string, RunState> = {};
+			for (const rule of rules) {
+				if (!rule.enabled) {
+					newRunState[rule.id] = { status: "idle" };
+					continue;
+				}
+				const result = runCustomRule(rule.code, latest.data);
+				newRunState[rule.id] =
+					result.ok ?
+						{ status: "ok", findings: result.findings, scanUrl: latest.url }
+					:	{ status: "error", error: result.error };
+			}
+			setRunState(newRunState);
+		};
+		runEnabledRules();
+	}, [loaded, rules]);
+
 	const startNew = () => {
 		setEditingId("new");
 		setDraftName("");
@@ -68,21 +95,10 @@ export default function CustomRulesPanel() {
 		refresh();
 	};
 
-	const handleRun = async (rule: CustomRule) => {
-		const recent = await getRecentScans(1);
-		const latest = recent[0];
-		if (!latest) {
-			setRunState((s) => ({ ...s, [rule.id]: { status: "no-scan" } }));
-			return;
-		}
-		const result = runCustomRule(rule.code, latest.data);
-		setRunState((s) => ({
-			...s,
-			[rule.id]:
-				result.ok ?
-					{ status: "ok", findings: result.findings, scanUrl: latest.url }
-				:	{ status: "error", error: result.error },
-		}));
+	const handleToggle = async (rule: CustomRule) => {
+		const updated = { ...rule, enabled: !rule.enabled };
+		await saveRule(updated);
+		refresh();
 	};
 
 	const handlePropose = (rule: CustomRule) => {
@@ -99,14 +115,14 @@ export default function CustomRulesPanel() {
 	return (
 		<>
 			<p className="settings-section-desc">
-				Write a small JS rule that post-processes your last scan&apos;s results and
-				surfaces extra findings — right here, in this browser. This can&apos;t reach the
-				actual crawler/analyzer running on the server (that would mean letting any visitor
-				run code on the server, which isn&apos;t safe to offer anyone), so rules work on
-				scan data you already have. Happy with a rule? Use{" "}
-				<strong>&quot;Propose to upstream repo&quot;</strong> to draft a real pull request
-				for it via your own GitHub account — no tokens involved, the repo owner reviews
-				and merges it like any other contribution.
+				Write a small JS rule that post-processes your last scan&apos;s results and surfaces
+				extra findings — right here, in this browser. <strong>Enabled rules run automatically</strong>{" "}
+				against your latest scan. This can&apos;t reach the actual crawler/analyzer running on
+				the server (that would mean letting any visitor run code on the server, which
+				isn&apos;t safe to offer anyone), so rules work on scan data you already have. Happy
+				with a rule? Use <strong>&quot;Propose to upstream repo&quot;</strong> to draft a
+				real pull request for it via your own GitHub account — no tokens involved, the repo
+				owner reviews and merges it like any other contribution.
 			</p>
 
 			<div className="settings-group">
@@ -127,15 +143,18 @@ export default function CustomRulesPanel() {
 							<div className="settings-row">
 								<div className="settings-row-label">
 									<strong>{rule.name}</strong>
-									<span>{rule.description || "No description"}</span>
+									<span>
+										{rule.description || "No description"}
+										{rule.enabled ? " · Enabled (auto-running)" : " · Disabled"}
+									</span>
 								</div>
 								<div className="settings-row-control" style={{ gap: 6, flexWrap: "wrap" }}>
 									<button
 										type="button"
 										className="settings-btn-outline"
-										onClick={() => handleRun(rule)}
+										onClick={() => handleToggle(rule)}
 									>
-										Run
+										{rule.enabled ? "Disable" : "Enable"}
 									</button>
 									<button
 										type="button"

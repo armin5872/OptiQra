@@ -21,10 +21,19 @@ import type { OptiqraSettings } from "@/lib/settingsStore";
 export default function AppearanceEffects() {
 	const { settings, hydrated } = useSettings();
 	const ranSavedJSOnce = useRef(false);
+	const appliedTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
 	useEffect(() => {
 		if (!hydrated) return;
 		applyAppearance(settings.appearance, settings.layout, settings.typography);
+
+		// Brief visual feedback: show a subtle pulse on the root to indicate settings applied
+		const root = document.documentElement;
+		root.style.opacity = "0.98";
+		if (appliedTimeoutRef.current) clearTimeout(appliedTimeoutRef.current);
+		appliedTimeoutRef.current = setTimeout(() => {
+			root.style.opacity = "1";
+		}, 80);
 
 		if (settings.appearance.theme !== "system") return;
 		const mq = window.matchMedia("(prefers-color-scheme: dark)");
