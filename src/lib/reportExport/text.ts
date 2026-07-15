@@ -88,6 +88,68 @@ export function toMarkdown(model: ReportModel): string {
 }
 
 // ---------------------------------------------------------------------------
+// YAML
+// ---------------------------------------------------------------------------
+// Hand-rolled emitter (no external dependency) — the report model is plain
+// data (strings/numbers/booleans/arrays/objects), so a small recursive
+// dumper covers it without pulling in a library like `js-yaml`.
+
+function yamlScalar(value: unknown): string {
+  if (value === null || value === undefined) return 'null';
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  const str = String(value);
+  if (str === '') return "''";
+  const needsQuoting =
+    /^[\s]|[\s]$/.test(str) ||
+    /^[-?:,\[\]{}#&*!|>'"%@`]/.test(str) ||
+    /: |:$/.test(str) ||
+    /[\n\t]/.test(str) ||
+    /^(true|false|null|~|yes|no)$/i.test(str) ||
+    /^-?\d+(\.\d+)?$/.test(str);
+  if (!needsQuoting) return str;
+  return `'${str.replace(/'/g, "''")}'`;
+}
+
+function yamlDump(value: unknown, indent = 0): string {
+  const pad = '  '.repeat(indent);
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) return `${pad}[]\n`;
+    return value
+      .map((item) => {
+        if (item !== null && typeof item === 'object') {
+          const inner = yamlDump(item, indent + 1);
+          // Put the first key on the same line as the dash.
+          return `${pad}-${inner.slice(pad.length + 2)}`;
+        }
+        return `${pad}- ${yamlScalar(item)}\n`;
+      })
+      .join('');
+  }
+
+  if (value !== null && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (entries.length === 0) return `${pad}{}\n`;
+    return entries
+      .map(([k, v]) => {
+        if (v !== null && typeof v === 'object' && Object.keys(v as object).length > 0) {
+          return `${pad}${yamlScalar(k)}:\n${yamlDump(v, indent + 1)}`;
+        }
+        if (Array.isArray(v) && v.length === 0) return `${pad}${yamlScalar(k)}: []\n`;
+        if (v !== null && typeof v === 'object') return `${pad}${yamlScalar(k)}: {}\n`;
+        return `${pad}${yamlScalar(k)}: ${yamlScalar(v)}\n`;
+      })
+      .join('');
+  }
+
+  return `${pad}${yamlScalar(value)}\n`;
+}
+
+export function toYAML(model: ReportModel): string {
+  return `# OptiQra audit report\n${yamlDump(model)}`;
+}
+
+// ---------------------------------------------------------------------------
 // Plain text
 // ---------------------------------------------------------------------------
 

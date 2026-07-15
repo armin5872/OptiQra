@@ -21,6 +21,7 @@ import {
 	toMarkdown,
 	toTxt,
 	toJSON,
+	toYAML,
 	downloadText,
 	type SourceReportData,
 } from "@/lib/reportExport";
@@ -28,17 +29,20 @@ import { useSettings } from "@/lib/hooks/useSettings";
 // Heavy exporters are dynamically imported on-click to avoid bloating the initial bundle
 import type { exportReportPdf } from "@/lib/reportExport/pdf";
 import type { exportReportDocx } from "@/lib/reportExport/docx";
+import type { exportReportXlsx } from "@/lib/reportExport/xlsx";
 
-type Format = "pdf" | "docx" | "csv" | "tsv" | "md" | "txt" | "json";
+type Format = "pdf" | "docx" | "xlsx" | "csv" | "tsv" | "md" | "txt" | "json" | "yaml";
 
 const FORMATS: { id: Format; label: string; hint: string }[] = [
 	{ id: "pdf", label: "PDF", hint: "Formatted, printable report" },
 	{ id: "docx", label: "Word (.docx)", hint: "Editable document" },
+	{ id: "xlsx", label: "Excel (.xlsx)", hint: "Multi-sheet spreadsheet" },
 	{ id: "csv", label: "CSV", hint: "Spreadsheet-friendly" },
 	{ id: "tsv", label: "TSV", hint: "Tab-separated" },
 	{ id: "md", label: "Markdown", hint: "For docs / wikis" },
 	{ id: "txt", label: "Plain text", hint: "No formatting" },
 	{ id: "json", label: "JSON", hint: "Raw data, for tooling" },
+	{ id: "yaml", label: "YAML", hint: "Raw data, human-readable" },
 ];
 
 export default function ReportDownload({
@@ -101,6 +105,11 @@ export default function ReportDownload({
 					await exportReportDocx(model);
 					break;
 				}
+				case "xlsx": {
+					const { exportReportXlsx } = await import("@/lib/reportExport/xlsx");
+					await exportReportXlsx(model);
+					break;
+				}
 				case "csv":
 					downloadText(toCSV(model), `${base}.csv`, "text/csv");
 					break;
@@ -116,15 +125,18 @@ export default function ReportDownload({
 				case "json":
 					downloadText(toJSON(model), `${base}.json`, "application/json");
 					break;
+				case "yaml":
+					downloadText(toYAML(model), `${base}.yaml`, "application/x-yaml");
+					break;
 			}
 			setOpen(false);
 		} catch (err: any) {
 			console.error(`Report export failed (${format}):`, err);
-			const pkgName = format === "pdf" ? "jspdf" : format === "docx" ? "docx" : null;
+			const pkgName = format === "pdf" ? "jspdf" : format === "docx" ? "docx" : format === "xlsx" ? "xlsx" : null;
 			const msg =
 				err?.message?.includes("not available") ?
 					`Install the missing package: npm install ${pkgName}`
-				: format === "pdf" || format === "docx" ?
+				: format === "pdf" || format === "docx" || format === "xlsx" ?
 					`Couldn't generate the ${format.toUpperCase()} file (check console for details).`
 				:	`Couldn't generate the ${format.toUpperCase()} file.`;
 			setError(msg);
