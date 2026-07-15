@@ -21,6 +21,8 @@ export type FontScale = "small" | "default" | "large";
 export type ScanDepthId = "quick" | "standard" | "full" | "crawl" | "custom";
 export type ExportFormat = "pdf" | "docx" | "json";
 export type InsightsTone = "concise" | "detailed";
+export type MotionSpeed = "slow" | "normal" | "fast";
+export type FontFamilyChoice = "default" | "system" | "serif" | "mono" | "custom";
 
 export interface OptiqraSettings {
 	appearance: {
@@ -67,6 +69,29 @@ export interface OptiqraSettings {
 	privacy: {
 		saveScanHistory: boolean;
 		historyRetentionDays: number; // 0 = keep forever
+	};
+	/** Structural page customization — width, roundness, motion speed. Pairs
+	 *  with `typography` (fonts) and `advanced` (raw CSS/JS) for the "make
+	 *  this look and behave like mine" power-user surface. */
+	layout: {
+		cornerRadius: number; // px, 0-28, drives --radius app-wide
+		contentWidth: number; // px, 720-1600, drives --max-width on .wrap
+		motionSpeed: MotionSpeed;
+	};
+	typography: {
+		fontFamily: FontFamilyChoice;
+		customFontFamily: string; // used only when fontFamily === "custom"
+		letterSpacing: number; // px, -0.5 to 2
+	};
+	/** Escape hatch for people who want to go further than the toggles above:
+	 *  raw CSS injected into the page, and an OPTIONAL raw JS snippet that
+	 *  runs in this browser tab. Both are entirely local — see SECURITY notes
+	 *  in customCode.ts before changing how customJS executes. */
+	advanced: {
+		customCSS: string;
+		customJS: string;
+		customJSEnabled: boolean;
+		acknowledgedCodeRisk: boolean;
 	};
 }
 
@@ -115,6 +140,22 @@ export const DEFAULT_SETTINGS: OptiqraSettings = {
 	privacy: {
 		saveScanHistory: true,
 		historyRetentionDays: 0,
+	},
+	layout: {
+		cornerRadius: 10,
+		contentWidth: 960,
+		motionSpeed: "normal",
+	},
+	typography: {
+		fontFamily: "default",
+		customFontFamily: "",
+		letterSpacing: 0,
+	},
+	advanced: {
+		customCSS: "",
+		customJS: "",
+		customJSEnabled: false,
+		acknowledgedCodeRisk: false,
 	},
 };
 
@@ -182,6 +223,9 @@ function mergeWithDefaults(stored: unknown): OptiqraSettings {
 		notifications: { ...DEFAULT_SETTINGS.notifications, ...s.notifications },
 		reports: { ...DEFAULT_SETTINGS.reports, ...s.reports },
 		privacy: { ...DEFAULT_SETTINGS.privacy, ...s.privacy },
+		layout: { ...DEFAULT_SETTINGS.layout, ...s.layout },
+		typography: { ...DEFAULT_SETTINGS.typography, ...s.typography },
+		advanced: { ...DEFAULT_SETTINGS.advanced, ...s.advanced },
 	};
 }
 
@@ -193,21 +237,57 @@ function setMirrorCookie(settings: OptiqraSettings) {
 		density: settings.appearance.density,
 		reduceMotion: settings.appearance.reduceMotion,
 		fontScale: settings.appearance.fontScale,
+		cornerRadius: settings.layout.cornerRadius,
+		contentWidth: settings.layout.contentWidth,
+		motionSpeed: settings.layout.motionSpeed,
+		fontFamily: settings.typography.fontFamily,
+		customFontFamily: settings.typography.customFontFamily,
+		letterSpacing: settings.typography.letterSpacing,
 	};
 	const secure = typeof location !== "undefined" && location.protocol === "https:" ? "; Secure" : "";
 	const maxAge = 365 * 24 * 60 * 60;
 	document.cookie = `${MIRROR_COOKIE}=${encodeURIComponent(JSON.stringify(mirror))}; Max-Age=${maxAge}; Path=/; SameSite=Lax${secure}`;
 }
 
-/** Reads just the appearance mirror from the cookie — synchronous, so it can
- *  run in a blocking script before first paint. See layout.tsx. */
-export function readAppearanceMirrorFromCookie(): OptiqraSettings["appearance"] | null {
+/** The subset of settings mirrored into a cookie so the pre-paint blocking
+ *  script in layout.tsx can apply them synchronously — no flash of default
+ *  theme/width/radius on reload. IndexedDB (read async, after hydration)
+ *  always wins once it's finished loading; this is just the first paint. */
+export type SettingsMirror = {
+	theme: ThemeMode;
+	accentColor: string;
+	density: Density;
+	reduceMotion: boolean;
+	fontScale: FontScale;
+	cornerRadius: number;
+	contentWidth: number;
+	motionSpeed: MotionSpeed;
+	fontFamily: FontFamilyChoice;
+	customFontFamily: string;
+	letterSpacing: number;
+};
+
+/** Reads the settings mirror from the cookie — synchronous, so it can run in
+ *  a blocking script before first paint. See layout.tsx. */
+export function readAppearanceMirrorFromCookie(): SettingsMirror | null {
 	if (typeof document === "undefined") return null;
 	const match = document.cookie.split("; ").find((row) => row.startsWith(`${MIRROR_COOKIE}=`));
 	if (!match) return null;
 	try {
 		const raw = JSON.parse(decodeURIComponent(match.split("=").slice(1).join("=")));
-		return { ...DEFAULT_SETTINGS.appearance, ...raw };
+		return {
+			theme: raw.theme ?? DEFAULT_SETTINGS.appearance.theme,
+			accentColor: raw.accentColor ?? DEFAULT_SETTINGS.appearance.accentColor,
+			density: raw.density ?? DEFAULT_SETTINGS.appearance.density,
+			reduceMotion: raw.reduceMotion ?? DEFAULT_SETTINGS.appearance.reduceMotion,
+			fontScale: raw.fontScale ?? DEFAULT_SETTINGS.appearance.fontScale,
+			cornerRadius: raw.cornerRadius ?? DEFAULT_SETTINGS.layout.cornerRadius,
+			contentWidth: raw.contentWidth ?? DEFAULT_SETTINGS.layout.contentWidth,
+			motionSpeed: raw.motionSpeed ?? DEFAULT_SETTINGS.layout.motionSpeed,
+			fontFamily: raw.fontFamily ?? DEFAULT_SETTINGS.typography.fontFamily,
+			customFontFamily: raw.customFontFamily ?? DEFAULT_SETTINGS.typography.customFontFamily,
+			letterSpacing: raw.letterSpacing ?? DEFAULT_SETTINGS.typography.letterSpacing,
+		};
 	} catch {
 		return null;
 	}

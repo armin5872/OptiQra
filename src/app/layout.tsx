@@ -134,6 +134,21 @@ export default function RootLayout({
 								root.style.setProperty("--accent-soft", resolved === "dark"
 									? "color-mix(in srgb, " + accent + " 22%, black)"
 									: "color-mix(in srgb, " + accent + " 14%, white)");
+
+								// Layout — corner radius, content width, motion speed.
+								root.style.setProperty("--radius", (a.cornerRadius != null ? a.cornerRadius : 10) + "px");
+								root.style.setProperty("--max-width", (a.contentWidth != null ? a.contentWidth : 960) + "px");
+								root.setAttribute("data-motion-speed", a.motionSpeed || "normal");
+
+								// Typography — custom font family + letter spacing.
+								if (a.fontFamily === "custom" && a.customFontFamily) {
+									root.setAttribute("data-custom-font", "1");
+									root.style.setProperty("--custom-font", a.customFontFamily);
+								}
+								if (a.letterSpacing) {
+									root.setAttribute("data-letter-spacing", "1");
+									root.style.setProperty("--letter-spacing", a.letterSpacing + "px");
+								}
 							} catch (e) {
 								// Cookie missing/corrupt — defaults from globals.css already apply.
 							}

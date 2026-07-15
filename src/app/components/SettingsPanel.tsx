@@ -17,23 +17,33 @@ import {
 	requestNotificationPermission,
 	type NotificationPermissionState,
 } from "@/lib/notifications";
+import CustomRulesPanel from "./CustomRulesPanel";
+import { runCustomJS } from "@/lib/customCode";
 
 type TabId =
 	| "appearance"
+	| "layout"
+	| "typography"
 	| "scanning"
 	| "crawler"
 	| "analyzer"
 	| "ai"
+	| "rules"
+	| "advanced"
 	| "notifications"
 	| "reports"
 	| "privacy";
 
 const TABS: { id: TabId; label: string; icon: string }[] = [
 	{ id: "appearance", label: "Appearance", icon: "🎨" },
+	{ id: "layout", label: "Layout", icon: "📐" },
+	{ id: "typography", label: "Typography", icon: "🔤" },
 	{ id: "scanning", label: "Scanning", icon: "🔍" },
 	{ id: "crawler", label: "Crawler", icon: "🕸️" },
 	{ id: "analyzer", label: "Analyzer", icon: "📊" },
 	{ id: "ai", label: "AI Assistant", icon: "✨" },
+	{ id: "rules", label: "Custom rules", icon: "🧩" },
+	{ id: "advanced", label: "Advanced / Code", icon: "🛠️" },
 	{ id: "notifications", label: "Notifications", icon: "🔔" },
 	{ id: "reports", label: "Reports", icon: "📄" },
 	{ id: "privacy", label: "Privacy & data", icon: "🛡️" },
@@ -76,6 +86,7 @@ export default function SettingsPanel() {
 	const [scanCount, setScanCount] = useState<number | null>(null);
 	const [storage, setStorage] = useState<{ usageBytes: number; quotaBytes: number } | null>(null);
 	const [toast, setToast] = useState("");
+	const [jsRunResult, setJsRunResult] = useState<{ ok: boolean; message: string } | null>(null);
 
 	useEffect(() => {
 		if (!open) return;
@@ -132,6 +143,15 @@ export default function SettingsPanel() {
 	const handleEnableNotifications = async () => {
 		const result = await requestNotificationPermission();
 		setPermission(result);
+	};
+
+	const handleRunCustomJS = () => {
+		const result = runCustomJS(settings.advanced.customJS);
+		setJsRunResult(
+			result.ok ?
+				{ ok: true, message: "Ran without errors." }
+			:	{ ok: false, message: result.error },
+		);
 	};
 
 	if (!hydrated) return null;
@@ -295,6 +315,147 @@ export default function SettingsPanel() {
 													label="Reduce motion"
 													onToggle={() => update("appearance", { reduceMotion: !a.reduceMotion })}
 												/>
+											</div>
+										</div>
+									</>
+								)}
+
+								{tab === "layout" && (
+									<>
+										<p className="settings-section-desc">
+											Reshape the page itself — corner roundness, content width, and how fast
+											things move. Applies instantly, everywhere, no reload.
+										</p>
+										<div className="settings-group">
+											<div className="settings-row">
+												<div className="settings-row-label">
+													<strong>Corner roundness</strong>
+													<span>Buttons, cards, inputs — 0 is sharp, 28 is very round</span>
+												</div>
+												<div className="settings-slider">
+													<input
+														type="range"
+														min={0}
+														max={28}
+														value={settings.layout.cornerRadius}
+														onChange={(e) =>
+															update("layout", { cornerRadius: Number(e.target.value) })
+														}
+													/>
+													<output>{settings.layout.cornerRadius}px</output>
+												</div>
+											</div>
+											<div className="settings-row">
+												<div className="settings-row-label">
+													<strong>Content width</strong>
+													<span>How wide the main column gets on large screens</span>
+												</div>
+												<div className="settings-slider">
+													<input
+														type="range"
+														min={720}
+														max={1600}
+														step={20}
+														value={settings.layout.contentWidth}
+														onChange={(e) =>
+															update("layout", { contentWidth: Number(e.target.value) })
+														}
+													/>
+													<output>{settings.layout.contentWidth}px</output>
+												</div>
+											</div>
+											<div className="settings-row">
+												<div className="settings-row-label">
+													<strong>Motion speed</strong>
+													<span>How fast transitions and animations run</span>
+												</div>
+												<div className="settings-row-control">
+													<div className="settings-segmented">
+														{(["slow", "normal", "fast"] as const).map((v) => (
+															<button
+																key={v}
+																type="button"
+																className={settings.layout.motionSpeed === v ? "active" : ""}
+																onClick={() => update("layout", { motionSpeed: v })}
+															>
+																{v[0].toUpperCase() + v.slice(1)}
+															</button>
+														))}
+													</div>
+												</div>
+											</div>
+										</div>
+									</>
+								)}
+
+								{tab === "typography" && (
+									<>
+										<p className="settings-section-desc">
+											Swap the typeface and tighten or loosen letter spacing. Custom font names
+											need to already be available on your system or loaded elsewhere on the
+											page — OptiqRA doesn&apos;t fetch font files for you.
+										</p>
+										<div className="settings-group">
+											<div className="settings-row">
+												<div className="settings-row-label">
+													<strong>Font family</strong>
+													<span>Overrides every typeface in the app</span>
+												</div>
+												<div className="settings-row-control">
+													<div className="settings-segmented">
+														{(["default", "system", "serif", "mono", "custom"] as const).map(
+															(v) => (
+																<button
+																	key={v}
+																	type="button"
+																	className={settings.typography.fontFamily === v ? "active" : ""}
+																	onClick={() => update("typography", { fontFamily: v })}
+																>
+																	{v[0].toUpperCase() + v.slice(1)}
+																</button>
+															),
+														)}
+													</div>
+												</div>
+											</div>
+											{settings.typography.fontFamily === "custom" && (
+												<div className="settings-row">
+													<div className="settings-row-label">
+														<strong>Custom font name</strong>
+														<span>e.g. &quot;Georgia&quot;, or a font-family you&apos;ve loaded</span>
+													</div>
+													<div className="settings-row-control" style={{ flex: 1 }}>
+														<input
+															type="text"
+															className="settings-text-input"
+															style={{ marginBottom: 0 }}
+															placeholder="Georgia, serif"
+															value={settings.typography.customFontFamily}
+															onChange={(e) =>
+																update("typography", { customFontFamily: e.target.value })
+															}
+														/>
+													</div>
+												</div>
+											)}
+											<div className="settings-row">
+												<div className="settings-row-label">
+													<strong>Letter spacing</strong>
+													<span>Nudges tracking tighter or looser</span>
+												</div>
+												<div className="settings-slider">
+													<input
+														type="range"
+														min={-1}
+														max={2}
+														step={0.1}
+														value={settings.typography.letterSpacing}
+														onChange={(e) =>
+															update("typography", { letterSpacing: Number(e.target.value) })
+														}
+													/>
+													<output>{settings.typography.letterSpacing.toFixed(1)}px</output>
+												</div>
 											</div>
 										</div>
 									</>
@@ -527,6 +688,131 @@ export default function SettingsPanel() {
 														))}
 													</div>
 												</div>
+											</div>
+										</div>
+									</>
+								)}
+
+								{tab === "rules" && <CustomRulesPanel />}
+
+								{tab === "advanced" && (
+									<>
+										<p className="settings-section-desc">
+											The full escape hatch: inject your own CSS, or run your own JavaScript in
+											this tab. Both only ever affect this browser — nothing here touches other
+											visitors or the server.
+										</p>
+
+										<div className="settings-group">
+											<div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
+												<div className="settings-row-label">
+													<strong>Custom CSS</strong>
+													<span>Injected into the page and applied live as you type</span>
+												</div>
+												<textarea
+													className="settings-code-textarea"
+													spellCheck={false}
+													rows={8}
+													placeholder={".settings-panel { font-style: italic; }"}
+													value={settings.advanced.customCSS}
+													onChange={(e) => update("advanced", { customCSS: e.target.value })}
+												/>
+											</div>
+										</div>
+
+										<div className="settings-warning-box">
+											<strong>Before you turn on custom JavaScript:</strong> it runs with full
+											access to this page, in this browser tab — including anything OptiqRA
+											keeps in this browser, like an AI provider API key you&apos;ve pasted in
+											under AI Assistant. Only run code you wrote yourself or fully trust. A
+											snippet copied from a stranger online can read or send that data
+											anywhere. This can break the app until you clear it — that&apos;s expected
+											for a raw code editor with no guardrails.
+										</div>
+
+										<div className="settings-group">
+											<div className="settings-row">
+												<div className="settings-row-label">
+													<strong>Enable custom JavaScript</strong>
+													<span>Required before any JS below can run</span>
+												</div>
+												<Switch
+													on={settings.advanced.customJSEnabled}
+													label="Enable custom JavaScript"
+													onToggle={() => {
+														if (
+															!settings.advanced.customJSEnabled &&
+															!settings.advanced.acknowledgedCodeRisk
+														) {
+															flashToast("Check the box below first");
+															return;
+														}
+														update("advanced", {
+															customJSEnabled: !settings.advanced.customJSEnabled,
+														});
+													}}
+												/>
+											</div>
+											<div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
+												<label className="settings-checkbox-row">
+													<input
+														type="checkbox"
+														checked={settings.advanced.acknowledgedCodeRisk}
+														onChange={(e) =>
+															update("advanced", { acknowledgedCodeRisk: e.target.checked })
+														}
+													/>
+													I understand this code runs with full access to this browser tab, that
+													it could read or leak locally-stored data (including any AI API key
+													I&apos;ve entered), and that I&apos;m only running code I wrote or fully
+													trust.
+												</label>
+											</div>
+											<div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
+												<div className="settings-row-label">
+													<strong>Custom JavaScript</strong>
+													<span>
+														Doesn&apos;t run as you type — click &quot;Run code&quot; to execute
+														it deliberately
+													</span>
+												</div>
+												<textarea
+													className="settings-code-textarea"
+													spellCheck={false}
+													rows={8}
+													placeholder={'console.log("hello from OptiQra");'}
+													value={settings.advanced.customJS}
+													onChange={(e) => {
+														update("advanced", { customJS: e.target.value });
+														setJsRunResult(null);
+													}}
+												/>
+												<div className="settings-row-control" style={{ marginTop: 8 }}>
+													<button
+														type="button"
+														className="settings-btn-primary"
+														disabled={
+															!settings.advanced.customJSEnabled ||
+															!settings.advanced.acknowledgedCodeRisk ||
+															!settings.advanced.customJS.trim()
+														}
+														onClick={handleRunCustomJS}
+													>
+														Run code
+													</button>
+												</div>
+												{jsRunResult && (
+													<p
+														className="settings-section-desc"
+														style={{
+															margin: "8px 0 0",
+															color: jsRunResult.ok ? "var(--good)" : "var(--critical)",
+														}}
+													>
+														{jsRunResult.ok ? "✓ " : "Error: "}
+														{jsRunResult.message}
+													</p>
+												)}
 											</div>
 										</div>
 									</>
