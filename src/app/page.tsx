@@ -405,15 +405,14 @@ export default function Home() {
 		links: "links",
 		duplicateContent: "duplicateContent",
 	};
-	const visibleCategories: Record<string, any> =
-		reportData ?
-			Object.fromEntries(
-				Object.entries(reportData.categories).filter(([key]) => {
-					const group = CATEGORY_GROUP[key];
-					return group ? settings.analyzer.visibleCategories[group] : true;
-				}),
-			)
-		:	{};
+	const visibleCategories: Record<string, Category> = {};
+	if (reportData) {
+		Object.entries(reportData.categories).forEach(([key, cat]) => {
+			const group = CATEGORY_GROUP[key];
+			const isVisible = group ? settings.analyzer.visibleCategories[group] : true;
+			if (isVisible) visibleCategories[key] = cat;
+		});
+	}
 
 	return (
 		<div className="wrap">
