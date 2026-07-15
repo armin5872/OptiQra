@@ -740,6 +740,80 @@ h1 {
 	outline-offset: 2px;
 }
 
+/* ---------- Broken-link check progress ---------- */
+.link-check-progress {
+	margin-top: 16px;
+	padding-top: 14px;
+	border-top: 1px dashed var(--line);
+}
+
+/* ---------- Stop menu ---------- */
+.finishing-up-note {
+	margin-top: 28px;
+	font-family: "IBM Plex Mono", monospace;
+	font-size: 13px;
+	color: var(--ink-soft);
+}
+.stop-menu {
+	margin-top: 28px;
+	max-width: 420px;
+}
+.stop-menu-prompt {
+	margin: 0 0 12px;
+	font-family: "IBM Plex Sans", sans-serif;
+	font-weight: 600;
+	font-size: 13.5px;
+	color: var(--ink);
+}
+.stop-menu-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+}
+.stop-menu-btn {
+	font-family: "IBM Plex Sans", sans-serif;
+	font-weight: 600;
+	font-size: 13.5px;
+	padding: 9px 18px;
+	border-radius: 999px;
+	cursor: pointer;
+	border: 1px solid var(--line);
+	background: transparent;
+	color: var(--ink);
+	transition:
+		background 0.15s ease,
+		color 0.15s ease,
+		border-color 0.15s ease;
+}
+.stop-menu-btn:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+.stop-menu-resume {
+	border-color: var(--accent);
+	color: var(--accent);
+}
+.stop-menu-resume:hover {
+	background: var(--accent);
+	color: #fff;
+}
+.stop-menu-report {
+	border-color: var(--good);
+	color: var(--good);
+}
+.stop-menu-report:hover {
+	background: var(--good);
+	color: #fff;
+}
+.stop-menu-cancel {
+	border-color: var(--critical);
+	color: var(--critical);
+}
+.stop-menu-cancel:hover {
+	background: var(--critical);
+	color: #fff;
+}
+
 /* ---------- Report ---------- */
 .report {
 	display: none;

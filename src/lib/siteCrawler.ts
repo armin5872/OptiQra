@@ -90,6 +90,12 @@ export interface CrawlOptions {
 	concurrency?: number;
 	/** Aborting this signal stops the crawl as soon as in-flight fetches settle. */
 	signal?: AbortSignal;
+	/** Polled between dispatches. When it returns true, the crawl stops handing
+	 *  out new pages (already in-flight fetches are left to finish) and returns
+	 *  normally with `stoppedEarly: true` — unlike `signal`, this doesn't throw
+	 *  or tear the connection down, so the caller can still build a report from
+	 *  whatever pages were collected so far. */
+	shouldStop?: () => boolean;
 	/** Called right after each page is fetched, before its child links are queued.
 	 *  With concurrency > 1 this fires in completion order, not queue order — use
 	 *  `page.depth === 0` rather than `pagesSoFar === 1` if you need to identify
@@ -105,6 +111,9 @@ export interface CrawlSummary {
 	source: "sitemap" | "links" | "mixed";
 	truncated: boolean;
 	aborted: boolean;
+	/** True when the crawl was wound down early via `shouldStop` rather than
+	 *  aborted (connection torn down) or finishing naturally. */
+	stoppedEarly: boolean;
 }
 
 function normalizeForDedup(rawUrl: string): string {
@@ -359,6 +368,7 @@ export async function crawlSite(
 
 	let discoveredExtraLinks = false;
 	let aborted = false;
+	let stoppedEarly = false;
 
 	// Fetches run concurrently (up to `concurrency` at a time) instead of one
 	// request at a time — most of a crawl's wall-clock time is spent waiting on
@@ -459,6 +469,10 @@ export async function crawlSite(
 				aborted = true;
 				return;
 			}
+			if (options.shouldStop?.()) {
+				stoppedEarly = true;
+				return;
+			}
 			if (dispatched >= maxPages) return;
 
 			const item = queue.shift();
@@ -489,7 +503,8 @@ export async function crawlSite(
 		pages,
 		skipped,
 		source: usedSitemap ? (discoveredExtraLinks ? "mixed" : "sitemap") : "links",
-		truncated: !aborted && queue.length > 0,
+		truncated: !aborted && (stoppedEarly || queue.length > 0),
 		aborted,
+		stoppedEarly,
 	};
 }

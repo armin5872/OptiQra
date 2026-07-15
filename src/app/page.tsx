@@ -64,6 +64,13 @@ export default function Home() {
 	);
 	const [statusMessage, setStatusMessage] = useState("");
 	const abortRef = useRef<AbortController | null>(null);
+	const liveScanIdRef = useRef<string | null>(null);
+	const [stopMenuOpen, setStopMenuOpen] = useState(false);
+	const [finishingUp, setFinishingUp] = useState(false);
+	const [linkCheckProgress, setLinkCheckProgress] = useState<{
+		checked: number;
+		total: number;
+	} | null>(null);
 	const [reportData, setReportData] = useState<{
 		url: string;
 		mode?: ScanMode;
@@ -73,6 +80,7 @@ export default function Home() {
 		pagesSkipped?: { url: string; reason: string }[];
 		crawlTruncated?: boolean;
 		pages?: PageNode[];
+		partial?: boolean;
 	} | null>(null);
 	const [openPanel, setOpenPanel] = useState<string | null>(null);
 	const [showPageList, setShowPageList] = useState(false);
@@ -205,6 +213,10 @@ export default function Home() {
 		setCrawlProgress(
 			scanMode === "site" ? { scanned: 0, total: resolvedMaxPages } : null,
 		);
+		setStopMenuOpen(false);
+		setFinishingUp(false);
+		setLinkCheckProgress(null);
+		liveScanIdRef.current = null;
 
 		const controller = new AbortController();
 		abortRef.current = controller;
@@ -296,7 +308,9 @@ export default function Home() {
 					continue;
 				}
 
-				if (evt.type === "status") {
+				if (evt.type === "scanId") {
+					liveScanIdRef.current = evt.scanId ?? null;
+				} else if (evt.type === "status") {
 					setStatusMessage(evt.message ?? "");
 					// Once the crawl itself is done, the pipeline moves into
 					// per-site post-processing (broken links, duplicate content,
@@ -309,14 +323,20 @@ export default function Home() {
 					setCrawlProgress((p) =>
 						p ? { ...p, currentUrl: undefined } : p,
 					);
+					// A new phase started — any link-check progress bar from a
+					// previous phase no longer applies.
+					setLinkCheckProgress(null);
 				} else if (evt.type === "progress") {
 					setCrawlProgress({
 						scanned: evt.scanned,
 						total: evt.total,
 						currentUrl: evt.currentUrl,
 					});
+				} else if (evt.type === "linkProgress") {
+					setLinkCheckProgress({ checked: evt.checked, total: evt.total });
 				} else if (evt.type === "done") {
 					setCrawlProgress((p) => (p ? { ...p, scanned: p.total } : p));
+					setFinishingUp(false);
 					setReportData(evt.data);
 					setTimeout(() => setViewState("report"), 350);
 					persistScan(evt.data, "site");
@@ -338,8 +358,61 @@ export default function Home() {
 		}
 	};
 
+	// Site scans get a "stop" menu with three real choices instead of an
+	// instant kill: Resume (just closes the menu, the scan was never actually
+	// interrupted), Cancel (abort outright, back to the start screen — the old
+	// "stop scan" behavior), or Create report (stop the crawler dead — no more
+	// pages fetched — and build the report right here from whatever was
+	// already scanned). Single-page scans have no meaningful "partial report"
+	// to build, so they keep the old one-click stop.
+	const openStopMenu = () => {
+		if (scanMode === "site") {
+			setStopMenuOpen(true);
+		} else {
+			stopScan();
+		}
+	};
+
+	const resumeScan = () => setStopMenuOpen(false);
+
+	const cancelScan = () => {
+		setStopMenuOpen(false);
+		stopScan();
+	};
+
 	const stopScan = () => {
 		abortRef.current?.abort();
+	};
+
+	// Tells the server to stop dispatching new page fetches and immediately
+	// ship back a report built from whatever pages it already scanned. This
+	// is a *separate* request from the streaming scan connection — aborting
+	// that connection directly would kill the crawl before it could send
+	// anything back.
+	const createReportNow = async () => {
+		setStopMenuOpen(false);
+		const scanId = liveScanIdRef.current;
+		if (!scanId) {
+			// No scan id yet (stopped before the server even sent one) — nothing
+			// to report on, fall back to a plain cancel.
+			stopScan();
+			return;
+		}
+		setFinishingUp(true);
+		try {
+			await fetch("/api/analyze/stop", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ scanId }),
+			});
+			// The stream is still open — the "done" event (with partial: true)
+			// will arrive shortly and take over from here.
+		} catch {
+			// Couldn't reach the stop endpoint — fall back to a hard cancel
+			// rather than leaving the user stuck on the scanning screen.
+			setFinishingUp(false);
+			stopScan();
+		}
 	};
 
 	const applyFix = (catKey: string, issueIdx: number) => {
@@ -675,6 +748,42 @@ export default function Home() {
 									statusMessage ||
 									"Getting started…"}
 							</p>
+							{linkCheckProgress && linkCheckProgress.total > 0 && (
+								<div className="link-check-progress">
+									<div className="crawl-progress-head">
+										<span>
+											Checking links: {linkCheckProgress.checked} of{" "}
+											{linkCheckProgress.total}
+										</span>
+										<span>
+											{Math.min(
+												100,
+												Math.round(
+													(linkCheckProgress.checked /
+														linkCheckProgress.total) *
+														100,
+												),
+											)}
+											%
+										</span>
+									</div>
+									<div className="progress-bar">
+										<div
+											className="progress-bar-fill"
+											style={{
+												width: `${Math.min(
+													100,
+													Math.round(
+														(linkCheckProgress.checked /
+															linkCheckProgress.total) *
+															100,
+													),
+												)}%`,
+											}}
+										/>
+									</div>
+								</div>
+							)}
 						</div>
 					)}
 
@@ -703,15 +812,56 @@ export default function Home() {
 						</ul>
 					)}
 
-					<button type="button" className="stop-btn" onClick={stopScan}>
-						Stop scan
-					</button>
+					{finishingUp ?
+						<p className="finishing-up-note" role="status">
+							Wrapping up your report from the pages already scanned…
+						</p>
+					: stopMenuOpen ?
+						<div className="stop-menu" role="group" aria-label="Stop scan options">
+							<p className="stop-menu-prompt">Stop this scan?</p>
+							<div className="stop-menu-actions">
+								<button
+									type="button"
+									className="stop-menu-btn stop-menu-resume"
+									onClick={resumeScan}
+								>
+									Resume
+								</button>
+								<button
+									type="button"
+									className="stop-menu-btn stop-menu-report"
+									onClick={createReportNow}
+								>
+									Create report now
+								</button>
+								<button
+									type="button"
+									className="stop-menu-btn stop-menu-cancel"
+									onClick={cancelScan}
+								>
+									Cancel scan
+								</button>
+							</div>
+						</div>
+					:	<button type="button" className="stop-btn" onClick={openStopMenu}>
+							Stop scan
+						</button>
+					}
 				</section>
 			)}
 
 			{viewState === "report" && reportData && (
 				<section className="report active">
 					<p className="report-url">{reportData.url}</p>
+					{reportData.partial && (
+						<p className="demo-note stopped-note show" role="status">
+							⏸ Report generated early — this only includes the{" "}
+							{reportData.pagesScanned?.length ?? 0} page
+							{reportData.pagesScanned?.length === 1 ? "" : "s"} scanned before
+							you stopped the crawl. Broken-link, duplicate-content, and other
+							site-wide checks were skipped.
+						</p>
+					)}
 					{reportData.mode === "site" &&
 						reportData.pages &&
 						reportData.pages.length > 1 && (

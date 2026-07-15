@@ -25,6 +25,8 @@ import {
 } from "@/lib/siteCrawler";
 import { CheerioAPI, load } from "cheerio";
 import { assertSafeUrl, UnsafeUrlError } from "@/lib/urlSafety";
+import { registerScan, unregisterScan, type ScanControl } from "@/lib/scanControl";
+import { randomUUID } from "crypto";
 
 export const runtime = "nodejs";
 // Site scans can now go up to 1000 pages, which won't finish in the default 60s.
@@ -520,10 +522,12 @@ function ndjson(obj: unknown): Uint8Array {
 /** Streams a whole-site scan as newline-delimited JSON so the client can render
  *  a live progress bar and offer a "stop scan" control instead of waiting on a
  *  single request/response round trip. Each line is one JSON object:
+ *   - {type:"scanId", scanId}                            sent first — pass to POST /api/analyze/stop to soft-stop
  *   - {type:"status", message}                          general phase updates
  *   - {type:"progress", scanned, total, currentUrl}      after each page is crawled + audited
- *   - {type:"done", data}                                final report, same shape the old JSON endpoint returned
- *   - {type:"aborted", pagesScanned}                     user hit "stop" before the crawl finished
+ *   - {type:"linkProgress", checked, total}              during the post-crawl broken-link check
+ *   - {type:"done", data}                                final report; data.partial is true if stopped early
+ *   - {type:"aborted", pagesScanned}                     the connection itself was aborted (hard stop / cancel)
  *   - {type:"error", message}                            unrecoverable failure
  */
 function streamSiteCrawl(
@@ -548,6 +552,9 @@ function streamSiteCrawl(
 			Math.max(1, Math.min(Math.round(requestedMaxDepth), 10))
 		:	undefined;
 
+	const scanId = randomUUID();
+	const scanControl: ScanControl = registerScan(scanId);
+
 	const stream = new ReadableStream<Uint8Array>({
 		async start(controller) {
 			let closed = false;
@@ -562,6 +569,7 @@ function streamSiteCrawl(
 			const close = () => {
 				if (closed) return;
 				closed = true;
+				unregisterScan(scanId);
 				try {
 					controller.close();
 				} catch {
@@ -570,6 +578,11 @@ function streamSiteCrawl(
 			};
 
 			try {
+				// Sent first so the client can reference this crawl in a later
+				// `/api/analyze/stop` call (e.g. the "Create report" stop-menu
+				// option) without needing to abort this connection.
+				enqueue({ type: "scanId", scanId });
+
 				enqueue({
 					type: "status",
 					message: `Discovering pages (up to ${maxPages})...`,
@@ -588,6 +601,7 @@ function streamSiteCrawl(
 					...(concurrency ? { concurrency } : {}),
 					...(maxDepth ? { maxDepth } : {}),
 					signal,
+					shouldStop: () => scanControl.stopRequested,
 					onPage: async (page, pagesSoFar) => {
 						const $ = load(page.html);
 						const pageCategories: PageNode["categories"] = {
@@ -795,7 +809,7 @@ function streamSiteCrawl(
 					enqueue({
 						type: "error",
 						message:
-							crawl.aborted ?
+							crawl.aborted || crawl.stoppedEarly ?
 								"Scan stopped before any pages could be analyzed."
 							:	"Couldn't reach any pages on that site. Check the URL and make sure the site is publicly accessible.",
 					});
@@ -819,6 +833,32 @@ function streamSiteCrawl(
 						convPerPage,
 					),
 				};
+
+				// User asked the crawl to stop and just get a report of what's been
+				// scanned so far ("Create report" in the stop menu) — skip the
+				// remaining site-wide checks (broken links, duplicate content,
+				// security headers, Lighthouse) entirely and ship the report
+				// immediately with what we already have.
+				if (crawl.stoppedEarly || scanControl.stopRequested) {
+					enqueue({
+						type: "done",
+						data: {
+							url: targetUrl,
+							mode: "site",
+							categories,
+							lighthouseAvailable: false,
+							pagesScanned: crawl.pages.map((p) => p.url),
+							pagesSkipped: crawl.skipped,
+							crawlSource: crawl.source,
+							crawlTruncated: true,
+							maxPages,
+							timestamp: new Date().toISOString(),
+							pages: pageNodes,
+							partial: true,
+						},
+					});
+					return close();
+				}
 
 				// Broken-link detection across the whole crawled site: every link from
 				// every page is deduped by resolved URL first, so a link repeated in a
@@ -847,6 +887,9 @@ function streamSiteCrawl(
 							// that still need to run afterward.
 							maxLinksToCheck: 500,
 							overallTimeoutMs: 90_000,
+							onProgress: (checked, total) => {
+								enqueue({ type: "linkProgress", checked, total });
+							},
 						},
 					);
 					const linksScore =

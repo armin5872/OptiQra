@@ -625,6 +625,9 @@ export interface SiteLinkAnalysisOptions {
    *  site-wide audits (duplicate content, security headers, PSI) that run
    *  after this one. */
   overallTimeoutMs?: number;
+  /** Called after each link's status has been checked, so callers can surface
+   *  a "checked X of Y links" progress bar for this (otherwise silent) phase. */
+  onProgress?: (checked: number, total: number) => void;
 }
 
 export interface BrokenSiteLink {
@@ -706,10 +709,16 @@ export async function findBrokenLinksAcrossSite(
   const urlsToCheck = allUniqueUrls.slice(0, options.maxLinksToCheck);
 
   const deadline = Date.now() + options.overallTimeoutMs;
+  let checkedCount = 0;
   const rawResults = await mapLimit(
     urlsToCheck,
     options.concurrency,
-    (url) => checkLinkStatus(url, options.maxRedirects, options.fetchTimeoutMs, options.userAgent, false),
+    async (url) => {
+      const result = await checkLinkStatus(url, options.maxRedirects, options.fetchTimeoutMs, options.userAgent, false);
+      checkedCount++;
+      opts.onProgress?.(checkedCount, urlsToCheck.length);
+      return result;
+    },
     deadline,
   );
   const statusResults = rawResults.filter((r): r is LinkStatusResult => r !== undefined);
