@@ -206,7 +206,7 @@ async function runSinglePageScan(
 				const jsRenderScore =
 					100 - jsRenderAudit.issues.reduce((sum, i) => sum + i.weight, 0);
 				categories["jsRendering"] = {
-					label: "JavaScript Rendering",
+					label: "JS Rendering",
 					score: Math.max(20, Math.min(100, jsRenderScore)),
 					issues: jsRenderAudit.issues,
 					passed: jsRenderAudit.passed,
@@ -857,7 +857,7 @@ function streamSiteCrawl(
 					...(jsRenderingPerPage.length > 0 ?
 						{
 							jsRendering: aggregateCategory(
-								"JavaScript Rendering",
+								"JS Rendering",
 								"js-renderer",
 								jsRenderingPerPage,
 							),
