@@ -4,6 +4,7 @@
 
 import * as cheerio from "cheerio";
 import imageSize from "image-size";
+import { getErrorMessage } from "@/lib/errorUtils";
 
 export interface ImageInfo {
 	src: string;
@@ -259,11 +260,11 @@ async function checkImage(
 			oversizedByResolution: false, // filled in later once we know declared display size
 			oversizedReasons: [],
 		};
-	} catch (err: any) {
+	} catch (err: unknown) {
 		const msg =
-			err?.name === "AbortError" ?
+			err instanceof Error && err.name === "AbortError" ?
 				"Timed out"
-			:	(err?.message ?? "Network error");
+			:	getErrorMessage(err, "Network error");
 		return {
 			resolvedUrl,
 			ok: false,

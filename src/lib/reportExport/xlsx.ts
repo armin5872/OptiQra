@@ -7,7 +7,7 @@ import { downloadBlob } from './download';
 // clicks "Download as Excel spreadsheet".
 
 export async function exportReportXlsx(model: ReportModel): Promise<void> {
-  let XLSX: any;
+  let XLSX: typeof import('xlsx');
   try {
     XLSX = await import('xlsx');
   } catch (e) {

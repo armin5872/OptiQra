@@ -27,6 +27,8 @@ import {
 } from "@/lib/scheduleStore";
 import { compareScans, summarizeComparison } from "@/lib/scanCompare";
 import { showScanNotification } from "@/lib/notifications";
+import type { Category } from "@/lib/reportAggregate";
+import { getErrorMessage } from "@/lib/errorUtils";
 
 export const FREQUENCY_OPTIONS: { id: ScanFrequency; label: string }[] = [
 	{ id: "hourly", label: "Every hour" },
@@ -67,9 +69,20 @@ export function computeNextRun(frequency: ScanFrequency, from = Date.now()): num
 type ScanReportData = {
 	url: string;
 	mode?: "single" | "site";
-	categories: Record<string, any>;
+	categories: Record<string, Category>;
 	[key: string]: unknown;
 };
+
+// Discriminated union for each NDJSON line the /api/analyze site-scan
+// stream can emit — mirrors the shape used in page.tsx's client-side
+// reader for the same endpoint.
+type ScanStreamEvent =
+	| { type: "status"; message?: string }
+	| { type: "progress" }
+	| { type: "linkProgress" }
+	| { type: "done"; data: ScanReportData }
+	| { type: "aborted" }
+	| { type: "error"; message?: string };
 
 /** Runs one scan against /api/analyze and resolves with the final report,
  * whether it came back as plain JSON (single-page) or as an NDJSON
@@ -122,9 +135,9 @@ async function performScan(
 			buffer = buffer.slice(newlineIdx + 1);
 			if (!line) continue;
 
-			let evt: any;
+			let evt: ScanStreamEvent;
 			try {
-				evt = JSON.parse(line);
+				evt = JSON.parse(line) as ScanStreamEvent;
 			} catch {
 				continue;
 			}
@@ -138,7 +151,7 @@ async function performScan(
 	throw new Error("Scan stream ended without a result.");
 }
 
-function overallFromCategories(categories: Record<string, any>): number {
+function overallFromCategories(categories: Record<string, Category>): number {
 	const keys = Object.keys(categories ?? {});
 	if (!keys.length) return 0;
 	const sum = keys.reduce((a, k) => a + (categories[k].score ?? 0), 0);
@@ -182,7 +195,7 @@ async function runSchedule(schedule: ScanSchedule) {
 		let comparisonFields: Partial<ScheduleRunResult> = {};
 		if (previous) {
 			const cmp = compareScans(
-				previous.data as { url: string; categories: Record<string, any> },
+				previous.data as { url: string; categories: Record<string, Category> },
 				data,
 			);
 			summary = summarizeComparison(cmp);
@@ -215,7 +228,7 @@ async function runSchedule(schedule: ScanSchedule) {
 				schedule.url,
 			);
 		}
-	} catch (err: any) {
+	} catch (err: unknown) {
 		const now = Date.now();
 		await updateSchedule(schedule.id, {
 			lastRunAt: now,
@@ -225,13 +238,13 @@ async function runSchedule(schedule: ScanSchedule) {
 				scanId: schedule.lastScanId ?? "",
 				overallScore: schedule.lastResult?.overallScore ?? 0,
 				ok: false,
-				error: err?.message || "Scheduled scan failed.",
+				error: getErrorMessage(err, "Scheduled scan failed."),
 			},
 		});
 		if (schedule.notify) {
 			await showScanNotification(
 				`Scheduled scan failed: ${schedule.url}`,
-				err?.message || "Something went wrong running that scan.",
+				getErrorMessage(err, "Something went wrong running that scan."),
 				schedule.url,
 			);
 		}
@@ -284,9 +297,19 @@ export function startScheduler() {
 	}, CHECK_INTERVAL_MS);
 
 	// Best-effort Periodic Background Sync registration — see file header.
+	// `periodicSync` isn't in the standard lib.dom ServiceWorkerRegistration
+	// type (it's a Chromium-only extension gated behind an installed-PWA +
+	// permission check), so we extend the real type rather than reach for
+	// `any`.
+	type PeriodicSyncRegistration = ServiceWorkerRegistration & {
+		periodicSync?: {
+			register: (tag: string, options: { minInterval: number }) => Promise<void>;
+		};
+	};
+
 	if ("serviceWorker" in navigator) {
 		navigator.serviceWorker.ready
-			.then(async (reg: any) => {
+			.then(async (reg: PeriodicSyncRegistration) => {
 				if (!reg.periodicSync) return;
 				const status = await (navigator.permissions
 					.query({ name: "periodic-background-sync" } as unknown as PermissionDescriptor) as Promise<PermissionStatus>)

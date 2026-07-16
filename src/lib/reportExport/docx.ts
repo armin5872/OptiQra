@@ -21,8 +21,22 @@ function scoreHex(score: number): string {
   return 'C82828';
 }
 
+// Type-only import of the docx module's shape (erased at build time — this
+// does not pull the real package into the bundle, only its declarations),
+// so the lazily-loaded exports below can be properly typed instead of `any`.
+type DocxModule = typeof import('docx');
+
 export async function exportReportDocx(model: ReportModel): Promise<void> {
-  let Document: any, Packer: any, Paragraph: any, TextRun: any, HeadingLevel: any, Table: any, TableRow: any, TableCell: any, WidthType: any, ShadingType: any;
+  let Document: DocxModule['Document'],
+    Packer: DocxModule['Packer'],
+    Paragraph: DocxModule['Paragraph'],
+    TextRun: DocxModule['TextRun'],
+    HeadingLevel: DocxModule['HeadingLevel'],
+    Table: DocxModule['Table'],
+    TableRow: DocxModule['TableRow'],
+    TableCell: DocxModule['TableCell'],
+    WidthType: DocxModule['WidthType'],
+    ShadingType: DocxModule['ShadingType'];
   try {
     const mod = await import('docx');
     Document = mod.Document;
@@ -75,7 +89,7 @@ export async function exportReportDocx(model: ReportModel): Promise<void> {
     rows: [summaryHeader, ...summaryRows],
   });
 
-  const children: any[] = [
+  const children: (InstanceType<DocxModule['Paragraph']> | InstanceType<DocxModule['Table']>)[] = [
     new Paragraph({ text: 'OptiQra Audit Report', heading: HeadingLevel.TITLE }),
     new Paragraph({ children: [new TextRun({ text: `Site: ${model.siteUrl}`, bold: true })] }),
     new Paragraph({ text: `Scan type: ${model.mode === 'site' ? 'Full site crawl' : 'Single page'}` }),

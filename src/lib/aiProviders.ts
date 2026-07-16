@@ -1,4 +1,5 @@
 import type { AIProviderId } from "@/lib/aiFix";
+import { getErrorMessage } from "@/lib/errorUtils";
 
 interface StreamArgs {
 	apiKey: string;
@@ -214,8 +215,8 @@ export async function testProviderKey(
 		});
 		if (!res.ok) return { ok: false, message: await summarizeError(res) };
 		return { ok: true };
-	} catch (err: any) {
-		return { ok: false, message: err?.message ?? "Network error reaching provider" };
+	} catch (err: unknown) {
+		return { ok: false, message: getErrorMessage(err, "Network error reaching provider") };
 	}
 }
 

@@ -3,6 +3,7 @@ import { AI_PROVIDERS } from "@/lib/aiFix";
 import type { GenerateInsightsRequest } from "@/lib/aiInsights";
 import { buildInsightsPrompt } from "@/lib/aiInsightsPrompt";
 import { streamFix } from "@/lib/aiProviders";
+import { getErrorMessage } from "@/lib/errorUtils";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -42,8 +43,8 @@ export async function POST(req: NextRequest) {
 					send({ type: "delta", text: chunk });
 				}
 				send({ type: "done" });
-			} catch (err: any) {
-				send({ type: "error", message: err?.message ?? "Unknown error generating insights" });
+			} catch (err: unknown) {
+				send({ type: "error", message: getErrorMessage(err, "Unknown error generating insights") });
 			} finally {
 				controller.close();
 			}

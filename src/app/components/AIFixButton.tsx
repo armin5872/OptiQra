@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Issue } from "@/lib/auditUtils";
 import { useAIProvider } from "@/lib/hooks/useAIProvider";
+import { getErrorMessage } from "@/lib/errorUtils";
 import MarkdownLite from "./MarkdownLite";
 
 interface Props {
@@ -100,8 +101,8 @@ export default function AIFixButton({ issue, pageUrl, category, stack, onResolve
 			}
 
 			setStatus("done");
-		} catch (err: any) {
-			setError(err?.message ?? "Failed to generate fix");
+		} catch (err: unknown) {
+			setError(getErrorMessage(err, "Failed to generate fix"));
 			setStatus("error");
 		}
 	};

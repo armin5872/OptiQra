@@ -1,5 +1,6 @@
 import type { CheerioAPI } from "cheerio";
 import { issue, pass, type Issue } from "@/lib/auditUtils";
+import { collectJsonLdNodes, nodeTypes, sameAsList, type JsonLdNode } from "@/lib/jsonLd";
 
 interface AuditResult {
 	issues: Issue[];
@@ -36,38 +37,9 @@ const APP_SHELL_MARKERS = [
 const ATTRIBUTION_VERBS =
 	/\b(said|says|according to|explains?|explained|noted|notes|argues?|argued|writes|wrote|states?|stated|told)\b/i;
 
-function collectJsonLdNodes($: CheerioAPI): any[] {
-	const nodes: any[] = [];
-	$('script[type="application/ld+json"]').each((_, el) => {
-		const raw = $(el).contents().text().trim();
-		if (!raw) return;
-		try {
-			const parsed = JSON.parse(raw);
-			const stack = Array.isArray(parsed) ? [...parsed] : [parsed];
-			while (stack.length) {
-				const node = stack.pop();
-				if (!node || typeof node !== "object") continue;
-				if (Array.isArray(node["@graph"])) stack.push(...node["@graph"]);
-				if (node["@type"]) nodes.push(node);
-			}
-		} catch {
-			// malformed JSON-LD is already flagged by the structured-data audit
-		}
-	});
-	return nodes;
-}
+// collectJsonLdNodes, nodeTypes, and sameAsList now live in @/lib/jsonLd
+// (shared with aeoAudit.ts, which reasons about the same JSON-LD nodes).
 
-function nodeTypes(node: any): string[] {
-	const t = node?.["@type"];
-	if (!t) return [];
-	return Array.isArray(t) ? t : [t];
-}
-
-function sameAsList(node: any): string[] {
-	const s = node?.sameAs;
-	if (!s) return [];
-	return Array.isArray(s) ? s.filter((x) => typeof x === "string") : [String(s)];
-}
 
 /** Checks whether the page's visible text is likely present in the raw HTML
  *  a non-executing crawler would fetch, as opposed to being injected client-side.
@@ -230,7 +202,7 @@ function analyzeAttributedQuotes($: CheerioAPI): AuditResult {
 /** Entity grounding: does structured data link this Organization/Person to
  *  an external authoritative profile (Wikipedia, Wikidata, LinkedIn, etc.)
  *  so generative engines can disambiguate who/what the page is about? */
-function analyzeEntityGrounding(jsonLdNodes: any[]): AuditResult {
+function analyzeEntityGrounding(jsonLdNodes: JsonLdNode[]): AuditResult {
 	const issues: Issue[] = [];
 	const passed: Issue[] = [];
 

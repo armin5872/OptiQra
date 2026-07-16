@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getErrorMessage, isAbortError } from "@/lib/errorUtils";
 import {
 	fetchPage,
 	analyzeSEO,
@@ -173,15 +174,15 @@ async function runSinglePageScan(
 			html = fetchResult.html;
 			response = fetchResult.response;
 			elapsedMs = fetchResult.elapsedMs;
-		} catch (error: any) {
-			if (error?.name === "AbortError") {
+		} catch (error: unknown) {
+			if (isAbortError(error)) {
 				return NextResponse.json(
 					{ error: "Scan stopped by user." },
 					{ status: 499 },
 				);
 			}
 			return NextResponse.json(
-				{ error: `Failed to fetch page: ${error.message}` },
+				{ error: `Failed to fetch page: ${getErrorMessage(error)}` },
 				{ status: 400 },
 			);
 		}
@@ -474,8 +475,8 @@ async function runSinglePageScan(
 			stack: { primary: stack.primary, summary: stack.summary, guidance: stack.guidance },
 			timestamp: new Date().toISOString(),
 		});
-	} catch (error: any) {
-		if (error?.name === "AbortError") {
+	} catch (error: unknown) {
+		if (isAbortError(error)) {
 			return NextResponse.json(
 				{ error: "Scan stopped by user." },
 				{ status: 499 },
@@ -483,7 +484,7 @@ async function runSinglePageScan(
 		}
 		console.error("Analyze endpoint error:", error);
 		return NextResponse.json(
-			{ error: error.message || "Internal server error" },
+			{ error: getErrorMessage(error, "Internal server error") },
 			{ status: 500 },
 		);
 	}
@@ -1072,14 +1073,14 @@ function streamSiteCrawl(
 					},
 				});
 				close();
-			} catch (error: any) {
-				if (error?.name === "AbortError" || signal.aborted) {
+			} catch (error: unknown) {
+				if (isAbortError(error) || signal.aborted) {
 					enqueue({ type: "aborted", pagesScanned: 0 });
 				} else {
 					console.error("Site crawl stream error:", error);
 					enqueue({
 						type: "error",
-						message: error?.message || "Internal server error",
+						message: getErrorMessage(error, "Internal server error"),
 					});
 				}
 				close();

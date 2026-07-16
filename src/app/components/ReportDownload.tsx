@@ -26,6 +26,7 @@ import {
 	type SourceReportData,
 } from "@/lib/reportExport";
 import { useSettings } from "@/lib/hooks/useSettings";
+import { getErrorMessage } from "@/lib/errorUtils";
 // Heavy exporters are dynamically imported on-click to avoid bloating the initial bundle
 import type { exportReportPdf } from "@/lib/reportExport/pdf";
 import type { exportReportDocx } from "@/lib/reportExport/docx";
@@ -130,11 +131,12 @@ export default function ReportDownload({
 					break;
 			}
 			setOpen(false);
-		} catch (err: any) {
+		} catch (err: unknown) {
 			console.error(`Report export failed (${format}):`, err);
 			const pkgName = format === "pdf" ? "jspdf" : format === "docx" ? "docx" : format === "xlsx" ? "xlsx" : null;
+			const errMessage = getErrorMessage(err, "");
 			const msg =
-				err?.message?.includes("not available") ?
+				errMessage.includes("not available") ?
 					`Install the missing package: npm install ${pkgName}`
 				: format === "pdf" || format === "docx" || format === "xlsx" ?
 					`Couldn't generate the ${format.toUpperCase()} file (check console for details).`

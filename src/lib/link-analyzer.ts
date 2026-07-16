@@ -4,6 +4,7 @@
 
 import * as cheerio from "cheerio";
 import { issue, pass, type Issue } from "@/lib/auditUtils";
+import { getErrorMessage } from "@/lib/errorUtils";
 
 export interface RawLink {
   href: string;           // original attribute value, unresolved
@@ -264,9 +265,11 @@ async function checkFast(resolvedUrl: string, timeoutMs: number, userAgent: stri
       redirectChain: [],
       finalUrl: res.url || resolvedUrl,
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const errName = err instanceof Error ? err.name : undefined;
+    const errMsg = getErrorMessage(err, "");
     // Retry once for transient network errors
-    if ((err?.message?.includes("ECONNRESET") || err?.message?.includes("ETIMEDOUT") || err?.name === "TypeError") && timeoutMs < 15000) {
+    if ((errMsg.includes("ECONNRESET") || errMsg.includes("ETIMEDOUT") || errName === "TypeError") && timeoutMs < 15000) {
       await delay(Math.random() * 500 + 200); // Random backoff 200-700ms
       try {
         const res = await fetch(resolvedUrl, {
@@ -290,7 +293,7 @@ async function checkFast(resolvedUrl: string, timeoutMs: number, userAgent: stri
         // Retry failed, fall through to error handling below
       }
     }
-    const msg = err?.name === "AbortError" || err?.name === "TimeoutError" ? "Timed out" : (err?.message ?? "Network error");
+    const msg = errName === "AbortError" || errName === "TimeoutError" ? "Timed out" : (errMsg || "Network error");
     return { href: resolvedUrl, resolvedUrl, ok: false, statusCode: null, error: msg, redirectChain: [], finalUrl: resolvedUrl };
   }
 }
@@ -362,9 +365,11 @@ async function checkWithChain(resolvedUrl: string, maxRedirects: number, timeout
     }
 
     return { href: resolvedUrl, resolvedUrl, ok: false, statusCode: null, error: `Too many redirects (>${maxRedirects})`, redirectChain: chain, finalUrl: currentUrl };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const errName = err instanceof Error ? err.name : undefined;
+    const errMsg = getErrorMessage(err, "");
     // Retry once for transient network errors
-    if ((err?.message?.includes("ECONNRESET") || err?.message?.includes("ETIMEDOUT") || err?.name === "TypeError") && chain.length < 2) {
+    if ((errMsg.includes("ECONNRESET") || errMsg.includes("ETIMEDOUT") || errName === "TypeError") && chain.length < 2) {
       await delay(Math.random() * 500 + 200); // Random backoff 200-700ms
       try {
         const controller = new AbortController();
@@ -386,7 +391,7 @@ async function checkWithChain(resolvedUrl: string, maxRedirects: number, timeout
         // Retry failed, fall through to error handling below
       }
     }
-    const msg = err?.name === "AbortError" || err?.name === "TimeoutError" ? "Timed out" : (err?.message ?? "Network error");
+    const msg = errName === "AbortError" || errName === "TimeoutError" ? "Timed out" : (errMsg || "Network error");
     return { href: resolvedUrl, resolvedUrl, ok: false, statusCode: null, error: msg, redirectChain: chain, finalUrl: currentUrl };
   }
 }

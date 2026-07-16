@@ -1,5 +1,6 @@
 import type { CheerioAPI } from "cheerio";
 import { issue, pass, type Issue } from "@/lib/auditUtils";
+import type { JsonLdNode } from "@/lib/jsonLd";
 
 interface AuditResult {
 	issues: Issue[];
@@ -120,46 +121,57 @@ function asArray<T>(value: T | T[] | undefined | null): T[] {
 	return Array.isArray(value) ? value : [value];
 }
 
-function getTypes(node: any): string[] {
-	return asArray(node?.["@type"]).filter((t) => typeof t === "string");
+/** Narrows an arbitrary JSON-LD value down to a plain object, so its
+ *  properties can be safely read without falling back to `any`. */
+function asRecord(value: unknown): JsonLdNode | undefined {
+	if (value && typeof value === "object" && !Array.isArray(value)) {
+		return value as JsonLdNode;
+	}
+	return undefined;
 }
 
-function hasProp(node: any, prop: string): boolean {
-	const val = node?.[prop];
+function getTypes(node: unknown): string[] {
+	const record = asRecord(node);
+	return asArray(record?.["@type"]).filter((t): t is string => typeof t === "string");
+}
+
+function hasProp(node: unknown, prop: string): boolean {
+	const val = asRecord(node)?.[prop];
 	if (val === undefined || val === null) return false;
 	if (typeof val === "string") return val.trim().length > 0;
 	if (Array.isArray(val)) return val.length > 0;
 	return true;
 }
 
-function collectNodes(parsed: any, out: any[]) {
+function collectNodes(parsed: unknown, out: JsonLdNode[]) {
 	if (parsed === null || typeof parsed !== "object") return;
 	if (Array.isArray(parsed)) {
 		parsed.forEach((item) => collectNodes(item, out));
 		return;
 	}
-	if (Array.isArray(parsed["@graph"])) {
-		parsed["@graph"].forEach((item: unknown) => collectNodes(item, out));
+	const record = parsed as JsonLdNode;
+	if (Array.isArray(record["@graph"])) {
+		(record["@graph"] as unknown[]).forEach((item) => collectNodes(item, out));
 	}
-	if (parsed["@type"] || parsed["@id"]) {
-		out.push(parsed);
+	if (record["@type"] || record["@id"]) {
+		out.push(record);
 	}
 }
 
-function validateOffers(offers: any): boolean {
+function validateOffers(offers: unknown): boolean {
 	const list = asArray(offers);
 	if (list.length === 0) return false;
 	return list.every((o) => hasProp(o, "price") && hasProp(o, "priceCurrency"));
 }
 
-function validateSearchAction(node: any): { valid: boolean; reason?: string } {
-	const actions = asArray(node?.potentialAction).filter((a) =>
+function validateSearchAction(node: unknown): { valid: boolean; reason?: string } {
+	const actions = asArray(asRecord(node)?.["potentialAction"]).filter((a) =>
 		getTypes(a).includes("SearchAction"),
 	);
 	if (actions.length === 0) return { valid: false, reason: "missing" };
-	const action = actions[0];
-	const target = action?.target;
-	const targetUrl = typeof target === "string" ? target : target?.urlTemplate;
+	const action = asRecord(actions[0]);
+	const target = action?.["target"];
+	const targetUrl = typeof target === "string" ? target : asRecord(target)?.["urlTemplate"];
 	const queryInput = action?.["query-input"];
 	if (!targetUrl || !/\{.*search_term_string.*\}/.test(String(targetUrl))) {
 		return { valid: false, reason: "target" };
@@ -170,37 +182,38 @@ function validateSearchAction(node: any): { valid: boolean; reason?: string } {
 	return { valid: true };
 }
 
-function validateBreadcrumb(node: any): string[] {
+function validateBreadcrumb(node: unknown): string[] {
 	const problems: string[] = [];
-	const items = asArray(node.itemListElement);
+	const items = asArray(asRecord(node)?.["itemListElement"]);
 	if (items.length === 0) {
 		problems.push("itemListElement is empty");
 		return problems;
 	}
-	items.forEach((item: any, idx: number) => {
-		if (item?.position === undefined)
+	items.forEach((item: unknown, idx: number) => {
+		const itemRecord = asRecord(item);
+		if (itemRecord?.["position"] === undefined)
 			problems.push(`item ${idx + 1} is missing "position"`);
-		const hasName = hasProp(item, "name") || hasProp(item?.item, "name");
+		const hasName = hasProp(item, "name") || hasProp(itemRecord?.["item"], "name");
 		if (!hasName) problems.push(`item ${idx + 1} is missing "name"`);
-		if (!hasProp(item, "item") && typeof item?.item !== "string")
+		if (!hasProp(item, "item") && typeof itemRecord?.["item"] !== "string")
 			problems.push(`item ${idx + 1} is missing "item" URL`);
 	});
 	return problems;
 }
 
-function validateFaqPage(node: any): string[] {
+function validateFaqPage(node: unknown): string[] {
 	const problems: string[] = [];
-	const questions = asArray(node.mainEntity);
+	const questions = asArray(asRecord(node)?.["mainEntity"]);
 	if (questions.length === 0) {
 		problems.push("mainEntity has no Question entries");
 		return problems;
 	}
-	questions.forEach((q: any, idx: number) => {
+	questions.forEach((q: unknown, idx: number) => {
 		if (!getTypes(q).includes("Question"))
 			problems.push(`entry ${idx + 1} is not typed as "Question"`);
 		if (!hasProp(q, "name"))
 			problems.push(`question ${idx + 1} is missing "name"`);
-		const answer = q?.acceptedAnswer;
+		const answer = asRecord(q)?.["acceptedAnswer"];
 		if (!answer || !hasProp(answer, "text"))
 			problems.push(`question ${idx + 1} is missing acceptedAnswer.text`);
 	});
@@ -216,7 +229,7 @@ export function analyzeStructuredData(
 
 	// ---------- JSON-LD ----------
 	const ldJsonScripts = $('script[type="application/ld+json"]');
-	const nodes: any[] = [];
+	const nodes: JsonLdNode[] = [];
 	let parseErrors = 0;
 	let emptyScripts = 0;
 

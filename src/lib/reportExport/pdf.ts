@@ -24,7 +24,7 @@ function scoreColor(score: number): [number, number, number] {
 }
 
 export async function exportReportPdf(model: ReportModel): Promise<void> {
-  let jsPDF: any;
+  let jsPDF: typeof import('jspdf').jsPDF;
   try {
     const mod = await import('jspdf');
     jsPDF = mod.jsPDF;

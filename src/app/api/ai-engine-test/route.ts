@@ -6,6 +6,7 @@ import { fetchPage } from "@/lib/htmlAudit";
 import { assertSafeUrl, UnsafeUrlError } from "@/lib/urlSafety";
 import { buildPageSnapshot, type EngineTestMode } from "@/lib/aiEngineTest";
 import { buildEngineTestPrompt } from "@/lib/aiEngineTestPrompt";
+import { getErrorMessage } from "@/lib/errorUtils";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -60,9 +61,9 @@ export async function POST(req: NextRequest) {
 			);
 		}
 		html = fetched.html;
-	} catch (err: any) {
+	} catch (err: unknown) {
 		return new Response(
-			JSON.stringify({ error: err?.message ?? "Could not fetch the page" }),
+			JSON.stringify({ error: getErrorMessage(err, "Could not fetch the page") }),
 			{ status: 400 },
 		);
 	}
@@ -83,8 +84,8 @@ export async function POST(req: NextRequest) {
 					send({ type: "delta", text: chunk });
 				}
 				send({ type: "done" });
-			} catch (err: any) {
-				send({ type: "error", message: err?.message ?? "Unknown error running the live test" });
+			} catch (err: unknown) {
+				send({ type: "error", message: getErrorMessage(err, "Unknown error running the live test") });
 			} finally {
 				controller.close();
 			}

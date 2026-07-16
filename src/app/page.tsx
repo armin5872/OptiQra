@@ -24,9 +24,36 @@ import {
 	removeScanFromCookie,
 } from "@/lib/scanCookies";
 import { aggregateCategoriesFromPageNodes, pickSiteStack } from "@/lib/reportAggregate";
+import { getErrorMessage, isAbortError } from "@/lib/errorUtils";
 
 type ScanState = "hero" | "scanning" | "report";
 type ScanMode = "single" | "site";
+
+// Shape of the parsed report the "done" event (and the /api/analyze
+// single-page response) resolves to. Kept as its own named type so it can
+// be reused for both useState<ReportData | null> and the streamed event.
+type ReportData = {
+	url: string;
+	mode?: ScanMode;
+	categories: Record<string, Category>;
+	lighthouseAvailable: boolean;
+	pagesScanned?: string[];
+	pagesSkipped?: { url: string; reason: string }[];
+	crawlTruncated?: boolean;
+	pages?: PageNode[];
+	partial?: boolean;
+	stack?: { primary: string; summary: string; guidance: string };
+};
+
+// Discriminated union for each NDJSON line emitted by the /api/analyze
+// site-scan stream (see runSiteScanStream below).
+type SiteScanStreamEvent =
+	| { type: "status"; message?: string }
+	| { type: "progress"; pageNode?: PageNode; scanned: number; total: number; currentUrl?: string }
+	| { type: "linkProgress"; checked: number; total: number }
+	| { type: "done"; data: ReportData }
+	| { type: "aborted"; pagesScanned?: number }
+	| { type: "error"; message?: string };
 
 const SCAN_DEPTHS = [
 	{ id: "quick", label: "⚡Quick scan", pages: 15 },
@@ -83,18 +110,7 @@ export default function Home() {
 		checked: number;
 		total: number;
 	} | null>(null);
-	const [reportData, setReportData] = useState<{
-		url: string;
-		mode?: ScanMode;
-		categories: Record<string, Category>;
-		lighthouseAvailable: boolean;
-		pagesScanned?: string[];
-		pagesSkipped?: { url: string; reason: string }[];
-		crawlTruncated?: boolean;
-		pages?: PageNode[];
-		partial?: boolean;
-		stack?: { primary: string; summary: string; guidance: string };
-	} | null>(null);
+	const [reportData, setReportData] = useState<ReportData | null>(null);
 	const [openPanel, setOpenPanel] = useState<string | null>(null);
 	const [showPageList, setShowPageList] = useState(false);
 	const [recentScans, setRecentScans] = useState<StoredScan[]>([]);
@@ -262,8 +278,8 @@ export default function Home() {
 				setTimeout(() => setViewState("report"), 350);
 				persistScan(data, "single");
 			}
-		} catch (err: any) {
-			if (err?.name === "AbortError") {
+		} catch (err: unknown) {
+			if (isAbortError(err)) {
 				// Cancel is the only path that lands here on purpose (pause and
 				// create-report-now handle their own UI transitions before
 				// aborting) — anything else means the connection dropped
@@ -278,7 +294,7 @@ export default function Home() {
 					setViewState("hero");
 				}
 			} else {
-				setErrorMsg(err.message);
+				setErrorMsg(getErrorMessage(err));
 				setViewState("hero");
 			}
 		} finally {
@@ -343,9 +359,9 @@ export default function Home() {
 				buffer = buffer.slice(newlineIdx + 1);
 				if (!line) continue;
 
-				let evt: any;
+				let evt: SiteScanStreamEvent;
 				try {
-					evt = JSON.parse(line);
+					evt = JSON.parse(line) as SiteScanStreamEvent;
 				} catch {
 					continue;
 				}
@@ -430,8 +446,8 @@ export default function Home() {
 				excludeUrls: already.map((p) => p.url),
 				priorPageNodes: already,
 			});
-		} catch (err: any) {
-			if (err?.name === "AbortError") {
+		} catch (err: unknown) {
+			if (isAbortError(err)) {
 				if (stopIntentRef.current === "cancel" || stopIntentRef.current === null) {
 					setStoppedNote(
 						already.length > 0 ?
@@ -441,7 +457,7 @@ export default function Home() {
 					setViewState("hero");
 				}
 			} else {
-				setErrorMsg(err.message);
+				setErrorMsg(getErrorMessage(err));
 				setViewState("hero");
 			}
 		} finally {

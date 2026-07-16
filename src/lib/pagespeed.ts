@@ -16,6 +16,32 @@ type PSIReport = {
 	passed: Issue[];
 };
 
+// Minimal shape of a Lighthouse result (`lighthouseResult` in the PSI API
+// response) covering only the fields this module reads. The real object
+// has many more fields; we don't need them and don't want `any`.
+type LighthouseAudit = {
+	scoreDisplayMode?: string;
+	score?: number | null;
+	title: string;
+	description: string;
+	displayValue?: string;
+};
+
+type LighthouseAuditRef = {
+	id: string;
+	weight?: number;
+};
+
+type LighthouseCategory = {
+	score?: number | null;
+	auditRefs?: LighthouseAuditRef[];
+};
+
+type LighthouseResult = {
+	categories?: Record<string, LighthouseCategory | undefined>;
+	audits?: Record<string, LighthouseAudit | undefined>;
+};
+
 function cleanDescription(markdown: string) {
 	if (!markdown) return "";
 	return markdown
@@ -24,7 +50,7 @@ function cleanDescription(markdown: string) {
 		.trim();
 }
 
-function mapCategory(lhr: any, categoryKey: string): PSIReport | null {
+function mapCategory(lhr: LighthouseResult, categoryKey: string): PSIReport | null {
 	const category = lhr.categories?.[categoryKey];
 	if (!category) return null;
 
@@ -61,7 +87,7 @@ function mapCategory(lhr: any, categoryKey: string): PSIReport | null {
 				severity: severityFromAuditScore(auditScore),
 				resolved: false,
 			});
-		} else if (ref.weight > 0) {
+		} else if ((ref.weight ?? 0) > 0) {
 			passed.push({
 				id: ref.id,
 				title: audit.title,

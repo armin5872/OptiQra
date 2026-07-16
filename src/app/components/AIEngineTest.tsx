@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useAIProvider } from "@/lib/hooks/useAIProvider";
 import type { EngineTestMode } from "@/lib/aiEngineTest";
+import { getErrorMessage } from "@/lib/errorUtils";
 import MarkdownLite from "./MarkdownLite";
 
 interface Props {
@@ -84,8 +85,8 @@ export default function AIEngineTest({ url, mode, siteWide }: Props) {
 			}
 
 			setStatus("done");
-		} catch (err: any) {
-			setError(err?.message ?? "Failed to run the live test");
+		} catch (err: unknown) {
+			setError(getErrorMessage(err, "Failed to run the live test"));
 			setStatus("error");
 		}
 	};

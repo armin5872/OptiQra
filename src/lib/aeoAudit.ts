@@ -1,5 +1,6 @@
 import type { CheerioAPI } from "cheerio";
 import { issue, pass, type Issue } from "@/lib/auditUtils";
+import { collectJsonLdNodes, nodeTypes, type JsonLdNode } from "@/lib/jsonLd";
 
 interface AuditResult {
 	issues: Issue[];
@@ -172,32 +173,8 @@ async function analyzeLlmsTxt(targetUrl: string): Promise<AuditResult> {
 	return { issues, passed };
 }
 
-function collectJsonLdNodes($: CheerioAPI): any[] {
-	const nodes: any[] = [];
-	$('script[type="application/ld+json"]').each((_, el) => {
-		const raw = $(el).contents().text().trim();
-		if (!raw) return;
-		try {
-			const parsed = JSON.parse(raw);
-			const stack = Array.isArray(parsed) ? [...parsed] : [parsed];
-			while (stack.length) {
-				const node = stack.pop();
-				if (!node || typeof node !== "object") continue;
-				if (Array.isArray(node["@graph"])) stack.push(...node["@graph"]);
-				if (node["@type"]) nodes.push(node);
-			}
-		} catch {
-			// malformed JSON-LD is already flagged by the structured-data audit
-		}
-	});
-	return nodes;
-}
-
-function nodeTypes(node: any): string[] {
-	const t = node?.["@type"];
-	if (!t) return [];
-	return Array.isArray(t) ? t : [t];
-}
+// collectJsonLdNodes and nodeTypes now live in @/lib/jsonLd (shared with
+// geoAudit.ts, which reasons about the same JSON-LD nodes).
 
 export function analyzeAEO(
 	$: CheerioAPI,
@@ -337,11 +314,13 @@ export function analyzeAEO(
 		.attr("content")
 		?.trim();
 	const jsonLdAuthor = jsonLdNodes.some((n) => {
-		const a = n?.author;
+		const a = n["author"];
 		if (!a) return false;
 		if (typeof a === "string") return a.trim().length > 0;
-		if (Array.isArray(a)) return a.some((x) => x?.name);
-		return Boolean(a?.name);
+		const hasName = (v: unknown): boolean =>
+			!!v && typeof v === "object" && "name" in v && !!(v as { name?: unknown }).name;
+		if (Array.isArray(a)) return a.some(hasName);
+		return hasName(a);
 	});
 	const relAuthorLink = $('a[rel~="author"], [itemprop="author"]').length > 0;
 
@@ -365,7 +344,7 @@ export function analyzeAEO(
 	const metaModified =
 		$('meta[property="article:modified_time"]').attr("content")?.trim() ||
 		$('meta[name="last-modified"]').attr("content")?.trim();
-	const jsonLdDate = jsonLdNodes.some((n) => n?.dateModified || n?.datePublished);
+	const jsonLdDate = jsonLdNodes.some((n) => n["dateModified"] || n["datePublished"]);
 	const timeElement = $("time[datetime]").length > 0;
 
 	if (metaModified || jsonLdDate || timeElement) {

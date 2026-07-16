@@ -26,6 +26,7 @@
 
 import { JSDOM, VirtualConsole } from "jsdom";
 import { issue, pass, type Issue } from "@/lib/auditUtils";
+import { getErrorMessage } from "@/lib/errorUtils";
 
 export interface RenderResult {
 	/** Serialized HTML of the DOM after scripts ran and the render budget elapsed. */
@@ -92,8 +93,8 @@ export async function renderPageJs(
 	// jsdom's own internal errors (script exceptions, failed resource loads,
 	// "Not implemented" for unsupported browser APIs) surface here rather
 	// than as thrown exceptions, since scripts run asynchronously.
-	virtualConsole.on("jsdomError", (err: any) => {
-		scriptErrors.push(err?.message ?? String(err));
+	virtualConsole.on("jsdomError", (err: unknown) => {
+		scriptErrors.push(getErrorMessage(err, String(err)));
 	});
 	virtualConsole.on("error", (...args: unknown[]) => {
 		consoleErrors.push(args.map(String).join(" "));
@@ -125,8 +126,8 @@ export async function renderPageJs(
 			await sleep(waitMs, options.signal);
 			if (elapsed() >= hardTimeoutMs) timedOut = true;
 		}
-	} catch (err: any) {
-		scriptErrors.push(err?.message ?? String(err));
+	} catch (err: unknown) {
+		scriptErrors.push(getErrorMessage(err, String(err)));
 	}
 
 	const renderTimeMs = Date.now() - started;
@@ -148,8 +149,8 @@ export async function renderPageJs(
 		renderedHtml = dom.serialize();
 		renderedText =
 			dom.window.document.body?.textContent?.replace(/\s+/g, " ").trim() ?? "";
-	} catch (err: any) {
-		scriptErrors.push(err?.message ?? String(err));
+	} catch (err: unknown) {
+		scriptErrors.push(getErrorMessage(err, String(err)));
 	} finally {
 		// Stop any timers/intervals/pending fetches the page scheduled so they
 		// don't keep running (or keep the Node process alive) after we've

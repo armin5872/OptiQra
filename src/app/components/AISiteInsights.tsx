@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Issue } from "./CrawlTree";
 import { useAIProvider } from "@/lib/hooks/useAIProvider";
 import type { InsightsCategorySummary } from "@/lib/aiInsights";
+import { getErrorMessage } from "@/lib/errorUtils";
 import MarkdownLite from "./MarkdownLite";
 
 type Category = {
@@ -119,8 +120,8 @@ export default function AISiteInsights({
 			}
 
 			setStatus("done");
-		} catch (err: any) {
-			setError(err?.message ?? "Failed to generate insights");
+		} catch (err: unknown) {
+			setError(getErrorMessage(err, "Failed to generate insights"));
 			setStatus("error");
 		}
 	};

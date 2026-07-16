@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { AI_PROVIDERS, type GenerateFixRequest } from "@/lib/aiFix";
 import { buildFixPrompt } from "@/lib/aiFixPrompt";
 import { streamFix } from "@/lib/aiProviders";
+import { getErrorMessage } from "@/lib/errorUtils";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -41,8 +42,8 @@ export async function POST(req: NextRequest) {
 					send({ type: "delta", text: chunk });
 				}
 				send({ type: "done" });
-			} catch (err: any) {
-				send({ type: "error", message: err?.message ?? "Unknown error generating fix" });
+			} catch (err: unknown) {
+				send({ type: "error", message: getErrorMessage(err, "Unknown error generating fix") });
 			} finally {
 				controller.close();
 			}
