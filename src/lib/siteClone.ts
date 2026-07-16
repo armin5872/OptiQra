@@ -1,4 +1,5 @@
-import { load, type CheerioAPI, type Element } from "cheerio";
+import { load, type CheerioAPI } from "cheerio";
+import type { Element } from "domhandler";
 import type { Severity } from "@/lib/auditUtils";
 
 /**

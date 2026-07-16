@@ -36,23 +36,6 @@
 - **Answer-liftable content** — detects whether key content is structured to be extracted directly into answers, Q&A format, and featured snippets
 - **Q&A structuring** — validates whether content is formatted to answer common questions about your domain
 
-### ⚙️ Customization
-You can customize nearly everything in the settings tab!
-
-- **Appearance** You can swtich between light and dark mode and change the accent color and text size
-- **Layout** Reshape the page itself — corner roundness, content width, and how fast things move. Applies instantly, everywhere, no reload.
-- **Typography** Swtich fonts and change text spacing
-- **Scanning** Change the default scan that comes up when you visit the site
-- **Crawler** Set the ammount of parallel requests that get sent to the target URLs server aand enable or disable JS rendering
-- **Analyzer** Choose which categories show up as cards in your report
-- **AI Assistant** Configure how the AI assistant behaves once its been connected to your api
-- **Custome rules** Write your own JS rules here and if you think they would make a good edtion to the site, well you can press "Propose to upstream repo" to draft a pull request with your real github account
-- **Advanced / Code** You can write your own custom CSS or JS code here and inject your code into the site—but its only for you so if you want to make your code acutally go into the orignal site then create a PR and it will be incorporated into the main
-- **Notifications** Disable and enable notifications for the scheduled scans
-- **Reports** Settings for the report exports
-- **Privacy & data** Everything OptiQra stores lives only in this browser — nothing is sent to a server for storage. Manage or wipe it here at any time.
-
-
 ### ⚡ Performance
 - HTML/response performance characteristics
 - (Optional) Google PageSpeed Insights integration with API key
@@ -80,7 +63,6 @@ You can customize nearly everything in the settings tab!
 2. **OptiQra crawls it** — follows internal links, scans every page
 3. **See results in seconds** — visual tree of all crawled pages, scores by category, detailed issue list
 4. **Get AI fixes** — (optional) paste an API key and OptiQra generates suggested fixes for each issue using your choice of provider: OpenAI, Anthropic, Google, Groq, OpenRouter, Mistral, DeepSeek, or xAI
-5. **Export the report** you can export the report with the issues and their fixes in CSV, PDF, TXT, Markdown, Word(DOCX), Excel(XLSX), JSON and YAML 
 
 Everything runs in your browser. No server sees your data. No account needed.
 
