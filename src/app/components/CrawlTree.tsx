@@ -5,6 +5,7 @@
 // `@/components/CrawlTree`.
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import SiteCloneViewer from "./SiteCloneViewer";
 
 export type Issue = {
 	id: string;
@@ -550,6 +551,11 @@ export default function CrawlTree({
 								>
 									{selectedNode.url}
 								</a>
+								<SiteCloneViewer
+									url={selectedNode.url}
+									label="🔍 View this page highlighted"
+									className="clone-view-btn clone-view-btn-inline"
+								/>
 							</div>
 							<button
 								type="button"

@@ -8,6 +8,7 @@ import AIFixButton from "./components/AIFixButton";
 import AISiteInsights from "./components/AISiteInsights";
 import AIEngineTest from "./components/AIEngineTest";
 import ReportDownload from "./components/ReportDownload";
+import SiteCloneViewer from "./components/SiteCloneViewer";
 import ScheduleManager from "./components/ScheduleManager";
 import SettingsPanel from "./components/SettingsPanel";
 import MissingFileBanner from "./components/MissingFileBanner";
@@ -995,6 +996,10 @@ export default function Home() {
 						<h2>Diagnostic report</h2>
 						<div className="report-top-actions">
 							<ReportDownload reportData={reportData} overallScore={overall} />
+							<SiteCloneViewer
+								url={reportData.url}
+								renderJs={settings.crawler.renderJs}
+							/>
 							<ScheduleManager
 								url={reportData.url}
 								mode={reportData.mode ?? scanMode}
