@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
 		return new Response(JSON.stringify({ error: "Invalid JSON body" }), { status: 400 });
 	}
 
-	const { provider, apiKey, model, issue, pageUrl, category } = body;
+	const { provider, apiKey, model, issue, pageUrl, category, stack } = body;
 
 	if (!provider || !apiKey || !issue || !pageUrl) {
 		return new Response(
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
 	}
 
 	const resolvedModel = model || AI_PROVIDERS[provider].defaultModel;
-	const { system, user } = buildFixPrompt({ provider, apiKey, model, issue, pageUrl, category });
+	const { system, user } = buildFixPrompt({ provider, apiKey, model, issue, pageUrl, category, stack });
 
 	const encoder = new TextEncoder();
 

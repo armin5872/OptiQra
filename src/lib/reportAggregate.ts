@@ -8,6 +8,7 @@
 // "Resume" able to pick up cleanly after a pause.
 
 import type { Issue } from "@/lib/htmlAudit";
+import type { StackPromptContext } from "@/lib/stackDetector";
 
 export type { Issue };
 
@@ -36,7 +37,18 @@ export type PageNode = {
 		string,
 		{ label: string; score: number; issues: Issue[]; passed: Issue[] }
 	>;
+	/** Detected tech stack for this page — only ever populated on the seed
+	 *  (depth 0) page; other pages on the same site are assumed to share it. */
+	stack?: StackPromptContext;
 };
+
+/** Picks the site-wide detected stack out of a list of crawled pages: the
+ *  seed page's (depth 0) detection if present, otherwise the first page
+ *  that has one. Used both server-side (final report) and client-side
+ *  ("Create report now" / resumed scans), so both paths agree. */
+export function pickSiteStack(pageNodes: PageNode[]): StackPromptContext | undefined {
+	return pageNodes.find((n) => n.depth === 0 && n.stack)?.stack ?? pageNodes.find((n) => n.stack)?.stack;
+}
 
 /** Merges the same category (e.g. "SEO") computed across many pages into one card:
  *  score is the average across pages, issues are grouped by id with the list of

@@ -10,6 +10,9 @@ Rules:
 - Be specific and reference actual numbers/scores/page counts given below — never generic textbook advice divorced from this data.
 - Format the response as clean, simple markdown so it renders nicely: "## " for each section heading (e.g. "## Overview", "## Priority Fixes", "## Quick Wins"), "- " for bullet points, and **bold** around key numbers, scores, and page counts so they stand out. Do not use backticks or code blocks — this is a narrative readout, not code. No markdown tables.`;
 
+const DEFAULT_STACK_RULE =
+	"- The site's exact platform/framework isn't known, so phrase fixes generically (e.g. \"add X to your page templates\") rather than naming specific files, hooks, or admin panels.";
+
 const TONE_INSTRUCTIONS: Record<"concise" | "detailed", string> = {
 	concise:
 		" Keep it short: aim for roughly 90-150 words total, favoring tight bullets over prose. Skip minor caveats and background — just overview + prioritized fixes.",
@@ -21,16 +24,21 @@ export function buildInsightsPrompt(req: GenerateInsightsRequest): {
 	system: string;
 	user: string;
 } {
-	const { siteUrl, mode, pagesScanned, overallScore, categories, tone } = req;
-	const SYSTEM_PROMPT = BASE_SYSTEM_PROMPT + TONE_INSTRUCTIONS[tone ?? "detailed"];
+	const { siteUrl, mode, pagesScanned, overallScore, categories, tone, stack } = req;
+	const stackRule = stack
+		? `- Detected stack: ${stack.summary}. When recommending how to implement a fix, phrase it for this stack specifically (${stack.guidance})`
+		: DEFAULT_STACK_RULE;
+	const SYSTEM_PROMPT = `${BASE_SYSTEM_PROMPT}\n${stackRule}` + TONE_INSTRUCTIONS[tone ?? "detailed"];
 
 	const lines: string[] = [
 		`Site: ${siteUrl}`,
 		`Scan type: ${mode === "site" ? `Full site crawl (${pagesScanned ?? "?"} pages scanned)` : "Single page scan"}`,
 		`Overall score: ${overallScore}/100`,
-		"",
-		"Category breakdown:",
 	];
+	if (stack) {
+		lines.push(`Detected tech stack: ${stack.summary}`);
+	}
+	lines.push("", "Category breakdown:");
 
 	for (const cat of categories) {
 		lines.push(

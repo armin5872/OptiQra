@@ -26,6 +26,9 @@ interface Props {
 	autoGenerate?: boolean;
 	/** From Settings → AI Assistant. Defaults to "detailed". */
 	tone?: "concise" | "detailed";
+	/** Detected tech stack of the scanned site, if known — lets recommendations
+	 *  be phrased for this stack instead of generically. */
+	stack?: { primary: string; summary: string; guidance: string };
 }
 
 const MAX_ISSUES_PER_CATEGORY = 6;
@@ -61,6 +64,7 @@ export default function AISiteInsights({
 	categories,
 	autoGenerate,
 	tone,
+	stack,
 }: Props) {
 	const { provider, apiKey, model, isConfigured, hydrated } = useAIProvider();
 	const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
@@ -88,6 +92,7 @@ export default function AISiteInsights({
 					overallScore,
 					categories: summarizeCategories(categories),
 					tone,
+					stack,
 				}),
 			});
 

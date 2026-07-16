@@ -1,4 +1,5 @@
 import type { Severity } from "@/lib/auditUtils";
+import type { StackPromptContext } from "@/lib/stackDetector";
 
 export type AIProviderId =
 	| "openai"
@@ -121,6 +122,10 @@ export interface GenerateFixRequest {
 	issue: FixableIssue;
 	pageUrl: string;
 	category: string; // e.g. "SEO", "Speed", "Accessibility", "Conversions"
+	/** Detected tech stack of the scanned site, if known — lets the fix be
+	 *  written in the site's actual stack (Liquid, PHP/WP hooks, Next.js
+	 *  App Router, builder-panel steps, etc.) instead of generic HTML. */
+	stack?: StackPromptContext;
 }
 
 export type FixStreamEvent =

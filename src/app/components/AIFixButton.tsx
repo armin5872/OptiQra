@@ -9,10 +9,13 @@ interface Props {
 	issue: Issue;
 	pageUrl: string;
 	category: string;
+	/** Detected tech stack of the scanned site, if known — lets the fix be
+	 *  written in the site's actual stack instead of generic HTML. */
+	stack?: { primary: string; summary: string; guidance: string };
 	onResolve: () => void;
 }
 
-export default function AIFixButton({ issue, pageUrl, category, onResolve }: Props) {
+export default function AIFixButton({ issue, pageUrl, category, stack, onResolve }: Props) {
 	const { provider, apiKey, model, isConfigured, hydrated } = useAIProvider();
 	const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
 	const [output, setOutput] = useState("");
@@ -64,6 +67,7 @@ export default function AIFixButton({ issue, pageUrl, category, onResolve }: Pro
 					model,
 					pageUrl,
 					category,
+					stack,
 					issue: {
 						title: issue.title,
 						detail: issue.detail,

@@ -28,10 +28,12 @@ import { CheerioAPI, load } from "cheerio";
 import { assertSafeUrl, UnsafeUrlError } from "@/lib/urlSafety";
 import {
 	aggregateCategory,
+	pickSiteStack,
 	type Category,
 	type PageCategoryResult,
 	type PageNode,
 } from "@/lib/reportAggregate";
+import { detectStack } from "@/lib/stackDetector";
 
 export const runtime = "nodejs";
 // Site scans can now go up to 1000 pages, which won't finish in the default 60s.
@@ -185,6 +187,8 @@ async function runSinglePageScan(
 		}
 
 		throwIfAborted(signal);
+
+		const stack = detectStack(html, response.headers, targetUrl);
 
 		// 1b. Optionally execute the page's JavaScript in a sandboxed DOM so the
 		// content-based audits below see the same fully-hydrated page a real
@@ -467,6 +471,7 @@ async function runSinglePageScan(
 			categories,
 			lighthouseAvailable,
 			renderJsApplied: Boolean($rendered),
+			stack: { primary: stack.primary, summary: stack.summary, guidance: stack.guidance },
 			timestamp: new Date().toISOString(),
 		});
 	} catch (error: any) {
@@ -814,6 +819,12 @@ function streamSiteCrawl(
 							depth: page.depth ?? 0,
 							score: overallScore,
 							categories: pageCategories,
+							...((page.depth ?? 0) === 0 ?
+								{ stack: (() => {
+									const detected = detectStack(page.html, page.response.headers, page.url);
+									return { primary: detected.primary, summary: detected.summary, guidance: detected.guidance };
+								})() }
+							:	{}),
 						};
 						pageNodes.push(pageNode);
 
@@ -1057,6 +1068,7 @@ function streamSiteCrawl(
 						maxPages,
 						timestamp: new Date().toISOString(),
 						pages: pageNodes,
+						stack: pickSiteStack(pageNodes),
 					},
 				});
 				close();

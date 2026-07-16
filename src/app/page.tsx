@@ -23,7 +23,7 @@ import {
 	recordScanInCookie,
 	removeScanFromCookie,
 } from "@/lib/scanCookies";
-import { aggregateCategoriesFromPageNodes } from "@/lib/reportAggregate";
+import { aggregateCategoriesFromPageNodes, pickSiteStack } from "@/lib/reportAggregate";
 
 type ScanState = "hero" | "scanning" | "report";
 type ScanMode = "single" | "site";
@@ -93,6 +93,7 @@ export default function Home() {
 		crawlTruncated?: boolean;
 		pages?: PageNode[];
 		partial?: boolean;
+		stack?: { primary: string; summary: string; guidance: string };
 	} | null>(null);
 	const [openPanel, setOpenPanel] = useState<string | null>(null);
 	const [showPageList, setShowPageList] = useState(false);
@@ -489,6 +490,7 @@ export default function Home() {
 			crawlTruncated: true,
 			pages: nodes,
 			partial: true,
+			stack: pickSiteStack(nodes),
 		};
 
 		stopIntentRef.current = "report";
@@ -1020,6 +1022,7 @@ export default function Home() {
 						categories={visibleCategories}
 						autoGenerate={settings.ai.autoGenerateInsights}
 						tone={settings.ai.insightsTone}
+						stack={reportData.stack}
 					/>
 
 					<div className="cards">
@@ -1124,6 +1127,7 @@ export default function Home() {
 											issue={iss}
 											pageUrl={reportData.url}
 											category={cat.label}
+											stack={reportData.stack}
 											onResolve={() => applyFix(key, idx)}
 										/>
 									</div>
