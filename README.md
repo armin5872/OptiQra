@@ -6,6 +6,7 @@
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)
 ![License](https://img.shields.io/badge/License-MIT-green)
+[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?logo=vercel)](https://optiqra.vercel.app/)
 
 **[Live demo](https://optiqra.vercel.app)** · Free, no signup, no accounts
 
@@ -49,7 +50,7 @@
 - Conversion signals and trust badges
 
 ### 📊 Reports & Intelligence
-- **AI-generated fixes** — paste an API key (yours to keep) and OptiQra suggests fixes for each issue using OpenAI, Anthropic, Claude, Groq, OpenRouter, Mistral, DeepSeek, or xAI
+- **AI-generated fixes** — paste an API key (yours to keep) and OptiQra suggests fixes for each issue using OpenAI, Anthropic, Google, Groq, OpenRouter, Mistral, DeepSeek, or xAI
 - **Site-wide AI insights** — generates a strategic summary reasoning across all categories and pages
 - **Visual crawl tree** — hover/click any page to see individual stats
 - **Export to PDF, DOCX, Markdown, CSV, TSV, TXT, JSON**
@@ -61,7 +62,7 @@
 1. **Paste a URL** — any website, any size
 2. **OptiQra crawls it** — follows internal links, scans every page
 3. **See results in seconds** — visual tree of all crawled pages, scores by category, detailed issue list
-4. **Get AI fixes** — (optional) paste an API key and OptiQra generates suggested fixes for each issue using your choice of provider: OpenAI, Anthropic, Claude, Groq, Mistral, DeepSeek, or xAI
+4. **Get AI fixes** — (optional) paste an API key and OptiQra generates suggested fixes for each issue using your choice of provider: OpenAI, Anthropic, Google, Groq, OpenRouter, Mistral, DeepSeek, or xAI
 
 Everything runs in your browser. No server sees your data. No account needed.
 
