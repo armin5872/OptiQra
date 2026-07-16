@@ -599,13 +599,28 @@ export default function Home() {
 
 			{viewState === "hero" && (
 				<section className="hero">
-					<p className="eyebrow">Diagnostic scan</p>
-					<h1>Find out what's actually wrong with your website.</h1>
-					<p className="sub">
+					<div className="hero-bg" aria-hidden="true" />
+					<div className="hero-blob b1" aria-hidden="true" />
+					<div className="hero-blob b2" aria-hidden="true" />
+					<div className="hero-blob b3" aria-hidden="true" />
+
+					<p className="eyebrow reveal" style={{ animationDelay: "0.02s" }}>
+						Diagnostic scan
+					</p>
+					<h1 className="reveal" style={{ animationDelay: "0.08s" }}>
+						Find out what's <span className="grad-text">actually wrong</span> with
+						your website.
+					</h1>
+					<p className="sub reveal" style={{ animationDelay: "0.16s" }}>
 						Paste a URL. We check your SEO, speed, accessibility, and conversion
 						paths — then show you exactly what to fix.
 					</p>
-					<div className="mode-toggle" role="radiogroup" aria-label="Scan mode">
+					<div
+						className="mode-toggle reveal"
+						style={{ animationDelay: "0.22s" }}
+						role="radiogroup"
+						aria-label="Scan mode"
+					>
 						<button
 							type="button"
 							role="radio"
@@ -672,7 +687,11 @@ export default function Home() {
 							/>
 						</div>
 					)}
-					<form className="intake" onSubmit={runScan}>
+					<form
+						className="intake reveal"
+						style={{ animationDelay: "0.28s" }}
+						onSubmit={runScan}
+					>
 						<input
 							type="text"
 							value={url}
@@ -702,6 +721,43 @@ export default function Home() {
 							{stoppedNote}
 						</p>
 					)}
+
+					<div
+						className="hero-features reveal"
+						style={{ animationDelay: "0.34s" }}
+					>
+						{[
+							{
+								label: "SEO",
+								path: "M4 3h9l5 5v13a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z M13 3v5h5",
+							},
+							{
+								label: "Speed",
+								path: "M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2 M12 12l4-4",
+							},
+							{
+								label: "Accessibility",
+								path: "M12 4a1.6 1.6 0 1 0 0-3.2A1.6 1.6 0 0 0 12 4Z M4 8h16 M12 8v6 M8 21l4-7 4 7 M8 12l-4 3 M16 12l4 3",
+							},
+							{
+								label: "Security",
+								path: "M12 2 4 5v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V5Z",
+							},
+						].map((f) => (
+							<span className="hero-feature" key={f.label}>
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+									<path d={f.path} />
+								</svg>
+								{f.label}
+							</span>
+						))}
+					</div>
+
+					<div className="vitals-strip reveal" style={{ animationDelay: "0.4s" }} aria-hidden="true">
+						<svg viewBox="0 0 1000 64" preserveAspectRatio="none">
+							<path d="M0 32 L120 32 L150 8 L180 56 L210 16 L240 32 L400 32 L430 8 L460 56 L490 16 L520 32 L700 32 L730 8 L760 56 L790 16 L820 32 L1000 32" />
+						</svg>
+					</div>
 
 					{recentScansLoaded && recentScans.length > 0 && (
 						<div className="recent-scans">
