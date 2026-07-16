@@ -327,7 +327,10 @@ export function buildAnnotatedClone(rawHtml: string, baseUrl: string) {
 		.remove();
 
 	$("*").each((_, el) => {
-		const attribs = el.attribs;
+		// el is AnyNode (includes Document, Text, etc.) — only Element has attribs
+		if (el.type !== "tag") return;
+		const element = el as Element;
+		const attribs = element.attribs;
 		if (!attribs) return;
 		for (const name of Object.keys(attribs)) {
 			if (/^on/i.test(name)) $(el).removeAttr(name);
