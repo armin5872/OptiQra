@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { getErrorMessage } from "@/lib/errorUtils";
+import { useAIProvider } from "@/lib/hooks/useAIProvider";
 import type { Severity } from "@/lib/auditUtils";
 
 export interface CloneAnnotation {
@@ -19,6 +20,68 @@ interface CloneResponse {
 	elementIssues: CloneAnnotation[];
 	pageIssues: CloneAnnotation[];
 	renderJsApplied: boolean;
+}
+
+type AutoFixIssueStatus = "fixed" | "ai-needed" | "duplicated" | "skipped";
+
+interface AutoFixIssueResult {
+	id: string;
+	title: string;
+	category: string;
+	severity: Severity;
+	status: AutoFixIssueStatus;
+	note: string;
+}
+
+interface AutoFixResponse {
+	url: string;
+	html: string;
+	results: AutoFixIssueResult[];
+	summary: { fixed: number; duplicated: number; skipped: number };
+	stack: { primary: string; summary: string; guidance: string };
+	duplicateBankUpdates: Record<string, string>;
+}
+
+// Session-scoped cache of previously AI-generated fix content, keyed by
+// "kind:category" — reused verbatim when auto-fixing a page with no AI key
+// configured, rather than leaving those issues untouched.
+const DUPLICATE_BANK_KEY = "optiqra_autofix_bank";
+
+function readDuplicateBank(): Record<string, string> {
+	if (typeof window === "undefined") return {};
+	try {
+		return JSON.parse(sessionStorage.getItem(DUPLICATE_BANK_KEY) || "{}");
+	} catch {
+		return {};
+	}
+}
+
+function writeDuplicateBankUpdates(updates: Record<string, string>) {
+	if (typeof window === "undefined" || Object.keys(updates).length === 0) return;
+	const current = readDuplicateBank();
+	sessionStorage.setItem(DUPLICATE_BANK_KEY, JSON.stringify({ ...current, ...updates }));
+}
+
+function downloadHtml(html: string, url: string) {
+	const filename =
+		(() => {
+			try {
+				const u = new URL(url);
+				const base = u.hostname + u.pathname.replace(/\/$/, "");
+				return `${base.replace(/[^a-z0-9.-]+/gi, "-")}-fixed.html`;
+			} catch {
+				return "fixed-page.html";
+			}
+		})();
+	const blob = new Blob([html], { type: "text/html" });
+	const href = URL.createObjectURL(blob);
+	const a = document.createElement("a");
+	a.href = href;
+	a.download = filename;
+	document.body.appendChild(a);
+	a.click();
+	a.remove();
+	URL.revokeObjectURL(href);
 }
 
 // Mirrors the --sev-* palette in globals.css. Hardcoded here (rather than
@@ -149,6 +212,40 @@ export default function SiteCloneViewer({
 	const [data, setData] = useState<CloneResponse | null>(null);
 	const [open, setOpen] = useState(false);
 
+	const { provider, apiKey, model, isConfigured, hydrated } = useAIProvider();
+	const [autoFixStatus, setAutoFixStatus] = useState<"idle" | "running" | "error">("idle");
+	const [autoFixError, setAutoFixError] = useState<string | null>(null);
+	const [autoFixResult, setAutoFixResult] = useState<AutoFixResponse | null>(null);
+	const [showFixed, setShowFixed] = useState(false);
+
+	const runAutoFix = async () => {
+		setAutoFixStatus("running");
+		setAutoFixError(null);
+		try {
+			const res = await fetch("/api/auto-fix", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					url,
+					renderJs,
+					provider: hydrated && isConfigured ? provider : undefined,
+					apiKey: hydrated && isConfigured ? apiKey : undefined,
+					model: hydrated && isConfigured ? model : undefined,
+					duplicateBank: readDuplicateBank(),
+				}),
+			});
+			const json = await res.json();
+			if (!res.ok) throw new Error(json.error || "Failed to auto-fix the page");
+			setAutoFixResult(json);
+			writeDuplicateBankUpdates(json.duplicateBankUpdates || {});
+			setShowFixed(true);
+			setAutoFixStatus("idle");
+		} catch (err) {
+			setAutoFixError(getErrorMessage(err, "Failed to auto-fix the page"));
+			setAutoFixStatus("error");
+		}
+	};
+
 	const load = async () => {
 		setStatus("loading");
 		setError(null);
@@ -171,13 +268,18 @@ export default function SiteCloneViewer({
 	const handleOpen = () => {
 		setOpen(true);
 		if (data && data.url === url) return;
+		setAutoFixResult(null);
+		setAutoFixStatus("idle");
+		setAutoFixError(null);
+		setShowFixed(false);
 		void load();
 	};
 
 	const srcDoc = useMemo(() => {
+		if (showFixed && autoFixResult) return autoFixResult.html;
 		if (!data) return "";
 		return buildSrcDoc(data.html, data.elementIssues);
-	}, [data]);
+	}, [data, showFixed, autoFixResult]);
 
 	const allIssues = useMemo(() => {
 		if (!data) return [];
@@ -264,18 +366,92 @@ export default function SiteCloneViewer({
 											Showing static HTML — JS rendering wasn&apos;t applied
 										</span>
 									)}
+									<span className="autofix-legend-actions">
+										{autoFixResult && (
+											<button
+												type="button"
+												className="link-btn"
+												onClick={() => setShowFixed((v) => !v)}
+											>
+												{showFixed ? "View original" : "View fixed"}
+											</button>
+										)}
+										<button
+											type="button"
+											className="apply-btn autofix-btn"
+											onClick={runAutoFix}
+											disabled={autoFixStatus === "running"}
+										>
+											{autoFixStatus === "running" ? "Auto-fixing…" : "⚡ Auto-fix all issues"}
+										</button>
+									</span>
 								</div>
+
+								{!hydrated ? null : !isConfigured && (
+									<p className="autofix-note">
+										No AI provider configured — issues needing generated content (titles,
+										descriptions, alt text…) will reuse a fix from elsewhere on your site if
+										one exists, or stay unfixed. Everything mechanical still gets fixed.
+									</p>
+								)}
+
+								{autoFixStatus === "error" && (
+									<div className="modal-error clone-modal-error">
+										<p>{autoFixError}</p>
+										<button type="button" className="apply-btn" onClick={runAutoFix}>
+											Try again
+										</button>
+									</div>
+								)}
+
+								{autoFixResult && (
+									<div className="autofix-summary">
+										<div className="autofix-summary-row">
+											<span className="autofix-chip autofix-chip-fixed">
+												{autoFixResult.summary.fixed} fixed
+											</span>
+											{autoFixResult.summary.duplicated > 0 && (
+												<span className="autofix-chip autofix-chip-duplicated">
+													{autoFixResult.summary.duplicated} reused from another page
+												</span>
+											)}
+											{autoFixResult.summary.skipped > 0 && (
+												<span className="autofix-chip autofix-chip-skipped">
+													{autoFixResult.summary.skipped} left unfixed
+												</span>
+											)}
+											<span className="autofix-stack-note">
+												Detected stack: {autoFixResult.stack.summary}
+											</span>
+											<button
+												type="button"
+												className="apply-btn"
+												onClick={() => downloadHtml(autoFixResult.html, url)}
+											>
+												Download fixed HTML
+											</button>
+										</div>
+										<ul className="autofix-results-list">
+											{autoFixResult.results.map((r) => (
+												<li key={r.id} className={`autofix-result autofix-result-${r.status}`}>
+													<strong>{r.title}</strong>
+													<span>{r.note}</span>
+												</li>
+											))}
+										</ul>
+									</div>
+								)}
 
 								<div className="clone-frame-wrap">
 									<iframe
-										title={`Highlighted clone of ${url}`}
+										title={`${showFixed ? "Fixed" : "Highlighted"} clone of ${url}`}
 										srcDoc={srcDoc}
 										sandbox="allow-scripts"
 										className="clone-iframe"
 									/>
 								</div>
 
-								{data.pageIssues.length > 0 && (
+								{!showFixed && data.pageIssues.length > 0 && (
 									<div className="clone-page-issues">
 										<h3>Page-level issues</h3>
 										<ul>

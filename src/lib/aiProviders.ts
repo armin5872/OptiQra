@@ -164,6 +164,17 @@ export function streamFix(provider: AIProviderId, args: StreamArgs) {
 	}
 }
 
+/** Consumes streamFix() fully and returns the joined text. Used by callers
+ *  (like batched auto-fix) that need one complete JSON response rather than
+ *  incremental deltas to show a person. */
+export async function completeFix(provider: AIProviderId, args: StreamArgs): Promise<string> {
+	let out = "";
+	for await (const chunk of streamFix(provider, args)) {
+		out += chunk;
+	}
+	return out;
+}
+
 /** Fires a minimal, cheap request against the provider to confirm the key/model
  *  actually work, without generating a real fix. Used by the "Test" button in
  *  AIProviderSetup so bad keys are caught before the person starts auditing. */
