@@ -295,6 +295,124 @@ function analyzeTableStructure($: CheerioAPI): AuditResult {
 	return { issues, passed };
 }
 
+/** Some CMS plugins and manually-added robots meta tags include emerging
+ *  "noai"/"noimageai" tokens, which several AI crawlers treat as an explicit
+ *  opt-out from training/answer use. Whether or not that's the site owner's
+ *  intent, it directly works against being cited by generative engines, so
+ *  it's worth surfacing even though it's not a traditional SEO directive. */
+function analyzeAIUsageDirectives($: CheerioAPI): AuditResult {
+	const issues: Issue[] = [];
+	const passed: Issue[] = [];
+
+	const robotsMeta = ($('meta[name="robots"]').attr("content") || "").toLowerCase();
+	const blockingTokens = ["noai", "noimageai"];
+	const found = blockingTokens.filter((t) => robotsMeta.includes(t));
+
+	if (found.length > 0) {
+		issues.push(
+			issue(
+				"geo-noai-directive",
+				"Page includes a generative-AI opt-out directive",
+				`The robots meta tag includes ${found.join(", ")}, an emerging token that some AI crawlers and training pipelines respect as an explicit opt-out. If this content is meant to be eligible for AI answer engines, this directive works directly against that.`,
+				"Remove noai/noimageai from the robots meta tag if you want this content eligible for generative-engine answers; keep it only if the opt-out is intentional.",
+				6,
+			),
+		);
+	} else {
+		passed.push(
+			pass(
+				"geo-noai-directive",
+				"No noai/noimageai directive blocking generative use",
+			),
+		);
+	}
+
+	return { issues, passed };
+}
+
+/** Generative engines favor short, self-contained sentences when deciding
+ *  what to quote verbatim in an answer — long, clause-heavy sentences are
+ *  harder to lift cleanly, so this is a real (if heuristic) quotability
+ *  signal rather than a general readability score. */
+function analyzeSentenceQuotability($: CheerioAPI): AuditResult {
+	const issues: Issue[] = [];
+	const passed: Issue[] = [];
+
+	const bodyText = $("body").text().replace(/\s+/g, " ").trim();
+	const wordCount = bodyText ? bodyText.split(" ").length : 0;
+	if (wordCount < 150) return { issues, passed };
+
+	const sentences = bodyText.match(/[^.!?]+[.!?]+/g) ?? [];
+	const substantial = sentences.filter((s) => s.trim().split(" ").length >= 4);
+	if (substantial.length < 5) return { issues, passed };
+
+	const avgLen =
+		substantial.reduce((sum, s) => sum + s.trim().split(" ").length, 0) /
+		substantial.length;
+
+	if (avgLen > 32) {
+		issues.push(
+			issue(
+				"geo-sentence-length",
+				`Average sentence length is ${avgLen.toFixed(0)} words`,
+				"Generative engines tend to extract and quote short, self-contained sentences rather than paraphrase long, clause-heavy ones. This page's prose runs long on average, making individual sentences harder to lift cleanly into a generated answer.",
+				"Break long sentences into shorter, single-idea statements, especially in sections most likely to be quoted (openings, key claims, definitions).",
+				3,
+			),
+		);
+	} else {
+		passed.push(
+			pass(
+				"geo-sentence-length",
+				`Average sentence length (${avgLen.toFixed(0)} words) is easy to quote`,
+			),
+		);
+	}
+
+	return { issues, passed };
+}
+
+/** RAG pipelines and generative-engine indexers typically retrieve content
+ *  in heading-bounded chunks. A very long run of text under a single
+ *  heading is harder to retrieve precisely and more likely to be partially
+ *  or incorrectly quoted than content broken into well-scoped subsections. */
+function analyzeContentChunking($: CheerioAPI): AuditResult {
+	const issues: Issue[] = [];
+	const passed: Issue[] = [];
+
+	const headings = $("h2, h3");
+	if (headings.length < 2) return { issues, passed };
+
+	let maxSectionWords = 0;
+	headings.each((_, el) => {
+		const section = $(el).nextUntil("h2, h3");
+		const text = section.text().replace(/\s+/g, " ").trim();
+		const words = text ? text.split(" ").length : 0;
+		if (words > maxSectionWords) maxSectionWords = words;
+	});
+
+	if (maxSectionWords > 600) {
+		issues.push(
+			issue(
+				"geo-content-chunking",
+				`At least one section runs to roughly ${maxSectionWords.toLocaleString()} words without a subheading`,
+				"Generative engines and RAG pipelines typically retrieve content in heading-bounded chunks. A long run of text under a single heading is harder to retrieve precisely and more likely to be partially or incorrectly quoted.",
+				"Break long sections into smaller subsections with their own H3 headings, each covering one idea.",
+				3,
+			),
+		);
+	} else {
+		passed.push(
+			pass(
+				"geo-content-chunking",
+				"Content is broken into well-sized, heading-bounded sections",
+			),
+		);
+	}
+
+	return { issues, passed };
+}
+
 /** Page-level GEO (Generative Engine Optimization) signals: content patterns
  *  that influence whether generative AI tools (ChatGPT, Gemini, Perplexity,
  *  Google AI Overviews, etc.) can reliably parse, trust, and quote a page's
@@ -319,6 +437,9 @@ export function analyzeGEO(
 		analyzeAttributedQuotes($),
 		analyzeEntityGrounding(jsonLdNodes),
 		analyzeTableStructure($),
+		analyzeAIUsageDirectives($),
+		analyzeSentenceQuotability($),
+		analyzeContentChunking($),
 	];
 
 	for (const r of results) {

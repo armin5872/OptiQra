@@ -102,6 +102,22 @@ export async function analyzeSEO(
 		);
 	}
 
+	if (
+		metaDesc.trim() &&
+		title &&
+		metaDesc.trim().toLowerCase() === title.trim().toLowerCase()
+	) {
+		issues.push(
+			issue(
+				"meta-desc-duplicates-title",
+				"Meta description is identical to the title tag",
+				"The meta description just repeats the title verbatim instead of adding new information, so the search snippet wastes the chance to give searchers an extra reason to click through.",
+				"Write a meta description that summarizes the page's content rather than repeating the title.",
+				3,
+			),
+		);
+	}
+
 	const canonical = $('link[rel="canonical"]').attr("href");
 	if (!canonical) {
 		issues.push(
@@ -113,8 +129,36 @@ export async function analyzeSEO(
 				8,
 			),
 		);
+	} else if (!/^https?:\/\//i.test(canonical)) {
+		issues.push(
+			issue(
+				"canonical-relative",
+				"Canonical tag uses a relative URL",
+				`The canonical href ("${canonical}") isn't a full absolute URL. Google's own guidance recommends absolute URLs for canonical tags to avoid ambiguity if the tag is copied elsewhere or the base URL changes.`,
+				"Use a full absolute URL (https://...) in the canonical tag rather than a relative path.",
+				3,
+			),
+		);
 	} else {
-		passed.push(pass("canonical", "Canonical tag is present"));
+		try {
+			const canonicalOrigin = new URL(canonical).origin;
+			const pageOrigin = new URL(targetUrl).origin;
+			if (canonicalOrigin !== pageOrigin) {
+				issues.push(
+					issue(
+						"canonical-cross-domain",
+						"Canonical tag points to a different domain",
+						`The canonical URL ("${canonical}") points to a different domain than the page being audited (${pageOrigin}). This is sometimes intentional (e.g. syndicated content), but if unintended it tells search engines to index the other domain's URL instead of this one.`,
+						"Confirm this is intentional; otherwise point the canonical tag at this page's own domain.",
+						4,
+					),
+				);
+			} else {
+				passed.push(pass("canonical", "Canonical tag is present and absolute"));
+			}
+		} catch {
+			passed.push(pass("canonical", "Canonical tag is present"));
+		}
 	}
 
 	const h1s = $("h1");
@@ -199,6 +243,160 @@ export async function analyzeSEO(
 		const crawlAudit = await analyzeCrawlFiles(targetUrl);
 		issues.push(...crawlAudit.issues);
 		passed.push(...crawlAudit.passed);
+	}
+
+	// --- Hreflang tags ---
+	const hreflangLinks = $('link[rel="alternate"][hreflang]');
+	if (hreflangLinks.length > 0) {
+		let invalidCode = false;
+		let hasXDefault = false;
+		let hasSelfRef = false;
+		const codes: string[] = [];
+
+		hreflangLinks.each((_, el) => {
+			const code = ($(el).attr("hreflang") || "").trim().toLowerCase();
+			const href = $(el).attr("href") || "";
+			codes.push(code);
+			if (code === "x-default") {
+				hasXDefault = true;
+			} else if (!/^[a-z]{2,3}(-[a-z]{2}|-\d{3})?$/.test(code)) {
+				invalidCode = true;
+			}
+			try {
+				if (new URL(href, targetUrl).toString() === new URL(targetUrl).toString()) {
+					hasSelfRef = true;
+				}
+			} catch {
+				// unresolvable href is covered by invalidCode-adjacent issues elsewhere
+			}
+		});
+
+		if (invalidCode) {
+			issues.push(
+				issue(
+					"hreflang-invalid",
+					"Invalid hreflang language code(s) found",
+					`One or more hreflang values (${codes.join(", ")}) don't match a valid ISO 639-1 language code or language-region pair. Search engines ignore alternates with unrecognized codes entirely.`,
+					'Use valid codes like "en", "en-us", or "x-default" for the international fallback.',
+					5,
+				),
+			);
+		} else {
+			passed.push(pass("hreflang-valid", "hreflang codes are valid"));
+		}
+
+		if (hreflangLinks.length > 1 && !hasXDefault) {
+			issues.push(
+				issue(
+					"hreflang-no-x-default",
+					"No x-default hreflang fallback",
+					"Multiple language/region alternates are declared but none is marked hreflang=\"x-default\", so visitors whose language doesn't match any listed variant get no explicit fallback page.",
+					'Add <link rel="alternate" hreflang="x-default" href="..."> pointing at your default/international page.',
+					3,
+				),
+			);
+		}
+
+		if (!hasSelfRef) {
+			issues.push(
+				issue(
+					"hreflang-no-self-reference",
+					"Page doesn't reference itself in its hreflang set",
+					"Google's guidelines expect every page in a hreflang group to include a self-referencing alternate; without one, the whole annotation set can be disregarded.",
+					"Add a hreflang alternate for this exact URL pointing back to itself.",
+					4,
+				),
+			);
+		}
+	}
+
+	// --- Charset declaration ---
+	const hasCharset =
+		$("meta[charset]").length > 0 ||
+		/charset=/i.test($('meta[http-equiv="Content-Type"]').attr("content") || "");
+	if (!hasCharset) {
+		issues.push(
+			issue(
+				"meta-charset",
+				"No charset declared",
+				"Neither a <meta charset> tag nor a Content-Type meta tag with a charset was found in the page head. Without an explicit charset, browsers have to guess the encoding, which can occasionally garble non-ASCII text before it's indexed.",
+				'Add <meta charset="UTF-8"> as the first element inside <head>.',
+				3,
+			),
+		);
+	} else {
+		passed.push(pass("meta-charset", "Charset is declared"));
+	}
+
+	// --- Favicon ---
+	const hasFavicon =
+		$('link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]')
+			.length > 0;
+	if (!hasFavicon) {
+		issues.push(
+			issue(
+				"favicon",
+				"No favicon declared",
+				'No <link rel="icon"> (or shortcut/apple-touch-icon) tag was found. Google displays a page\'s favicon next to its listing in both mobile and desktop search results, so a missing one leaves search results looking generic.',
+				'Add <link rel="icon" href="/favicon.ico" sizes="any"> in <head> (plus an SVG/PNG variant for higher resolution).',
+				3,
+			),
+		);
+	} else {
+		passed.push(pass("favicon", "Favicon is declared"));
+	}
+
+	// --- Thin content ---
+	const bodyWordCount = $("body")
+		.text()
+		.replace(/\s+/g, " ")
+		.trim()
+		.split(" ")
+		.filter(Boolean).length;
+	if (bodyWordCount > 0 && bodyWordCount < 300) {
+		issues.push(
+			issue(
+				"thin-content",
+				`Page has very little text content (${bodyWordCount} words)`,
+				"Pages with very little unique body text give search engines little to rank on and are more likely to be treated as thin content, especially if similar pages exist elsewhere on the site.",
+				"Expand the page with substantive, unique content relevant to its topic, or noindex it if it's intentionally minimal (e.g. a redirect or utility page).",
+				6,
+			),
+		);
+	} else if (bodyWordCount >= 300) {
+		passed.push(
+			pass(
+				"thin-content",
+				`Page has substantive body content (${bodyWordCount.toLocaleString()} words)`,
+			),
+		);
+	}
+
+	// --- URL structure ---
+	try {
+		const urlObj = new URL(targetUrl);
+		const path = urlObj.pathname;
+		const urlProblems: string[] = [];
+		if (/[A-Z]/.test(path)) urlProblems.push("contains uppercase letters");
+		if (/_/.test(path)) urlProblems.push("uses underscores instead of hyphens");
+		if (urlObj.search && urlObj.search.length > 30) {
+			urlProblems.push("carries a long query string");
+		}
+		if (urlProblems.length > 0) {
+			issues.push(
+				issue(
+					"url-structure",
+					"URL structure could be cleaner",
+					`This page's URL ${urlProblems.join(" and ")}. Google treats hyphens as word separators but not underscores, and mixed-case or heavily-parameterized URLs are more prone to being treated as duplicates of a cleaner canonical version.`,
+					"Prefer lowercase, hyphen-separated paths and keep query parameters minimal on the canonical/indexable URL.",
+					2,
+				),
+			);
+		} else {
+			passed.push(pass("url-structure", "URL structure follows SEO-friendly conventions"));
+		}
+	} catch {
+		// invalid targetUrl would already have failed earlier in the pipeline
 	}
 
 	// --- Open Graph & Twitter Card ---

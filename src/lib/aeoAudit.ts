@@ -136,6 +136,80 @@ async function analyzeAiCrawlerAccess(targetUrl: string): Promise<AuditResult> {
 	return { issues, passed };
 }
 
+// A real browser-style UA so the "normal" request isn't itself mistaken for
+// a bot by the bot-management layer we're trying to test against.
+const NORMAL_UA =
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+const AI_BOT_UA =
+	"Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; GPTBot/1.1; +https://openai.com/gptbot";
+
+/** robots.txt only controls well-behaved crawlers. Many sites additionally
+ *  sit behind a CDN/WAF (Cloudflare, etc.) with bot-management rules that
+ *  block known AI-crawler user-agents at the network level regardless of
+ *  what robots.txt says. This actually issues both requests and compares
+ *  status codes, so it catches that class of block, which the robots.txt
+ *  parse above cannot see. */
+async function analyzeAiCrawlerFirewall(targetUrl: string): Promise<AuditResult> {
+	const issues: Issue[] = [];
+	const passed: Issue[] = [];
+
+	let normalStatus: number | null = null;
+	try {
+		const normalRes = await fetch(targetUrl, {
+			redirect: "follow",
+			headers: { "User-Agent": NORMAL_UA },
+			next: { revalidate: 3600 },
+		});
+		normalStatus = normalRes.status;
+	} catch {
+		// If we can't even reach the page normally, that's out of scope here
+		// (fetchPage/analyzeSEO already surfaces general fetch failures).
+		return { issues, passed };
+	}
+
+	let botStatus: number | null = null;
+	try {
+		const botRes = await fetch(targetUrl, {
+			redirect: "follow",
+			headers: { "User-Agent": AI_BOT_UA },
+			next: { revalidate: 3600 },
+		});
+		botStatus = botRes.status;
+	} catch {
+		issues.push(
+			issue(
+				"aeo-ai-crawler-network-block",
+				"A request identifying as an AI crawler failed outright",
+				"A request sent with GPTBot's user-agent could not complete at all (connection-level failure), while the same request under a normal browser user-agent succeeded. This points to a firewall, CDN, or bot-management rule blocking AI crawlers below the level robots.txt can express.",
+				"Check your CDN/WAF (Cloudflare, etc.) bot-management rules for entries blocking GPTBot or AI crawlers generally, and allow the ones you want eligible for AI answers.",
+				10,
+			),
+		);
+		return { issues, passed };
+	}
+
+	if (normalStatus !== null && botStatus !== null && normalStatus < 400 && botStatus >= 400) {
+		issues.push(
+			issue(
+				"aeo-ai-crawler-firewall-block",
+				`Requests with an AI crawler user-agent get HTTP ${botStatus}`,
+				`A request using GPTBot's user-agent returned HTTP ${botStatus}, while the identical request with a normal browser user-agent returned ${normalStatus}. robots.txt may allow this crawler, but a firewall, bot-protection service, or CDN rule is blocking it at the network level, which fully excludes this page from that engine's answers regardless of robots.txt.`,
+				'Check your CDN/WAF bot-management settings (e.g. Cloudflare "Verified Bots") for rules blocking AI crawlers by user-agent or ASN, and allow the ones you want indexed.',
+				10,
+			),
+		);
+	} else {
+		passed.push(
+			pass(
+				"aeo-ai-crawler-firewall",
+				"Requests with an AI crawler user-agent (GPTBot) aren't blocked at the network level",
+			),
+		);
+	}
+
+	return { issues, passed };
+}
+
 async function analyzeLlmsTxt(targetUrl: string): Promise<AuditResult> {
 	const issues: Issue[] = [];
 	const passed: Issue[] = [];
@@ -308,6 +382,58 @@ export function analyzeAEO(
 		);
 	}
 
+	// --- Table of contents for long-form content ---
+	// RAG/answer-engine extraction and human scanning both benefit from being
+	// able to jump straight to a subsection instead of scanning a long page;
+	// only worth flagging once a page is long enough to actually need one.
+	const h2h3Count = $("h2, h3").length;
+	if (wordCount > 1200 && h2h3Count >= 4) {
+		const headingIds = $("h2[id], h3[id]").length;
+		const anchorLinks = $('a[href^="#"]').length;
+		if (headingIds === 0 || anchorLinks === 0) {
+			issues.push(
+				issue(
+					"aeo-toc-missing",
+					"Long page has no jump-to-section navigation",
+					`The page has roughly ${wordCount.toLocaleString()} words across ${h2h3Count} sections but no linked table of contents (anchor links pointing at heading ids). Answer engines and readers both benefit from being able to jump straight to a relevant subsection instead of scanning the whole page.`,
+					"Add id attributes to your H2/H3 headings and a short linked table of contents near the top of long-form content.",
+					3,
+				),
+			);
+		} else {
+			passed.push(
+				pass(
+					"aeo-toc",
+					"Long-form content includes a jump-to-section table of contents",
+				),
+			);
+		}
+	}
+
+	// --- Speakable schema (voice assistants / Google Assistant) ---
+	// Optional enhancement, so it's only surfaced (and at low weight) when the
+	// page has already invested in direct-answer schema, where it's most
+	// relevant rather than a generic nag on every page.
+	const hasSpeakable = jsonLdNodes.some((n) => {
+		const s = n["speakable"];
+		return !!s && (typeof s === "object" || typeof s === "string");
+	});
+	if (hasAnswerSchema && !hasSpeakable) {
+		issues.push(
+			issue(
+				"aeo-speakable-missing",
+				"No Speakable schema for voice assistants",
+				'The page has FAQ/QA/HowTo schema but no SpeakableSpecification marking which sections are suitable for text-to-speech playback by voice assistants. This is an optional enhancement, not a ranking requirement.',
+				'Add a "speakable": { "@type": "SpeakableSpecification", "cssSelector": [...] } property to your WebPage/Article JSON-LD pointing at the summary or answer sections.',
+				2,
+			),
+		);
+	} else if (hasSpeakable) {
+		passed.push(
+			pass("aeo-speakable", "Page marks speakable sections for voice assistants"),
+		);
+	}
+
 	// --- Author / byline signal ---
 	const metaAuthor = $('meta[name="author"]').attr("content")?.trim();
 	const articleAuthor = $('meta[property="article:author"]')
@@ -435,13 +561,14 @@ export async function analyzeAEOSiteSignals(
 	const issues: Issue[] = [];
 	const passed: Issue[] = [];
 
-	const [crawlerAudit, llmsAudit] = await Promise.all([
+	const [crawlerAudit, llmsAudit, firewallAudit] = await Promise.all([
 		analyzeAiCrawlerAccess(targetUrl),
 		analyzeLlmsTxt(targetUrl),
+		analyzeAiCrawlerFirewall(targetUrl),
 	]);
 
-	issues.push(...crawlerAudit.issues, ...llmsAudit.issues);
-	passed.push(...crawlerAudit.passed, ...llmsAudit.passed);
+	issues.push(...crawlerAudit.issues, ...llmsAudit.issues, ...firewallAudit.issues);
+	passed.push(...crawlerAudit.passed, ...llmsAudit.passed, ...firewallAudit.passed);
 
 	return { issues, passed };
 }
