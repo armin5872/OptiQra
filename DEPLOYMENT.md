@@ -81,20 +81,6 @@ docker-compose up -d
 docker run \
   -p 3000:3000 \
   -e NODE_ENV=production \
-  -e PSI_API_KEY=your_api_key_here \
-  site-vitals:latest
-```
-
-### Using Environment File
-
-```bash
-# Create .env file
-echo "PSI_API_KEY=your_api_key_here" > .env
-
-# Run with env file
-docker run \
-  -p 3000:3000 \
-  --env-file .env \
   site-vitals:latest
 ```
 
@@ -130,7 +116,6 @@ vercel
 1. Go to Vercel dashboard
 2. Select your project
 3. Settings → Environment Variables
-4. Add `PSI_API_KEY`
 
 ### AWS ECS with Fargate
 
@@ -169,13 +154,6 @@ gcloud run deploy site-vitals \
   --allow-unauthenticated
 ```
 
-Set environment variables:
-
-```bash
-gcloud run services update site-vitals \
-  --set-env-vars PSI_API_KEY=your_api_key_here
-```
-
 ### Azure Container Instances
 
 ```bash
@@ -205,7 +183,6 @@ az container create \
 - [ ] **Environment Variables**
   - [ ] Set `NODE_ENV=production`
   - [ ] Set `NEXT_TELEMETRY_DISABLED=1`
-  - [ ] Add `PSI_API_KEY` if using Lighthouse (optional)
 
 - [ ] **Security Headers** (auto-configured in next.config.ts)
   - [ ] X-Content-Type-Options: nosniff

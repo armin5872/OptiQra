@@ -11,8 +11,6 @@ services:
     environment:
       - NODE_ENV=production
       - NEXT_TELEMETRY_DISABLED=1
-      # Optional: Add your PageSpeed Insights API key here
-      # - PSI_API_KEY=your_api_key_here
     restart: unless-stopped
     healthcheck:
       test:

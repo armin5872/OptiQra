@@ -37,7 +37,6 @@ type ReportData = {
 	url: string;
 	mode?: ScanMode;
 	categories: Record<string, Category>;
-	lighthouseAvailable: boolean;
 	pagesScanned?: string[];
 	pagesSkipped?: { url: string; reason: string }[];
 	crawlTruncated?: boolean;
@@ -371,7 +370,7 @@ export default function Home() {
 					setStatusMessage(evt.message ?? "");
 					// Once the crawl itself is done, the pipeline moves into
 					// per-site post-processing (broken links, duplicate content,
-					// security headers, PageSpeed Insights) that can take
+					// security headers) that can take
 					// anywhere from a few seconds to 30+ seconds. That phase has
 					// no per-page `currentUrl` of its own, so without this the
 					// last crawled page's URL stays pinned on screen and the
@@ -501,7 +500,6 @@ export default function Home() {
 			url: scanUrlRef.current,
 			mode: "site" as ScanMode,
 			categories,
-			lighthouseAvailable: false,
 			pagesScanned: nodes.map((n) => n.url),
 			pagesSkipped: [],
 			crawlTruncated: true,
@@ -568,12 +566,8 @@ export default function Home() {
 	// always computed from every category, filtered or not.
 	const CATEGORY_GROUP: Record<string, keyof typeof settings.analyzer.visibleCategories> = {
 		seo: "seo",
-		"psi-seo": "seo",
 		speed: "speed",
-		"psi-speed": "speed",
 		a11y: "a11y",
-		"psi-a11y": "a11y",
-		"psi-bp": "security",
 		aeo: "aeo",
 		geo: "geo",
 		conversions: "conversions",

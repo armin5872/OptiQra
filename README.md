@@ -38,7 +38,6 @@
 
 ### ⚡ Performance
 - HTML/response performance characteristics
-- (Optional) Google PageSpeed Insights integration with API key
 
 ### ♿ Accessibility
 - Missing alt text, labels, and ARIA attributes
@@ -123,11 +122,7 @@ Open http://localhost:3000 in your browser.
 
 ### Environment variables
 
-The app runs its built-in audits without any configuration. AI-powered fixes and insights use a provider API key you enter in the UI rather than an environment variable, so nothing needs to be set for those either. The only optional variable is for PageSpeed Insights:
-
-```bash
-export PSI_API_KEY=your_google_pagespeed_insights_api_key
-```
+The app runs its built-in audits without any configuration. AI-powered fixes and insights use a provider API key you enter in the UI rather than an environment variable, so nothing needs to be set for those either.
 
 ## Available scripts
 
@@ -200,7 +195,7 @@ Verifies that a given provider/API key/model combination is reachable and workin
 - `src/app/page.tsx`: the main diagnostic UI
 - `src/app/api/analyze/route.ts`: the analysis orchestration endpoint
 - `src/app/api/ai-fix`, `ai-insights`, `ai-test`: AI-backed endpoints
-- `src/lib`: audit modules — crawler, SEO, GEO, AEO, structured data, performance/PageSpeed, accessibility (via HTML audit), security headers, links, images, and duplicate content
+- `src/lib`: audit modules — crawler, SEO, GEO, AEO, structured data, performance, accessibility (via HTML audit), security headers, links, images, and duplicate content
 - `src/lib/aiFix.ts`, `aiProviders.ts`, `aiInsights.ts`: multi-provider AI fix and insights generation
 - `src/lib/reportExport`: PDF, DOCX, Markdown, CSV, TSV, TXT, and JSON report exporters, built on a shared format-agnostic report model
 - `src/lib/scanStore.ts`, `scanCookies.ts`: local (IndexedDB + cookie) scan history

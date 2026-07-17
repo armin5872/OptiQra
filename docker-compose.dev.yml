@@ -12,7 +12,6 @@ services:
     environment:
       - NODE_ENV=development
       - NEXT_TELEMETRY_DISABLED=1
-      # - PSI_API_KEY=your_api_key_here
     restart: unless-stopped
     volumes:
       - .:/app

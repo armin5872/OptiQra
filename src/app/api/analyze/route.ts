@@ -19,7 +19,6 @@ import {
 import { analyzeDuplicateContent } from "@/lib/duplicateContentAudit";
 import { analyzeImages } from "@/lib/image-analyzer";
 import { analyzeSecurityHeaders } from "@/lib/securityHeadersAudit";
-import { runPageSpeed } from "@/lib/pagespeed";
 import {
 	crawlSite,
 	DEFAULT_MAX_PAGES,
@@ -160,7 +159,6 @@ async function runSinglePageScan(
 ) {
 	try {
 		const categories: Record<string, Category> = {};
-		let lighthouseAvailable = false;
 
 		// 1. Fetch page content
 		let $: CheerioAPI;
@@ -420,57 +418,9 @@ async function runSinglePageScan(
 			};
 		}
 
-		// 8. Run Lighthouse (PageSpeed Insights) if API key is configured
-		try {
-			const psiResult = await runPageSpeed(targetUrl);
-			if (psiResult.speed) {
-				categories["psi-speed"] = {
-					label: "PageSpeed Insights - Performance",
-					score: psiResult.speed.score || 50,
-					issues: psiResult.speed.issues || [],
-					passed: psiResult.speed.passed || [],
-					source: "lighthouse",
-				};
-			}
-			if (psiResult.a11y) {
-				categories["psi-a11y"] = {
-					label: "PageSpeed Insights - Accessibility",
-					score: psiResult.a11y.score || 50,
-					issues: psiResult.a11y.issues || [],
-					passed: psiResult.a11y.passed || [],
-					source: "lighthouse",
-				};
-			}
-			if (psiResult.seo) {
-				categories["psi-seo"] = {
-					label: "PageSpeed Insights - SEO",
-					score: psiResult.seo.score || 50,
-					issues: psiResult.seo.issues || [],
-					passed: psiResult.seo.passed || [],
-					source: "lighthouse",
-				};
-			}
-			if (psiResult.bestPractices) {
-				categories["psi-bp"] = {
-					label: "PageSpeed Insights - Best Practices",
-					score: psiResult.bestPractices.score || 50,
-					issues: psiResult.bestPractices.issues || [],
-					passed: psiResult.bestPractices.passed || [],
-					source: "lighthouse",
-				};
-			}
-			lighthouseAvailable = true;
-		} catch (error) {
-			console.warn(
-				"PageSpeed Insights audit skipped (API key not configured):",
-				error,
-			);
-		}
-
 		return NextResponse.json({
 			url: targetUrl,
 			categories,
-			lighthouseAvailable,
 			renderJsApplied: Boolean($rendered),
 			stack: { primary: stack.primary, summary: stack.summary, guidance: stack.guidance },
 			timestamp: new Date().toISOString(),
@@ -1004,64 +954,11 @@ function streamSiteCrawl(
 				}
 
 				enqueue({
-					type: "status",
-					message: "Running Lighthouse on the homepage...",
-				});
-
-				let lighthouseAvailable = false;
-				try {
-					const psiResult = await runPageSpeed(targetUrl);
-					if (psiResult.speed) {
-						categories["psi-speed"] = {
-							label: "PageSpeed Insights - Performance (homepage)",
-							score: psiResult.speed.score || 50,
-							issues: psiResult.speed.issues || [],
-							passed: psiResult.speed.passed || [],
-							source: "pagespeed-insights",
-						};
-					}
-					if (psiResult.a11y) {
-						categories["psi-a11y"] = {
-							label: "PageSpeed Insights - Accessibility (homepage)",
-							score: psiResult.a11y.score || 50,
-							issues: psiResult.a11y.issues || [],
-							passed: psiResult.a11y.passed || [],
-							source: "pagespeed-insights",
-						};
-					}
-					if (psiResult.seo) {
-						categories["psi-seo"] = {
-							label: "PageSpeed Insights - SEO (homepage)",
-							score: psiResult.seo.score || 50,
-							issues: psiResult.seo.issues || [],
-							passed: psiResult.seo.passed || [],
-							source: "pagespeed-insights",
-						};
-					}
-					if (psiResult.bestPractices) {
-						categories["psi-bp"] = {
-							label: "PageSpeed Insights - Best Practices (homepage)",
-							score: psiResult.bestPractices.score || 50,
-							issues: psiResult.bestPractices.issues || [],
-							passed: psiResult.bestPractices.passed || [],
-							source: "pagespeed-insights",
-						};
-					}
-					lighthouseAvailable = true;
-				} catch (error) {
-					console.warn(
-						"PageSpeed Insights audit skipped (API key not configured):",
-						error,
-					);
-				}
-
-				enqueue({
 					type: "done",
 					data: {
 						url: targetUrl,
 						mode: "site",
 						categories,
-						lighthouseAvailable,
 						pagesScanned: pageNodes.map((p) => p.url),
 						pagesSkipped: crawl.skipped,
 						crawlSource: crawl.source,

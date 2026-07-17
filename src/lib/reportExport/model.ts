@@ -36,7 +36,6 @@ export interface SourceReportData {
   url: string;
   mode?: 'single' | 'site';
   categories: Record<string, SourceCategory>;
-  lighthouseAvailable: boolean;
   pagesScanned?: string[];
   pagesSkipped?: { url: string; reason: string }[];
   crawlTruncated?: boolean;
@@ -93,7 +92,6 @@ export interface ReportModel {
 }
 
 const readableSource = (source: string) => {
-  if (source === 'lighthouse' || source === 'pagespeed-insights') return 'Google Lighthouse (PageSpeed Insights)';
   if (source === 'security-headers-audit') return 'Security headers audit';
   return 'Live HTML scan';
 };
