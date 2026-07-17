@@ -209,51 +209,33 @@ Outbound scan requests are guarded against SSRF, and API keys for AI providers a
 
 ## 🌱 Roadmap
 
-### v0.2
+**So I think the most important thing that could be added to OptiQra is for the ability to have OptiQra optimize and Audit your site for you just by you uploading it onto the web app but here are some other things that would make OptiQra a better platform:**
 
-- [x] SEO audit
-- [x] Accessibility audit
-- [x] Performance audit
-- [x] Conversion analysis
-- [x] Security header analysis
-- [x] robots.txt analysis
-- [x] Sitemap analysis
-- [x] Structured data detection
-- [x] Google Lighthouse integration
+### Extenstions and Plugins and Apps
+- [ ] WordPress plugin
+- [ ] Browser Extenstion
+- [ ] Jetbrains Plugin
+- [ ] VS Code Plugin
+- [ ] Linux and Windows apps
+- [ ] APK
+- [ ] CLI
 
-### v0.3
+### Crawl Tree
 
-- [x] Advanced link analyzer
-- [x] Advanced image analyzer
-- [x] Open Graph preview
-- [x] Twitter card preview
-- [x] Security score improvements
-- [ ] HTTP/2 and HTTP/3 detection
-- [ ] Core Web Vitals visualization
+- [ ] Live Crawl (the crawl will expand as more pages get crawled)
+- [ ] 3D Crawl tree with ThreeJS
 
-### v0.5
+### Packages (a package that can optimize the enitre site just with one command)
 
-- [x] Whole website crawler
-- [x] Multi-page SEO reports
-- [x] Duplicate content detection
-- [x] Internal linking analysis
-- [x] Broken link detection
-- [x] Crawl visualization
+- [ ] npm Package
+- [ ] deno
+- [ ] bun
 
-### v1.0
+### app abilities
 
-- [x] AI website review
-- [x] AI generated fixes
-- [x] Multi-provider AI support (OpenAI, Anthropic, Google, Groq, OpenRouter, Mistral, DeepSeek, xAI)
-- [x] GEO (generative engine optimization) audit
-- [x] AEO (answer engine optimization) audit
-- [x] PWA / offline support
-- [x] Report export (PDF, DOCX, Markdown, CSV, TSV, TXT, JSON)
-- [ ] Competitor comparison
-- [x] Historical scan tracking
-- [x] Periodic (scheduled) scans with change detection and notifications
-- [ ] CI/CD integration
-- [ ] GitHub pull request fixes
+- [ ] Periodic Background scans
+- [ ] Open Project in app
+- [ ] Auto Optimiziations and Audits
 
 ## 💡 Vision
 
