@@ -22,6 +22,13 @@
 // headers, HSTS/CSP, x-powered-by) can't be fixed by editing a single HTML
 // document — those are handled separately in project-folder mode, where
 // there's an actual server config file to patch.
+//
+// This engine only ever sees a rendered/complete HTML document (via
+// Cheerio) — a live crawl, or a static export's actual .html file. Project
+// uploads that are framework SOURCE (Next.js/Vue/Angular/Svelte components,
+// with no rendered HTML anywhere) go through jsxAutoFix.ts instead, which
+// covers the same kinds of fixes directly on source text for whichever
+// framework the project turns out to be.
 
 import type { CheerioAPI } from "cheerio";
 import type { Element } from "domhandler";
@@ -286,6 +293,30 @@ export function runAutoFix($: CheerioAPI, pageUrl: string): { results: AutoFixRe
 		);
 	}
 
+	// --- Missing apple-touch-icon: deterministic — point at the conventional default path. ---
+	if ($('link[rel="apple-touch-icon"]').length === 0) {
+		$("head").append('<link rel="apple-touch-icon" href="/apple-touch-icon.png">');
+		fixed(
+			"Missing apple-touch-icon",
+			"SEO",
+			"low",
+			'Added <link rel="apple-touch-icon" href="/apple-touch-icon.png"> — make sure a 180×180px icon actually exists at that path.',
+		);
+	}
+
+	// --- Page set to noindex: could be intentional (staging, gated content) — flag, don't touch. ---
+	{
+		const robotsContent = ($('meta[name="robots"]').attr("content") || "").toLowerCase();
+		if (/\bnoindex\b/.test(robotsContent)) {
+			skipped(
+				"Page is set to noindex",
+				"SEO",
+				"high",
+				`<meta name="robots" content="${robotsContent}"> is blocking this page from search engines — left as-is since that's sometimes intentional (staging, duplicate, gated content). Remove it by hand if this page should actually be indexed.`,
+			);
+		}
+	}
+
 	// --- Render-blocking scripts: deterministic — defer script tags in <head>. ---
 	{
 		let deferCount = 0;
@@ -499,6 +530,21 @@ export function runAutoFix($: CheerioAPI, pageUrl: string): { results: AutoFixRe
 		}
 	}
 
+	// --- srcset without a sizes attribute: the browser falls back to guessing
+	// the display width, which needs knowledge of the actual CSS layout to
+	// get right — flag rather than guess a value that might not fit. ---
+	{
+		const srcsetNoSizes = $("img[srcset]").filter((_, el) => !$(el).attr("sizes")).length;
+		if (srcsetNoSizes > 0) {
+			skipped(
+				`Image${srcsetNoSizes === 1 ? "" : "s"} with srcset but no sizes attribute`,
+				"Performance",
+				"low",
+				`${srcsetNoSizes} image${srcsetNoSizes === 1 ? "" : "s"} set srcset without a sizes attribute. Add a sizes value matching your actual CSS layout by hand — that depends on the page's styling, which isn't safe to guess blind.`,
+			);
+		}
+	}
+
 	// --- Form fields without a label: needs to know the field's purpose. ---
 	$('input:not([type="hidden"]):not([type="submit"]):not([type="button"]), select, textarea').each((_, el) => {
 		const id = $(el).attr("id");
@@ -564,6 +610,29 @@ export function runAutoFix($: CheerioAPI, pageUrl: string): { results: AutoFixRe
 		);
 	}
 
+	// --- Clickable <div>/<span> with an onclick handler but no role/tabindex:
+	// invisible to keyboard and screen-reader users. Adding role="button"
+	// tabindex="0" is safe and reversible; an actual keydown handler for
+	// Enter/Space is a follow-up the note calls out rather than guesses at. ---
+	{
+		let clickableCount = 0;
+		$("div[onclick], span[onclick]").each((_, el) => {
+			const $el = $(el);
+			if ($el.attr("role") || $el.attr("tabindex") !== undefined) return;
+			$el.attr("role", "button");
+			$el.attr("tabindex", "0");
+			clickableCount++;
+		});
+		if (clickableCount > 0) {
+			fixed(
+				"Clickable element isn't keyboard accessible",
+				"Accessibility",
+				"high",
+				`Added role="button" tabindex="0" to ${clickableCount} clickable <div>/<span> element${clickableCount === 1 ? "" : "s"} — add a keydown handler for Enter/Space too if one isn't already there.`,
+			);
+		}
+	}
+
 	// --- Missing landmark elements: too structural to guess blind — skip. ---
 	const landmarks = ["main", "nav", "footer"].filter((t) => $(t).length > 0);
 	if (landmarks.length < 3) {
@@ -624,6 +693,22 @@ export function runAutoFix($: CheerioAPI, pageUrl: string): { results: AutoFixRe
 				"Conversions",
 				"medium",
 				`Added rel="noopener noreferrer" to ${relCount} new-tab link${relCount === 1 ? "" : "s"} to close the tabnabbing security gap and stop the new tab sharing your window object.`,
+			);
+		}
+	}
+
+	// --- href="#" used purely as a click-handler anchor: breaks screen
+	// readers and "open in new tab" alike. Nothing safe to rewrite it to
+	// automatically (depends on what the handler does) — flag for a by-hand
+	// swap to a <button> or a real URL. ---
+	{
+		const deadLinks = $('a[href="#"]').filter((_, el) => !!$(el).attr("onclick")).length;
+		if (deadLinks > 0) {
+			skipped(
+				`Link${deadLinks === 1 ? "" : "s"} using href="#" as a click handler`,
+				"Accessibility",
+				"low",
+				`${deadLinks} link${deadLinks === 1 ? " uses" : "s use"} href="#" purely to attach a click handler. Swap to a <button> or a real URL by hand — screen readers and "open in new tab" both break on these.`,
 			);
 		}
 	}

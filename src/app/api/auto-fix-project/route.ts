@@ -15,7 +15,7 @@ export const maxDuration = 120;
 const MAX_TOTAL_UNCOMPRESSED_BYTES = 60 * 1024 * 1024; // 60MB
 const MAX_FILE_COUNT = 3000;
 const MAX_HTML_FILES_TO_FIX = 250; // guardrail against runaway AI cost on huge sites
-const MAX_SOURCE_FILES_TO_FIX = 250; // same guardrail, for .tsx/.jsx source projects
+const MAX_SOURCE_FILES_TO_FIX = 250; // same guardrail, for non-full-document source files (.tsx/.jsx/.vue/.svelte/Angular/JS/HTML fragments)
 
 interface PerFileSummary {
 	path: string;
@@ -177,13 +177,24 @@ export async function POST(req: NextRequest) {
 
 	// Skip build output / dependency directories — fixing generated files is
 	// pointless (they're overwritten on next build) and node_modules can be huge.
-	files = files.filter((f) => !/(^|\/)(node_modules|\.next|\.git|dist|build|out)\//.test(f.path));
+	files = files.filter((f) => !/(^|\/)(node_modules|\.next|\.nuxt|\.svelte-kit|\.angular|\.git|dist|build|out)\//.test(f.path));
 
-	const htmlFiles = files.filter((f) => /\.html?$/i.test(f.path));
-	const sourceFiles = files.filter((f) => isFixableSourceFile(f.path));
+	// A .html file only gets the full Cheerio engine (which assumes a real
+	// <head>/<title>/<meta> to work with) if it actually IS a complete
+	// document. Anything without <html>/<head>/a doctype — an Angular
+	// component's templateUrl file, an SSI/Nunjucks include, any other
+	// markup partial — goes through the fragment-safe source engine instead,
+	// so it doesn't get a spurious <head> full of SEO tags stapled onto it.
+	const isFullHtmlDocument = (content: string) => /<html[\s>]/i.test(content) || /<!doctype\s+html/i.test(content) || /<head[\s>]/i.test(content);
+	const htmlFiles = files.filter((f) => /\.html?$/i.test(f.path) && isFullHtmlDocument(f.content));
+	const fragmentHtmlFiles = files.filter((f) => /\.html?$/i.test(f.path) && !isFullHtmlDocument(f.content));
+	const sourceFiles = [...fragmentHtmlFiles, ...files.filter((f) => isFixableSourceFile(f.path, f.content))];
 	if (htmlFiles.length === 0 && sourceFiles.length === 0) {
 		return NextResponse.json(
-			{ error: "Couldn't find any .html, .tsx, or .jsx files in the uploaded project to fix." },
+			{
+				error:
+					"Couldn't find any fixable files in the uploaded project — looked for .html documents, React/Next .tsx/.jsx, Vue .vue, Svelte .svelte, Angular component/template files, and markup-bearing .js files.",
+			},
 			{ status: 400 },
 		);
 	}
@@ -231,9 +242,12 @@ export async function POST(req: NextRequest) {
 		perFileSummaries.push({ path: file.path, results: [...results, ...aiResults] });
 	}
 
-	// --- Same pass, but for JSX/TSX source files (Next.js pages/layouts, Vite
-	// components, etc.) — the class of project the HTML-only pass above used
-	// to silently skip entirely, or reject the whole upload for. ---
+	// --- Same pass, but for non-full-document source files: JSX/TSX
+	// (Next.js pages/layouts, Vite/CRA components), Vue SFCs, Svelte
+	// components, Angular components/templates, markup-bearing plain JS, and
+	// HTML fragments that aren't complete documents — the class of project
+	// the HTML-only pass above used to silently skip entirely, or reject the
+	// whole upload for. ---
 	for (const file of sourceFilesToFix) {
 		const pageUrl = siteUrl ? joinUrl(siteUrl, file.path) : file.path;
 		const { content, results, aiTargets } = runJsxAutoFix(file, files, pageUrl);

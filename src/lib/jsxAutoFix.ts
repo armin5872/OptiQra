@@ -1,28 +1,47 @@
 // lib/jsxAutoFix.ts
 //
-// autoFixEngine.ts only ever sees a rendered HTML document (via Cheerio).
-// That's fine for a live-URL crawl or a static site export, but most
-// "drop your project in" uploads are framework SOURCE — Next.js .tsx pages,
-// a Vite/CRA .jsx app — which may contain zero .html files anywhere in the
-// tree. auto-fix-project used to hard-require at least one .html file and
-// silently skip everything else, so dropping a real Next.js project either
-// errored outright or, at best, "fixed" a stray static file in /public and
-// left the actual app untouched.
+// autoFixEngine.ts only ever sees a rendered, *complete* HTML document (via
+// Cheerio) — <html>, <head>, the works. That's fine for a live-URL crawl or a
+// static site export, but most "drop your project in" uploads are framework
+// SOURCE: Next.js .tsx pages, a Vite/CRA .jsx app, a Vue .vue SFC, an Angular
+// component with an inline or external template, a Svelte .svelte file, or a
+// fragment .html file (an Angular templateUrl, an include, a partial) that
+// has no <head> of its own. None of those parse as a full document, and most
+// of them contain zero .html files anywhere in the tree — auto-fix-project
+// used to hard-require at least one .html file and silently skip everything
+// else, so dropping a real framework project either errored outright or, at
+// best, "fixed" a stray static file in /public and left the actual app
+// untouched.
 //
 // This engine covers the same fix categories (rel=noopener, missing alt
-// text, missing lang, generic CTA copy, missing SEO metadata) directly on
-// JSX/TSX source text. It's deliberately more conservative than the Cheerio
-// engine: we don't run this through a full TS/Babel parse+print (that risks
-// reformatting code we don't fully understand, or mishandling a shape we
-// didn't anticipate), so every fix here only fires on a narrow, unambiguous
-// textual pattern. Anything shaped differently than expected is left alone
-// and reported "skipped" with a reason — never guessed at.
+// text, generic CTA copy, unlabeled form fields, un-keyboard-accessible
+// clickable elements, missing SEO metadata where a framework has an obvious
+// per-page spot for it) directly on source text, for any of the dialects
+// above. The tag-level fixes themselves (rel/alt/CTA/clickable-div/labels)
+// live in markupFixes.ts, written once to understand every framework's
+// attribute-binding syntax (`alt=`, `:alt=`, `[alt]=`, `alt={}` all mean the
+// same thing) rather than five separate implementations.
+//
+// Deliberately conservative throughout: no full TS/Vue/Angular/Svelte
+// parse+print (that risks reformatting code we don't fully understand, or
+// mishandling a shape we didn't anticipate), so every fix only fires on a
+// narrow, unambiguous textual pattern. Anything shaped differently than
+// expected is left alone and reported "skipped" with a reason — never
+// guessed at.
 
 import type { AutoFixResult, AITarget, AITargetKind } from "@/lib/autoFixEngine";
 import type { Severity } from "@/lib/auditUtils";
 import type { ProjectFile } from "@/lib/projectFixEngine";
-
-const GENERIC_CTA_WORDS = new Set(["submit", "click here", "here", "go", "learn more", "read more"]);
+import {
+	fixNoopener,
+	fixMissingAlt,
+	fixGenericCtaText,
+	fixClickableDivRole,
+	fixMissingFieldLabel,
+	checkHashOnlyLinks,
+	insertAttrBeforeClose,
+	type MarkupFixContext,
+} from "@/lib/markupFixes";
 
 /** Same shape as autoFixEngine's AITarget, plus a closure that knows how to
  *  splice the AI-resolved value back into this specific file's source —
@@ -38,8 +57,29 @@ export interface JsxFixOutcome {
 	aiTargets: JsxAITarget[];
 }
 
-export function isFixableSourceFile(path: string): boolean {
-	return /\.(tsx|jsx)$/.test(path) && !/\.(test|spec|stories)\.(tsx|jsx)$/.test(path);
+const TEST_FILE_RE = /\.(test|spec|stories)\.[jt]sx?$/;
+
+/** Which source files this engine will look at. Extension alone is enough
+ *  for the templating dialects that are unambiguously markup-bearing
+ *  (.tsx/.jsx/.vue/.svelte). Plain .js/.mjs/.cjs and .ts are only worth a
+ *  pass when their *content* actually looks like it renders markup or sets
+ *  up an Angular component template — otherwise this would burn the
+ *  per-project file-count budget on ordinary utility/logic files that have
+ *  nothing for these fixers to find. */
+export function isFixableSourceFile(path: string, content = ""): boolean {
+	if (/\.d\.ts$/.test(path)) return false;
+	if (TEST_FILE_RE.test(path)) return false;
+	if (/\.(tsx|jsx)$/.test(path)) return true;
+	if (/\.(vue|svelte)$/.test(path)) return true;
+	if (/\.(js|mjs|cjs)$/.test(path)) {
+		return /<[A-Za-z][\w.-]*[\s/>]/.test(content) || /target\s*=\s*["']_blank["']/.test(content);
+	}
+	if (/\.ts$/.test(path)) {
+		// Angular component with an INLINE template. A templateUrl points at a
+		// separate .html file, which gets picked up on its own as a fragment.
+		return /@Component\s*\(/.test(content) && /template\s*:\s*`/.test(content);
+	}
+	return false;
 }
 
 function isPageOrLayoutFile(path: string): boolean {
@@ -48,14 +88,6 @@ function isPageOrLayoutFile(path: string): boolean {
 
 function isDocumentFile(path: string): boolean {
 	return /(^|\/)_document\.(tsx|jsx)$/.test(path);
-}
-
-function slugToWords(slug: string): string {
-	return slug
-		.replace(/\.[a-z0-9]+$/i, "")
-		.replace(/[-_]+/g, " ")
-		.replace(/%20/g, " ")
-		.trim();
 }
 
 /** Finds the index of the `}` that matches the `{` at `openIdx`, tolerating
@@ -101,28 +133,15 @@ function ancestorHasMetadata(files: ProjectFile[], filePath: string): boolean {
 	return false;
 }
 
-/** A tag-matching regex like `<img\b[^>]*>` will stop at the FIRST literal
- *  `>` it sees — which, if the tag has a JSX arrow-function attribute
- *  (`onLoad={() => ...}`), is the `>` inside `=>`, not the tag's real end.
- *  That gives a truncated, mid-attribute "tag" string that would corrupt
- *  the file if we inserted into it. Bail out on that shape instead. */
-function looksTruncatedByArrow(tag: string): boolean {
-	return /=>\s*$/.test(tag);
-}
-
-function insertAttrBeforeClose(tag: string, attr: string): string {
-	// Self-closing (`... />`) or a plain opener (`...>`) — insert right before
-	// whichever closer is present, keeping a single space before the new attr.
-	if (/\/>\s*$/.test(tag)) return tag.replace(/\/>\s*$/, ` ${attr} />`);
-	return tag.replace(/>\s*$/, ` ${attr}>`);
-}
-
 /**
- * Runs every deterministic + AI-collectable fix on one JSX/TSX source file.
- * Mirrors autoFixEngine.runAutoFix's split: safe mechanical edits happen
+ * Runs every deterministic + AI-collectable fix on one source file, whatever
+ * dialect it's written in (React/Next JSX/TSX, Vue SFC, Angular component or
+ * template, Svelte, plain JS, or a markup fragment .html file). Mirrors
+ * autoFixEngine.runAutoFix's split: safe mechanical edits happen
  * immediately, anything needing authored content (a title, alt text, a CTA
- * label) comes back as an AITarget the caller resolves the same way it
- * already does for HTML — a single batched AI call, or the duplicate bank.
+ * label, an aria-label) comes back as an AITarget the caller resolves the
+ * same way it already does for full HTML documents — a single batched AI
+ * call, or the duplicate bank.
  */
 export function runJsxAutoFix(file: ProjectFile, allFiles: ProjectFile[], pageUrl: string): JsxFixOutcome {
 	let source = file.content;
@@ -148,119 +167,20 @@ export function runJsxAutoFix(file: ProjectFile, allFiles: ProjectFile[], pageUr
 		aiTargets.push({ id: nextId(), kind, title, category, severity, context, apply });
 	};
 
-	// ======================= target=_blank without rel=noopener =======================
-	{
-		let count = 0;
-		let dynamicSkipped = 0;
-		source = source.replace(/<a\b[^>]*>/g, (tag) => {
-			if (looksTruncatedByArrow(tag)) return tag; // e.g. onClick={() => ...} inside the tag — bail, don't risk corrupting it
-			if (!/target=(["'])_blank\1/.test(tag)) return tag;
-			if (/\brel=\{/.test(tag)) {
-				dynamicSkipped++;
-				return tag; // rel is a dynamic expression — don't guess what it resolves to
-			}
-			const relMatch = tag.match(/\brel=(["'])([^"']*)\1/);
-			if (relMatch) {
-				const relVal = relMatch[2].toLowerCase();
-				if (relVal.includes("noopener") && relVal.includes("noreferrer")) return tag;
-				const parts = new Set(relMatch[2].split(/\s+/).filter(Boolean));
-				parts.add("noopener");
-				parts.add("noreferrer");
-				count++;
-				return tag.slice(0, relMatch.index!) + `rel=${relMatch[1]}${Array.from(parts).join(" ")}${relMatch[1]}` + tag.slice(relMatch.index! + relMatch[0].length);
-			}
-			count++;
-			return insertAttrBeforeClose(tag, 'rel="noopener noreferrer"');
-		});
-		if (count > 0) {
-			fixed(
-				"target=_blank links missing rel=noopener",
-				"Conversions",
-				"medium",
-				`Added rel="noopener noreferrer" to ${count} new-tab link${count === 1 ? "" : "s"} to close the tabnabbing gap.`,
-			);
-		}
-		if (dynamicSkipped > 0) {
-			skipped(
-				"target=_blank links with a dynamic rel",
-				"Conversions",
-				"medium",
-				`${dynamicSkipped} link${dynamicSkipped === 1 ? " has" : "s have"} rel={...} as an expression — check by hand that it includes noopener/noreferrer.`,
-			);
-		}
-	}
-
-	// ======================= <img>/<Image> missing alt text =======================
-	{
-		let deterministic = 0;
-		source = source.replace(/<(img|Image)\b[^>]*\/?>/g, (tag, tagName) => {
-			if (looksTruncatedByArrow(tag)) return tag; // e.g. onLoad={() => ...} inside the tag — bail, don't risk corrupting it
-			if (/\balt=/.test(tag)) return tag; // already has one, static or dynamic — leave it
-			const srcMatch = tag.match(/\bsrc=(["'])([^"']*)\1/);
-			const staticSrc = srcMatch?.[2];
-			if (staticSrc && !/^https?:\/\//.test(staticSrc)) {
-				const guess = slugToWords(staticSrc.split("/").filter(Boolean).pop() || "");
-				if (guess.length > 2 && guess.length < 60 && !/^[0-9a-f]{6,}$/i.test(guess.replace(/\s/g, ""))) {
-					const capitalized = guess.replace(/\b\w/g, (c) => c.toUpperCase());
-					deterministic++;
-					return insertAttrBeforeClose(tag, `alt="${escapeForJsxAttr(capitalized)}"`);
-				}
-			}
-			// Dynamic src, a hash-looking filename, or no src at all — needs a
-			// human/AI description of what's actually in the image.
-			needsAI(
-				"alt-text",
-				"Image missing alt text",
-				"Accessibility",
-				"high",
-				`<${tagName}> tag in ${file.path}. src="${staticSrc || "(dynamic)"}"`,
-				(src) => src.replace(tag, insertAttrBeforeClose(tag, `alt="__PLACEHOLDER__"`)),
-			);
-			return tag;
-		});
-		if (deterministic > 0) {
-			fixed(
-				"Image missing alt text",
-				"Accessibility",
-				"high",
-				`Filled in alt text for ${deterministic} image${deterministic === 1 ? "" : "s"} based on its filename — reword any that read awkwardly.`,
-			);
-		}
-	}
-
-	// ======================= Generic CTA text =======================
-	{
-		let deterministic = 0;
-		source = source.replace(/<(a|button)\b([^>]*)>\s*([A-Za-z][A-Za-z ]{1,20})\s*<\/\1>/g, (whole, el, attrs, text) => {
-			const norm = text.trim().toLowerCase();
-			if (!GENERIC_CTA_WORDS.has(norm)) return whole;
-			const hrefMatch = attrs.match(/\bhref=(["'])([^"']*)\1/);
-			const href = hrefMatch?.[2] || "";
-			const guess = slugToWords(href.split("/").filter(Boolean).pop() || "");
-			if (guess.length > 2 && guess.length < 40) {
-				const capitalized = guess.replace(/\b\w/g, (c) => c.toUpperCase());
-				deterministic++;
-				return `<${el}${attrs}>${capitalized}</${el}>`;
-			}
-			needsAI(
-				"cta-text",
-				"Generic call-to-action text",
-				"Conversions",
-				"low",
-				`Current text: "${text.trim()}". Href (if any): "${href}". File: ${file.path}`,
-				(src) => src.replace(whole, `<${el}${attrs}>__PLACEHOLDER__</${el}>`),
-			);
-			return whole;
-		});
-		if (deterministic > 0) {
-			fixed(
-				"Generic call-to-action text",
-				"Conversions",
-				"low",
-				`Renamed ${deterministic} generic link${deterministic === 1 ? "" : "s"} based on its href.`,
-			);
-		}
-	}
+	// ======================= Shared cross-framework fixes =======================
+	// These operate directly on the raw file text: for .tsx/.jsx/.vue/.svelte
+	// the markup IS the file; for an Angular component .ts file the markup
+	// only lives inside its `template: \`...\`` literal, but since ordinary
+	// TS logic essentially never contains literal `<img `/`<a `/`<div `
+	// substrings, running the same tag-shaped regexes across the whole file
+	// is safe in practice and avoids a bespoke template-literal extractor.
+	const ctx: MarkupFixContext = { filePath: file.path, fixed, skipped, needsAI };
+	source = fixNoopener(source, ctx);
+	source = fixMissingAlt(source, ctx);
+	source = fixGenericCtaText(source, ctx);
+	source = fixClickableDivRole(source, ctx);
+	source = fixMissingFieldLabel(source, ctx);
+	checkHashOnlyLinks(source, ctx);
 
 	// ======================= <html lang="..."> — App Router root layout =======================
 	if (/(^|\/)app\/layout\.(tsx|jsx)$/.test(file.path)) {
@@ -306,6 +226,11 @@ export function runJsxAutoFix(file: ProjectFile, allFiles: ProjectFile[], pageUr
 	// object at apply time, so either one resolving without the other
 	// (AI call partially fails, only one has a duplicate-bank match, etc.)
 	// still lands correctly instead of the two fighting over one insertion.
+	//
+	// This block is Next.js-specific by design. Vue/Svelte/Angular/CRA apps
+	// don't have a per-file convention this safe to pattern-match against —
+	// their <title>/<meta description> live in the single index.html entry
+	// point instead, which the full-document Cheerio pass already covers.
 	if (isPageOrLayoutFile(file.path)) {
 		const metaMatch = source.match(/export\s+const\s+metadata(?:\s*:\s*Metadata)?\s*=\s*/);
 		const hasGenerateMetadata = /export\s+(async\s+)?function\s+generateMetadata\b/.test(source);
@@ -385,7 +310,18 @@ export function runJsxAutoFix(file: ProjectFile, allFiles: ProjectFile[], pageUr
 /** Splices AI (or duplicate-bank) resolved values into `source` using the
  *  `apply` closures `runJsxAutoFix` attached to each target, replacing the
  *  placeholder tokens those closures leave behind. Mirrors
- *  autoFixEngine.applyAITargetValues but for raw text instead of a DOM. */
+ *  autoFixEngine.applyAITargetValues but for raw text instead of a DOM.
+ *
+ *  Different placeholder tokens get different escaping because they land in
+ *  different syntactic contexts: __TITLE_PLACEHOLDER__/__DESC_PLACEHOLDER__
+ *  sit inside a real JS string literal (Next's `metadata` object), so they
+ *  need JS-string escaping; __ATTR_PLACEHOLDER__ sits inside a double-quoted
+ *  HTML/JSX/Vue/Angular tag attribute, so it needs HTML-attribute escaping;
+ *  __TEXT_PLACEHOLDER__ sits as element text content, so it needs HTML-text
+ *  escaping. Using JS-string escaping for all three (as an earlier version
+ *  of this file did) would leave a literal backslash in front of any quote
+ *  inside alt text or CTA copy, since backslash isn't an escape character in
+ *  HTML/JSX attribute or text position. */
 export function applyJsxAITargetValues(
 	source: string,
 	targets: JsxAITarget[],
@@ -425,9 +361,10 @@ export function applyJsxAITargetValues(
 			continue;
 		}
 		content = content
-			.replace("__PLACEHOLDER__", escapeForJsxAttr(value))
-			.replace("__TITLE_PLACEHOLDER__", escapeForJsxAttr(value))
-			.replace("__DESC_PLACEHOLDER__", escapeForJsxAttr(value));
+			.replace("__ATTR_PLACEHOLDER__", escapeForTagAttr(value))
+			.replace("__TEXT_PLACEHOLDER__", escapeForTagText(value))
+			.replace("__TITLE_PLACEHOLDER__", escapeForJsStringLiteral(value))
+			.replace("__DESC_PLACEHOLDER__", escapeForJsStringLiteral(value));
 
 		results.push({
 			id: target.id,
@@ -442,14 +379,34 @@ export function applyJsxAITargetValues(
 	return { content, results };
 }
 
-function escapeForJsxAttr(s: string): string {
-	// The placeholders this replaces always sit inside a double-quoted JS/TSX
-	// string literal (a JSX attribute value or an object property), so this
-	// needs JS string escaping — not HTML entities, which would show up as
-	// literal "&quot;" text in the rendered page.
+/** Used for values placed inside a real JS string literal (Next's `metadata`
+ *  object: `title: "..."`) — needs JS string escaping. */
+function escapeForJsStringLiteral(s: string): string {
 	return s
 		.replace(/\\/g, "\\\\")
 		.replace(/"/g, '\\"')
+		.replace(/\n/g, " ")
+		.trim();
+}
+
+/** Used for values placed inside a double-quoted tag attribute
+ *  (alt="...", aria-label="...") in any of the frameworks this engine
+ *  touches — HTML entity escaping, since backslash has no special meaning
+ *  there. */
+function escapeForTagAttr(s: string): string {
+	return s
+		.replace(/&/g, "&amp;")
+		.replace(/"/g, "&quot;")
+		.replace(/\n/g, " ")
+		.trim();
+}
+
+/** Used for values placed as element text content (CTA label text). */
+function escapeForTagText(s: string): string {
+	return s
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
 		.replace(/\n/g, " ")
 		.trim();
 }

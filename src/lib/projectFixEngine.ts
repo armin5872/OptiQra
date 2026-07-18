@@ -19,20 +19,65 @@ export interface ProjectFile {
 	content: string;
 }
 
-export type ProjectStackKind = "next" | "vite-react" | "static" | "unknown";
+export type ProjectStackKind =
+	| "next"
+	| "nuxt"
+	| "vue"
+	| "angular"
+	| "sveltekit"
+	| "svelte"
+	| "remix"
+	| "astro"
+	| "vite-react"
+	| "cra"
+	| "static"
+	| "unknown";
 
+/**
+ * Detects the project's framework so the AI prompt can carry the right
+ * terminology/tone and so runProjectFix knows which config file (if any) is
+ * safe to patch for security headers.
+ *
+ * Marker files (angular.json, nuxt.config.*, svelte.config.*, astro.config.*,
+ * any .vue/.svelte file present) are checked alongside package.json deps
+ * because a zipped project can arrive with a malformed or missing
+ * package.json (partial export, monorepo root left out, etc.) while its file
+ * layout still unambiguously identifies the stack.
+ */
 export function detectProjectStack(files: ProjectFile[]): { kind: ProjectStackKind; summary: string } {
 	const pkgFile = files.find((f) => /(^|\/)package\.json$/.test(f.path));
+	const hasFile = (re: RegExp) => files.some((f) => re.test(f.path));
+	let deps: Record<string, string> = {};
 	if (pkgFile) {
 		try {
 			const pkg = JSON.parse(pkgFile.content);
-			const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
-			if (deps.next) return { kind: "next", summary: `Next.js ${deps.next}` };
-			if (deps.vite && (deps.react || deps.vue)) return { kind: "vite-react", summary: "Vite + " + (deps.react ? "React" : "Vue") };
+			deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
 		} catch {
-			// malformed package.json — fall through to static
+			// malformed package.json — fall through to marker-file / extension detection
 		}
 	}
+
+	if (deps.next) return { kind: "next", summary: `Next.js ${deps.next}` };
+	if (deps.nuxt || deps.nuxt3 || hasFile(/(^|\/)nuxt\.config\.(js|ts|mjs)$/)) {
+		return { kind: "nuxt", summary: `Nuxt${deps.nuxt ? " " + deps.nuxt : ""}` };
+	}
+	if (deps["@angular/core"] || hasFile(/(^|\/)angular\.json$/)) {
+		return { kind: "angular", summary: `Angular${deps["@angular/core"] ? " " + deps["@angular/core"] : ""}` };
+	}
+	if (deps["@sveltejs/kit"] || hasFile(/(^|\/)svelte\.config\.(js|ts|mjs)$/)) {
+		return { kind: "sveltekit", summary: "SvelteKit" };
+	}
+	if (deps.svelte || hasFile(/\.svelte$/)) {
+		return { kind: "svelte", summary: `Svelte${deps.svelte ? " " + deps.svelte : ""}` };
+	}
+	if (deps["@remix-run/react"]) return { kind: "remix", summary: "Remix" };
+	if (deps.astro || hasFile(/(^|\/)astro\.config\.(js|ts|mjs)$/)) return { kind: "astro", summary: "Astro" };
+	if (deps.vue || hasFile(/\.vue$/)) {
+		return { kind: "vue", summary: `Vue${deps.vue ? " " + deps.vue : ""}${deps.vite ? " + Vite" : ""}` };
+	}
+	if (deps["react-scripts"]) return { kind: "cra", summary: "Create React App" };
+	if (deps.vite && deps.react) return { kind: "vite-react", summary: "Vite + React" };
+	if (deps.react) return { kind: "vite-react", summary: "React" };
 	if (files.some((f) => /\.html?$/i.test(f.path))) return { kind: "static", summary: "Static HTML" };
 	return { kind: "unknown", summary: "Unrecognized project layout" };
 }
@@ -169,7 +214,7 @@ export function runProjectFix(
 				category: "Security",
 				severity: "high",
 				status: "fixed",
-				note: "Added a _headers file (Netlify/Cloudflare Pages format) with baseline security headers. If you're on Apache/Nginx, apply the equivalent directives in your server config instead — this file alone won't take effect there.",
+				note: `Added a _headers file (Netlify/Cloudflare Pages format) with baseline security headers, appropriate for the detected ${stack.summary} project. If you're deploying behind Apache/Nginx/another reverse proxy instead, apply the equivalent directives in that config — this file alone won't take effect there.`,
 			});
 		}
 	}

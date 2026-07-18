@@ -177,7 +177,7 @@ export default function ProjectUploadPanel() {
 				onDrop={handleDrop}
 			>
 				<p className="upload-dropzone-title">Drag &amp; drop or upload your project</p>
-				<p className="upload-dropzone-sub">We&apos;ll scan every HTML, JSX, and TSX file (Next.js, Vite/CRA, or plain static) and auto-fix what it finds — right in your browser, nothing kept on our servers after.</p>
+				<p className="upload-dropzone-sub">We&apos;ll scan every HTML, JSX/TSX, Vue, Svelte, and Angular file we find (Next.js, Nuxt, Vite/CRA, SvelteKit, Angular, or plain static/vanilla JS) and auto-fix what it finds — right in your browser, nothing kept on our servers after.</p>
 				<div className="upload-dropzone-actions">
 					<button type="button" className="apply-btn" onClick={() => folderInputRef.current?.click()}>
 						Choose folder
