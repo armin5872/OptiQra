@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { load } from "cheerio";
 import JSZip from "jszip";
-import { runAutoFix, applyAITargetValues, duplicateBankKey, type AutoFixResult } from "@/lib/autoFixEngine";
+import { runAutoFix, applyAITargetValues, duplicateBankKey, type AutoFixResult, type AITarget } from "@/lib/autoFixEngine";
 import { runProjectFix, detectProjectStack, type ProjectFile } from "@/lib/projectFixEngine";
+import { runJsxAutoFix, applyJsxAITargetValues, isFixableSourceFile } from "@/lib/jsxAutoFix";
 import { buildAutoFixBatchPrompt, parseAutoFixResponse } from "@/lib/autoFixPrompt";
 import { AI_PROVIDERS, type AIProviderId } from "@/lib/aiFix";
 import { completeFix } from "@/lib/aiProviders";
@@ -14,10 +15,95 @@ export const maxDuration = 120;
 const MAX_TOTAL_UNCOMPRESSED_BYTES = 60 * 1024 * 1024; // 60MB
 const MAX_FILE_COUNT = 3000;
 const MAX_HTML_FILES_TO_FIX = 250; // guardrail against runaway AI cost on huge sites
+const MAX_SOURCE_FILES_TO_FIX = 250; // same guardrail, for .tsx/.jsx source projects
 
 interface PerFileSummary {
 	path: string;
 	results: AutoFixResult[];
+}
+
+/** Shared between the HTML and JSX passes: resolves a batch of AITargets via
+ *  a single AI call (falling back to the duplicate bank for anything the
+ *  model didn't return), or straight to the duplicate bank when no key is
+ *  configured. Doesn't touch the file itself — each caller applies `values`
+ *  in whatever way fits its own content (Cheerio vs. raw source text). */
+async function resolveAITargetValues(
+	targets: AITarget[],
+	pageUrl: string,
+	stackSummary: string,
+	hasAI: boolean,
+	provider: string,
+	apiKey: string,
+	model: string,
+	duplicateBank: Record<string, string>,
+): Promise<{ values: Record<string, string>; usedAI: boolean; aiError?: string }> {
+	if (targets.length === 0) return { values: {}, usedAI: false };
+
+	if (!hasAI) {
+		const values: Record<string, string> = {};
+		for (const t of targets) {
+			const bankValue = duplicateBank[duplicateBankKey(t.kind, t.category)];
+			if (bankValue) values[t.id] = bankValue;
+		}
+		return { values, usedAI: false };
+	}
+
+	const resolvedModel = model || AI_PROVIDERS[provider as AIProviderId].defaultModel;
+	const { system, user } = buildAutoFixBatchPrompt(targets, pageUrl, {
+		primary: stackSummary,
+		summary: stackSummary,
+		guidance: "This is a static project file, not a live crawl — keep suggested content generic to the page's own markup.",
+	});
+	try {
+		const raw = await completeFix(provider as AIProviderId, { apiKey, model: resolvedModel, system, user });
+		const { values } = parseAutoFixResponse(raw);
+		return { values, usedAI: true };
+	} catch (err) {
+		return { values: {}, usedAI: false, aiError: getErrorMessage(err, "unknown error") };
+	}
+}
+
+/** Anything the AI call didn't resolve gets a second chance against the
+ *  duplicate bank; `firstPassResults` already has one result per target
+ *  (mostly "skipped" for the unresolved ones), so we replace those entries
+ *  in place rather than appending a second, redundant result for the same id. */
+function fillFromDuplicateBank<T extends AITarget>(
+	firstPassResults: AutoFixResult[],
+	targets: T[],
+	values: Record<string, string>,
+	duplicateBank: Record<string, string>,
+	applyFallback: (missing: T[], fallbackValues: Record<string, string>) => AutoFixResult[],
+): AutoFixResult[] {
+	const missing = targets.filter((t) => !values[t.id]);
+	if (missing.length === 0) return firstPassResults;
+	const fallbackValues: Record<string, string> = {};
+	for (const t of missing) {
+		const bankValue = duplicateBank[duplicateBankKey(t.kind, t.category)];
+		if (bankValue) fallbackValues[t.id] = bankValue;
+	}
+	const fallbackResults = applyFallback(missing, fallbackValues);
+	const byId = new Map(fallbackResults.map((r) => [r.id, r]));
+	return firstPassResults.map((r) => byId.get(r.id) ?? r);
+}
+
+/** Derives static route paths from an App Router project's page.tsx files
+ *  (for sitemap.xml generation, since a source project has no rendered HTML
+ *  files to enumerate) — e.g. `src/app/blog/page.tsx` -> "blog". Dynamic
+ *  segments ([slug], [...slug]) can't be enumerated without running the app,
+ *  so routes containing them are skipped rather than guessed at. */
+function deriveNextAppRoutes(files: ProjectFile[]): string[] {
+	const routes: string[] = [];
+	for (const f of files) {
+		const m = f.path.match(/(?:^|\/)app\/(.*)page\.(tsx|jsx)$/);
+		if (!m) continue;
+		if (m[1].includes("[")) continue;
+		const seg = m[1]
+			.split("/")
+			.filter((s) => s && !/^\(.*\)$/.test(s)) // drop route groups — invisible in the URL
+			.join("/");
+		routes.push(seg);
+	}
+	return routes;
 }
 
 export async function POST(req: NextRequest) {
@@ -94,14 +180,19 @@ export async function POST(req: NextRequest) {
 	files = files.filter((f) => !/(^|\/)(node_modules|\.next|\.git|dist|build|out)\//.test(f.path));
 
 	const htmlFiles = files.filter((f) => /\.html?$/i.test(f.path));
-	if (htmlFiles.length === 0) {
-		return NextResponse.json({ error: "No .html files found in the uploaded project." }, { status: 400 });
+	const sourceFiles = files.filter((f) => isFixableSourceFile(f.path));
+	if (htmlFiles.length === 0 && sourceFiles.length === 0) {
+		return NextResponse.json(
+			{ error: "Couldn't find any .html, .tsx, or .jsx files in the uploaded project to fix." },
+			{ status: 400 },
+		);
 	}
 
 	const stack = detectProjectStack(files);
 	const perFileSummaries: PerFileSummary[] = [];
 	const newDuplicateBankEntries: Record<string, string> = {};
 	const htmlFilesToFix = htmlFiles.slice(0, MAX_HTML_FILES_TO_FIX);
+	const sourceFilesToFix = sourceFiles.slice(0, MAX_SOURCE_FILES_TO_FIX);
 
 	for (const file of htmlFilesToFix) {
 		const $ = load(file.content);
@@ -110,47 +201,29 @@ export async function POST(req: NextRequest) {
 		let aiResults: AutoFixResult[] = [];
 
 		if (aiTargets.length > 0) {
-			if (hasAI) {
-				const resolvedModel = model || AI_PROVIDERS[provider as AIProviderId].defaultModel;
-				const { system, user } = buildAutoFixBatchPrompt(aiTargets, pageUrl, {
-					primary: stack.summary,
-					summary: stack.summary,
-					guidance: "This is a static project file, not a live crawl — keep suggested content generic to the page's own markup.",
-				});
-				try {
-					const raw = await completeFix(provider as AIProviderId, { apiKey, model: resolvedModel, system, user });
-					const { values } = parseAutoFixResponse(raw);
-					const missing = aiTargets.filter((t) => !values[t.id]);
-					aiResults = applyAITargetValues($, aiTargets, values, "ai");
-					if (missing.length > 0) {
-						const fallbackValues: Record<string, string> = {};
-						for (const t of missing) {
-							const bankValue = duplicateBank[duplicateBankKey(t.kind, t.category)];
-							if (bankValue) fallbackValues[t.id] = bankValue;
-						}
-						aiResults = aiResults.concat(applyAITargetValues($, missing, fallbackValues, "duplicate"));
-					}
-					for (const t of aiTargets) {
-						if (values[t.id]) newDuplicateBankEntries[duplicateBankKey(t.kind, t.category)] = values[t.id];
-					}
-				} catch (err) {
-					const fallbackValues: Record<string, string> = {};
-					for (const t of aiTargets) {
-						const bankValue = duplicateBank[duplicateBankKey(t.kind, t.category)];
-						if (bankValue) fallbackValues[t.id] = bankValue;
-					}
-					aiResults = applyAITargetValues($, aiTargets, fallbackValues, "duplicate");
-					aiResults.forEach((r) => {
-						if (r.status === "skipped") r.note = `AI call failed (${getErrorMessage(err, "unknown error")}) — ${r.note}`;
-					});
-				}
-			} else {
-				const fallbackValues: Record<string, string> = {};
+			const { values, usedAI, aiError } = await resolveAITargetValues(
+				aiTargets,
+				pageUrl,
+				stack.summary,
+				hasAI,
+				provider,
+				apiKey,
+				model,
+				duplicateBank,
+			);
+			aiResults = applyAITargetValues($, aiTargets, values, usedAI ? "ai" : "duplicate");
+			if (usedAI) {
+				aiResults = fillFromDuplicateBank(aiResults, aiTargets, values, duplicateBank, (missing, fallbackValues) =>
+					applyAITargetValues($, missing, fallbackValues, "duplicate"),
+				);
 				for (const t of aiTargets) {
-					const bankValue = duplicateBank[duplicateBankKey(t.kind, t.category)];
-					if (bankValue) fallbackValues[t.id] = bankValue;
+					if (values[t.id]) newDuplicateBankEntries[duplicateBankKey(t.kind, t.category)] = values[t.id];
 				}
-				aiResults = applyAITargetValues($, aiTargets, fallbackValues, "duplicate");
+			}
+			if (aiError) {
+				aiResults.forEach((r) => {
+					if (r.status === "skipped") r.note = `AI call failed (${aiError}) — ${r.note}`;
+				});
 			}
 		}
 
@@ -158,8 +231,55 @@ export async function POST(req: NextRequest) {
 		perFileSummaries.push({ path: file.path, results: [...results, ...aiResults] });
 	}
 
-	// --- Project-wide fixes: robots.txt, sitemap.xml, security headers. ---
-	const projectResults = runProjectFix(files, siteUrl, htmlFiles.map((f) => f.path));
+	// --- Same pass, but for JSX/TSX source files (Next.js pages/layouts, Vite
+	// components, etc.) — the class of project the HTML-only pass above used
+	// to silently skip entirely, or reject the whole upload for. ---
+	for (const file of sourceFilesToFix) {
+		const pageUrl = siteUrl ? joinUrl(siteUrl, file.path) : file.path;
+		const { content, results, aiTargets } = runJsxAutoFix(file, files, pageUrl);
+		let updatedContent = content;
+		let aiResults: AutoFixResult[] = [];
+
+		if (aiTargets.length > 0) {
+			const { values, usedAI, aiError } = await resolveAITargetValues(
+				aiTargets,
+				pageUrl,
+				stack.summary,
+				hasAI,
+				provider,
+				apiKey,
+				model,
+				duplicateBank,
+			);
+			const applied = applyJsxAITargetValues(updatedContent, aiTargets, values, usedAI ? "ai" : "duplicate");
+			updatedContent = applied.content;
+			aiResults = applied.results;
+			if (usedAI) {
+				aiResults = fillFromDuplicateBank(aiResults, aiTargets, values, duplicateBank, (missing, fallbackValues) => {
+					const fallbackApplied = applyJsxAITargetValues(updatedContent, missing, fallbackValues, "duplicate");
+					updatedContent = fallbackApplied.content;
+					return fallbackApplied.results;
+				});
+				for (const t of aiTargets) {
+					if (values[t.id]) newDuplicateBankEntries[duplicateBankKey(t.kind, t.category)] = values[t.id];
+				}
+			}
+			if (aiError) {
+				aiResults.forEach((r) => {
+					if (r.status === "skipped") r.note = `AI call failed (${aiError}) — ${r.note}`;
+				});
+			}
+		}
+
+		file.content = updatedContent;
+		perFileSummaries.push({ path: file.path, results: [...results, ...aiResults] });
+	}
+
+	// --- Project-wide fixes: robots.txt, sitemap.xml, security headers. Prefer
+	// enumerating actual rendered HTML files for the sitemap; fall back to
+	// statically-derivable Next.js App Router routes when there are none. ---
+	const routePaths = htmlFiles.length > 0 ? htmlFiles.map((f) => f.path) : deriveNextAppRoutes(files);
+	const projectResults = runProjectFix(files, siteUrl, routePaths);
 
 	// --- Rezip everything (files array now holds the fixed content, plus any
 	// newly created robots.txt/sitemap.xml/_headers/next.config.js entries). ---
@@ -170,8 +290,8 @@ export async function POST(req: NextRequest) {
 	const zipBuffer = await outZip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
 
 	const summary = {
-		filesFixed: htmlFilesToFix.length,
-		filesSkippedTooMany: htmlFiles.length - htmlFilesToFix.length,
+		filesFixed: htmlFilesToFix.length + sourceFilesToFix.length,
+		filesSkippedTooMany: (htmlFiles.length - htmlFilesToFix.length) + (sourceFiles.length - sourceFilesToFix.length),
 		fixed: perFileSummaries.reduce((n, f) => n + f.results.filter((r) => r.status === "fixed").length, 0) +
 			projectResults.filter((r) => r.status === "fixed").length,
 		duplicated: perFileSummaries.reduce((n, f) => n + f.results.filter((r) => r.status === "duplicated").length, 0),

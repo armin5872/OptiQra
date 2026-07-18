@@ -49,7 +49,10 @@ export function detectProjectStack(files: ProjectFile[]): { kind: ProjectStackKi
 export function runProjectFix(
 	files: ProjectFile[],
 	siteUrl: string,
-	htmlFilePaths: string[],
+	/** Relative page paths to list in sitemap.xml — either real .html file
+	 *  paths (static sites) or statically-derivable route strings (e.g.
+	 *  Next.js App Router page.tsx locations, which have no rendered HTML). */
+	routePaths: string[],
 ): AutoFixResult[] {
 	const results: AutoFixResult[] = [];
 	const stack = detectProjectStack(files);
@@ -70,9 +73,9 @@ export function runProjectFix(
 	}
 
 	// --- sitemap.xml — best-effort, listing every HTML file found. ---
-	if (!findFile(/(^|\/)sitemap\.xml$/i) && htmlFilePaths.length > 0 && siteUrl) {
+	if (!findFile(/(^|\/)sitemap\.xml$/i) && routePaths.length > 0 && siteUrl) {
 		const base = siteUrl.replace(/\/$/, "");
-		const urls = htmlFilePaths
+		const urls = routePaths
 			.map((p) => {
 				const clean = p.replace(/(^|\/)index\.html?$/i, "").replace(/\.html?$/i, "");
 				const loc = `${base}/${clean}`.replace(/\/{2,}/g, "/").replace(/:\//, "://");
@@ -87,7 +90,7 @@ export function runProjectFix(
 			category: "SEO",
 			severity: "medium",
 			status: "fixed",
-			note: `Generated a sitemap.xml listing ${htmlFilePaths.length} page${htmlFilePaths.length === 1 ? "" : "s"} found in the project.`,
+			note: `Generated a sitemap.xml listing ${routePaths.length} page${routePaths.length === 1 ? "" : "s"} found in the project.`,
 		});
 	}
 

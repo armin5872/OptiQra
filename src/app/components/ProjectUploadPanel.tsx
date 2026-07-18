@@ -177,7 +177,7 @@ export default function ProjectUploadPanel() {
 				onDrop={handleDrop}
 			>
 				<p className="upload-dropzone-title">Drag &amp; drop or upload your project</p>
-				<p className="upload-dropzone-sub">We&apos;ll scan every HTML file and auto-fix what it finds — right in your browser, nothing kept on our servers after.</p>
+				<p className="upload-dropzone-sub">We&apos;ll scan every HTML, JSX, and TSX file (Next.js, Vite/CRA, or plain static) and auto-fix what it finds — right in your browser, nothing kept on our servers after.</p>
 				<div className="upload-dropzone-actions">
 					<button type="button" className="apply-btn" onClick={() => folderInputRef.current?.click()}>
 						Choose folder
@@ -238,7 +238,7 @@ export default function ProjectUploadPanel() {
 					</div>
 					{result.summary.filesSkippedTooMany > 0 && (
 						<p className="autofix-note">
-							Fixed the first {result.summary.filesFixed} HTML files; {result.summary.filesSkippedTooMany} more were
+							Fixed the first {result.summary.filesFixed} files; {result.summary.filesSkippedTooMany} more were
 							left as-is to keep this request from running too long — re-upload just that subfolder to cover the rest.
 						</p>
 					)}
