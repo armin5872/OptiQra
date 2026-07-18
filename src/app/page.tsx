@@ -9,6 +9,7 @@ import AISiteInsights from "./components/AISiteInsights";
 import AIEngineTest from "./components/AIEngineTest";
 import ReportDownload from "./components/ReportDownload";
 import SiteCloneViewer from "./components/SiteCloneViewer";
+import ProjectUploadPanel from "./components/ProjectUploadPanel";
 import ScheduleManager from "./components/ScheduleManager";
 import SettingsPanel from "./components/SettingsPanel";
 import MissingFileBanner from "./components/MissingFileBanner";
@@ -713,6 +714,8 @@ export default function Home() {
 							{stoppedNote}
 						</p>
 					)}
+
+					<ProjectUploadPanel />
 
 					{recentScansLoaded && recentScans.length > 0 && (
 						<div className="recent-scans">
