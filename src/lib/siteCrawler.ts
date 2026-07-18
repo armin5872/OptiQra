@@ -6,7 +6,7 @@ import * as cheerio from "cheerio";
 import { extractLinks } from "@/lib/link-analyzer";
 import { getErrorMessage, isAbortError } from "@/lib/errorUtils";
 
-const CRAWL_USER_AGENT = "SiteVitalsBot/1.0 (+https://example.com/bot)";
+const CRAWL_USER_AGENT = "OptiqraBot/1.0 (+https://optiqra.vercel.app/bot)";
 export const DEFAULT_MAX_PAGES = 15;
 export const HARD_MAX_PAGES = Infinity; // Unlimited pages
 const DEFAULT_MAX_DEPTH = 3;

@@ -58,7 +58,7 @@ async function fetchHeaders(
 	try {
 		const response = await fetch(targetUrl, {
 			redirect: "follow",
-			headers: { "User-Agent": "SiteVitalsBot/1.0 (+https://example.com/bot)" },
+			headers: { "User-Agent": "OptiqraBot/1.0 (+https://optiqra.vercel.app/bot)" },
 			next: { revalidate: 3600 },
 		});
 

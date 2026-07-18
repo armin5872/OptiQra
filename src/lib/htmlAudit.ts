@@ -31,7 +31,7 @@ export async function fetchPage(targetUrl: string, options?: { signal?: AbortSig
 	// Next.js specific: Cache this raw HTML fetch for 1 hour to prevent redundant external loads
 	const response = await fetch(targetUrl, {
 		redirect: "follow",
-		headers: { "User-Agent": "SiteVitalsBot/1.0 (+https://example.com/bot)" },
+		headers: { "User-Agent": "OptiqraBot/1.0 (+https://optiqra.vercel.app/bot)" },
 		next: { revalidate: 3600 },
 		signal: options?.signal,
 	});

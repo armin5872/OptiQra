@@ -1,6 +1,6 @@
-# Deployment Guide for Site Vitals
+# Deployment Guide for OptiQra
 
-This guide provides detailed instructions for deploying Site Vitals in various environments.
+This guide provides detailed instructions for deploying OptiQra in various environments.
 
 ## Current Production Deployment
 
@@ -26,8 +26,8 @@ The live application is available at https://optiqra.vercel.app/.
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/site-vitals-next.git
-cd site-vitals-next
+git clone https://github.com/armin5872/OptiQra.git
+cd OptiQra
 
 # Install dependencies
 npm install
@@ -56,7 +56,7 @@ This provides hot-reload and debugging capabilities.
 ### Build the Docker Image
 
 ```bash
-docker build -t site-vitals:latest .
+docker build -t optiqra:latest .
 ```
 
 ### Run with Docker
@@ -66,7 +66,7 @@ docker run \
   -p 3000:3000 \
   -e NODE_ENV=production \
   -e NEXT_TELEMETRY_DISABLED=1 \
-  site-vitals:latest
+  optiqra:latest
 ```
 
 ### Docker Compose Production
@@ -81,7 +81,7 @@ docker-compose up -d
 docker run \
   -p 3000:3000 \
   -e NODE_ENV=production \
-  site-vitals:latest
+  optiqra:latest
 ```
 
 ### Docker Compose with Environment File
@@ -125,9 +125,9 @@ vercel
 aws ecr get-login-password --region us-east-1 | \
   docker login --username AWS --password-stdin YOUR_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com
 
-docker tag site-vitals:latest YOUR_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/site-vitals:latest
+docker tag optiqra:latest YOUR_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/optiqra:latest
 
-docker push YOUR_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/site-vitals:latest
+docker push YOUR_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/optiqra:latest
 ```
 
 2. Create ECS task definition with:
@@ -145,7 +145,7 @@ For serverless deployment, use the Next.js Lambda wrapper or serverless framewor
 
 ```bash
 # Build and deploy
-gcloud run deploy site-vitals \
+gcloud run deploy optiqra \
   --source . \
   --platform managed \
   --region us-central1 \
@@ -159,8 +159,8 @@ gcloud run deploy site-vitals \
 ```bash
 az container create \
   --resource-group myResourceGroup \
-  --name site-vitals \
-  --image site-vitals:latest \
+  --name optiqra \
+  --image optiqra:latest \
   --ports 3000 \
   --environment-variables \
     NODE_ENV=production \
@@ -225,16 +225,16 @@ The Docker image includes a health check at `http://localhost:3000/`
 
 ```bash
 # View logs
-docker logs site-vitals
+docker logs optiqra
 
 # Follow logs
-docker logs -f site-vitals
+docker logs -f optiqra
 ```
 
 ### Docker Compose Logs
 
 ```bash
-docker-compose logs -f site-vitals
+docker-compose logs -f optiqra
 ```
 
 ---
@@ -245,7 +245,7 @@ docker-compose logs -f site-vitals
 
 ```bash
 # Check logs
-docker logs site-vitals
+docker logs optiqra
 
 # Ensure proper memory allocation
 # Minimum: 512 MB
@@ -255,7 +255,7 @@ docker logs site-vitals
 
 ```bash
 # Use different port
-docker run -p 3001:3000 site-vitals:latest
+docker run -p 3001:3000 optiqra:latest
 ```
 
 ### API requests fail
@@ -268,7 +268,7 @@ docker run -p 3001:3000 site-vitals:latest
 
 ```bash
 # Increase memory limit
-docker run -m 1g site-vitals:latest
+docker run -m 1g optiqra:latest
 ```
 
 ---
@@ -296,10 +296,10 @@ docker run -m 1g site-vitals:latest
 
 ```bash
 # Tag previous version
-docker tag site-vitals:previous site-vitals:latest
+docker tag optiqra:previous optiqra:latest
 
 # Run previous version
-docker run -p 3000:3000 site-vitals:latest
+docker run -p 3000:3000 optiqra:latest
 ```
 
 ### Docker Compose

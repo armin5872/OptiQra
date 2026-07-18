@@ -8,7 +8,7 @@ interface AuditResult {
 }
 
 const FETCH_HEADERS = {
-	"User-Agent": "SiteVitalsBot/1.0 (+https://example.com/bot)",
+	"User-Agent": "OptiqraBot/1.0 (+https://optiqra.vercel.app/bot)",
 };
 
 // User-agent tokens used by the major AI answer/assistant crawlers. Robots.txt

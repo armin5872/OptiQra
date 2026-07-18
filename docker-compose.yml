@@ -1,11 +1,9 @@
-version: "3.8"
-
 services:
-  site-vitals:
+  optiqra:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: site-vitals-app
+    container_name: optiqra-app
     ports:
       - "3000:3000"
     environment:
@@ -28,8 +26,8 @@ services:
     # volumes:
     #   - ./data:/app/data
     networks:
-      - site-vitals-network
+      - optiqra-network
 
 networks:
-  site-vitals-network:
+  optiqra-network:
     driver: bridge

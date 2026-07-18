@@ -1,6 +1,6 @@
 # PWA setup notes
 
-This app now has:
+OptiQra now has:
 
 - **next-pwa** — generates a service worker at build time (`next build`) that precaches the app shell and adds runtime caching (see `next.config.ts`):
   - Next static JS/CSS chunks, icons/images → cache-first

@@ -66,7 +66,7 @@ export const metadata = {
 		"audit",
 		"crawler",
 		"ai",
-		"optigra",
+		"optiqra",
 	],
 	authors: [{ name: "ArminNX", url: "https://optiqra.vercel.app/" }],
 	manifest: "/manifest.json",
@@ -94,9 +94,9 @@ export const metadata = {
 		siteName: "OptiQra Site Vitals",
 		images: [
 			{
-				url: "https://optiqra.vercel.app/optigra.png",
-				width: 1200,
-				height: 630,
+				url: "https://optiqra.vercel.app/optiqra.webp",
+				width: 400,
+				height: 343,
 			},
 		],
 		locale: "en_US",

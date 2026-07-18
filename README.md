@@ -5,6 +5,7 @@
 ![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)
+![Version](https://img.shields.io/badge/version-1.5.0-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 [![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?logo=vercel)](https://optiqra.vercel.app/)
 
@@ -65,9 +66,6 @@
 
 Everything runs in your browser. No server sees your data. No account needed.
 
-## Showcase
-![showcase](showcase.gif)
-
 ## How OptiQra compares
 
 | Feature | OptiQra | Lighthouse | SEMrush | Ahrefs |
@@ -127,10 +125,11 @@ The app runs its built-in audits without any configuration. AI-powered fixes and
 ## Available scripts
 
 ```bash
-npm run dev      # Start the development server
-npm run build    # Create a production build
-npm run start    # Start the production server
-npm run lint     # Run ESLint
+npm run dev         # Start the development server
+npm run build       # Create a production build
+npm run start       # Start the production server
+npm run lint        # Run ESLint
+npm run type-check  # Run the TypeScript compiler in check-only mode
 ```
 
 ## Docker
@@ -208,6 +207,13 @@ Verifies that a given provider/API key/model combination is reachable and workin
 Outbound scan requests are guarded against SSRF, and API keys for AI providers are never persisted server-side. See [SECURITY.md](SECURITY.md) for the full policy and how to report a vulnerability.
 
 ## 🌱 Roadmap
+
+### v1.5
+
+- [x] Consistent OptiQra branding across package metadata, Docker, and deployment docs
+- [x] `.gitignore` and build-artifact cleanup for a clean production checkout
+- [x] `type-check` script wired up alongside `lint` for CI/pre-deploy checks
+- [ ] Automated test suite
 
 ### v0.2
 

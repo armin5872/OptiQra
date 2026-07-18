@@ -1,7 +1,7 @@
 import * as cheerio from 'cheerio';
 import { issue, pass, type Issue } from '@/lib/auditUtils';
 
-const FETCH_HEADERS = { 'User-Agent': 'SiteVitalsBot/1.0 (+https://example.com/bot)' };
+const FETCH_HEADERS = { 'User-Agent': 'OptiqraBot/1.0 (+https://optiqra.vercel.app/bot)' };
 const SITEMAP_FALLBACK_PATHS = ['/sitemap.xml', '/sitemap_index.xml', '/sitemap-index.xml'];
 const MAX_SITEMAPS_TO_VALIDATE = 3;
 

@@ -1,4 +1,4 @@
-# Multi-stage build for Site Vitals diagnostic tool
+# Multi-stage build for OptiQra diagnostic tool
 
 # Stage 1: Dependencies and build
 FROM node:20-alpine AS builder
