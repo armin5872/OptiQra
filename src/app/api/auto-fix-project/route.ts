@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { load } from "cheerio";
 import JSZip from "jszip";
 import { runAutoFix, applyAITargetValues, duplicateBankKey, type AutoFixResult, type AITarget } from "@/lib/autoFixEngine";
@@ -17,9 +17,31 @@ const MAX_FILE_COUNT = 3000;
 const MAX_HTML_FILES_TO_FIX = 250; // guardrail against runaway AI cost on huge sites
 const MAX_SOURCE_FILES_TO_FIX = 250; // same guardrail, for non-full-document source files (.tsx/.jsx/.vue/.svelte/Angular/JS/HTML fragments)
 
+type ProjectMode = "audit" | "fix";
+
 interface PerFileSummary {
 	path: string;
 	results: AutoFixResult[];
+}
+
+function ndjson(obj: unknown): Uint8Array {
+	return new TextEncoder().encode(JSON.stringify(obj) + "\n");
+}
+
+/** Turns unresolved AI targets straight into "ai-needed" report entries,
+ *  with no AI call and no duplicate-bank lookup — this is what audit mode
+ *  uses instead of resolveAITargetValues, since a pure audit shouldn't
+ *  spend AI tokens or mutate the duplicate bank just to describe what's
+ *  wrong with the page. */
+function aiTargetsToAuditResults(targets: AITarget[]): AutoFixResult[] {
+	return targets.map((t) => ({
+		id: t.id,
+		title: t.title,
+		category: t.category,
+		severity: t.severity,
+		status: "ai-needed",
+		note: `Needs authored content (${t.kind.replace(/-/g, " ")}) — switch to Auto-fix (with an AI key configured, or a matching value elsewhere in the project) to resolve this.`,
+	}));
 }
 
 /** Shared between the HTML and JSX passes: resolves a batch of AITargets via
@@ -106,25 +128,46 @@ function deriveNextAppRoutes(files: ProjectFile[]): string[] {
 	return routes;
 }
 
+function normalizePath(p: string): string {
+	return p.replace(/\\/g, "/").replace(/^\/+/, "");
+}
+
+function joinUrl(base: string, relPath: string): string {
+	try {
+		const cleanBase = base.replace(/\/$/, "");
+		const cleanRel = relPath.replace(/(^|\/)index\.html?$/i, "");
+		return `${cleanBase}/${cleanRel}`.replace(/([^:])\/{2,}/g, "$1/");
+	} catch {
+		return relPath;
+	}
+}
+
 export async function POST(req: NextRequest) {
 	let form: FormData;
 	try {
 		form = await req.formData();
 	} catch {
-		return NextResponse.json({ error: "Expected multipart/form-data with an uploaded project." }, { status: 400 });
+		return new Response(JSON.stringify({ error: "Expected multipart/form-data with an uploaded project." }), {
+			status: 400,
+			headers: { "Content-Type": "application/json" },
+		});
 	}
 
 	const uploaded = form.get("project");
 	if (!uploaded || typeof uploaded === "string") {
-		return NextResponse.json({ error: "No project file/folder uploaded." }, { status: 400 });
+		return new Response(JSON.stringify({ error: "No project file/folder uploaded." }), {
+			status: 400,
+			headers: { "Content-Type": "application/json" },
+		});
 	}
 	const uploadedFile = uploaded as File;
 
+	const mode: ProjectMode = form.get("mode") === "audit" ? "audit" : "fix";
 	const siteUrl = (form.get("siteUrl") as string) || "";
 	const provider = (form.get("provider") as string) || "";
 	const apiKey = (form.get("apiKey") as string) || "";
 	const model = (form.get("model") as string) || "";
-	const hasAI = !!provider && !!apiKey && !!AI_PROVIDERS[provider as AIProviderId];
+	const hasAI = mode === "fix" && !!provider && !!apiKey && !!AI_PROVIDERS[provider as AIProviderId];
 	let duplicateBank: Record<string, string> = {};
 	try {
 		duplicateBank = JSON.parse((form.get("duplicateBank") as string) || "{}");
@@ -146,33 +189,48 @@ export async function POST(req: NextRequest) {
 			const zip = await JSZip.loadAsync(buf);
 			const entries = Object.values(zip.files).filter((f) => !f.dir);
 			if (entries.length > MAX_FILE_COUNT) {
-				return NextResponse.json({ error: `Project has too many files (${entries.length}, max ${MAX_FILE_COUNT}).` }, { status: 400 });
+				return new Response(
+					JSON.stringify({ error: `Project has too many files (${entries.length}, max ${MAX_FILE_COUNT}).` }),
+					{ status: 400, headers: { "Content-Type": "application/json" } },
+				);
 			}
 			let totalBytes = 0;
 			for (const entry of entries) {
 				const content = await entry.async("string");
 				totalBytes += content.length;
 				if (totalBytes > MAX_TOTAL_UNCOMPRESSED_BYTES) {
-					return NextResponse.json({ error: "Project is too large to auto-fix in the browser (60MB limit)." }, { status: 400 });
+					return new Response(JSON.stringify({ error: "Project is too large to process in the browser (60MB limit)." }), {
+						status: 400,
+						headers: { "Content-Type": "application/json" },
+					});
 				}
 				files.push({ path: normalizePath(entry.name), content });
 			}
 		} else {
 			if (allEntries.length > MAX_FILE_COUNT) {
-				return NextResponse.json({ error: `Project has too many files (${allEntries.length}, max ${MAX_FILE_COUNT}).` }, { status: 400 });
+				return new Response(
+					JSON.stringify({ error: `Project has too many files (${allEntries.length}, max ${MAX_FILE_COUNT}).` }),
+					{ status: 400, headers: { "Content-Type": "application/json" } },
+				);
 			}
 			let totalBytes = 0;
 			for (const f of allEntries) {
 				const content = await f.text();
 				totalBytes += content.length;
 				if (totalBytes > MAX_TOTAL_UNCOMPRESSED_BYTES) {
-					return NextResponse.json({ error: "Project is too large to auto-fix in the browser (60MB limit)." }, { status: 400 });
+					return new Response(JSON.stringify({ error: "Project is too large to process in the browser (60MB limit)." }), {
+						status: 400,
+						headers: { "Content-Type": "application/json" },
+					});
 				}
 				files.push({ path: normalizePath(f.name), content });
 			}
 		}
 	} catch (err) {
-		return NextResponse.json({ error: getErrorMessage(err, "Couldn't read the uploaded project") }, { status: 400 });
+		return new Response(JSON.stringify({ error: getErrorMessage(err, "Couldn't read the uploaded project") }), {
+			status: 400,
+			headers: { "Content-Type": "application/json" },
+		});
 	}
 
 	// Skip build output / dependency directories — fixing generated files is
@@ -190,149 +248,201 @@ export async function POST(req: NextRequest) {
 	const fragmentHtmlFiles = files.filter((f) => /\.html?$/i.test(f.path) && !isFullHtmlDocument(f.content));
 	const sourceFiles = [...fragmentHtmlFiles, ...files.filter((f) => isFixableSourceFile(f.path, f.content))];
 	if (htmlFiles.length === 0 && sourceFiles.length === 0) {
-		return NextResponse.json(
-			{
+		return new Response(
+			JSON.stringify({
 				error:
 					"Couldn't find any fixable files in the uploaded project — looked for .html documents, React/Next .tsx/.jsx, Vue .vue, Svelte .svelte, Angular component/template files, and markup-bearing .js files.",
-			},
-			{ status: 400 },
+			}),
+			{ status: 400, headers: { "Content-Type": "application/json" } },
 		);
 	}
 
 	const stack = detectProjectStack(files);
-	const perFileSummaries: PerFileSummary[] = [];
-	const newDuplicateBankEntries: Record<string, string> = {};
 	const htmlFilesToFix = htmlFiles.slice(0, MAX_HTML_FILES_TO_FIX);
 	const sourceFilesToFix = sourceFiles.slice(0, MAX_SOURCE_FILES_TO_FIX);
+	const totalSteps = htmlFilesToFix.length + sourceFilesToFix.length + 1; // +1 for the project-wide pass
 
-	for (const file of htmlFilesToFix) {
-		const $ = load(file.content);
-		const pageUrl = siteUrl ? joinUrl(siteUrl, file.path) : file.path;
-		const { results, aiTargets } = runAutoFix($, pageUrl);
-		let aiResults: AutoFixResult[] = [];
-
-		if (aiTargets.length > 0) {
-			const { values, usedAI, aiError } = await resolveAITargetValues(
-				aiTargets,
-				pageUrl,
-				stack.summary,
-				hasAI,
-				provider,
-				apiKey,
-				model,
-				duplicateBank,
-			);
-			aiResults = applyAITargetValues($, aiTargets, values, usedAI ? "ai" : "duplicate");
-			if (usedAI) {
-				aiResults = fillFromDuplicateBank(aiResults, aiTargets, values, duplicateBank, (missing, fallbackValues) =>
-					applyAITargetValues($, missing, fallbackValues, "duplicate"),
-				);
-				for (const t of aiTargets) {
-					if (values[t.id]) newDuplicateBankEntries[duplicateBankKey(t.kind, t.category)] = values[t.id];
+	const stream = new ReadableStream<Uint8Array>({
+		async start(controller) {
+			let closed = false;
+			const enqueue = (obj: unknown) => {
+				if (closed) return;
+				try {
+					controller.enqueue(ndjson(obj));
+				} catch {
+					// stream already closed (client disconnected) — safe to ignore
 				}
-			}
-			if (aiError) {
-				aiResults.forEach((r) => {
-					if (r.status === "skipped") r.note = `AI call failed (${aiError}) — ${r.note}`;
-				});
-			}
-		}
-
-		file.content = $.html();
-		perFileSummaries.push({ path: file.path, results: [...results, ...aiResults] });
-	}
-
-	// --- Same pass, but for non-full-document source files: JSX/TSX
-	// (Next.js pages/layouts, Vite/CRA components), Vue SFCs, Svelte
-	// components, Angular components/templates, markup-bearing plain JS, and
-	// HTML fragments that aren't complete documents — the class of project
-	// the HTML-only pass above used to silently skip entirely, or reject the
-	// whole upload for. ---
-	for (const file of sourceFilesToFix) {
-		const pageUrl = siteUrl ? joinUrl(siteUrl, file.path) : file.path;
-		const { content, results, aiTargets } = runJsxAutoFix(file, files, pageUrl);
-		let updatedContent = content;
-		let aiResults: AutoFixResult[] = [];
-
-		if (aiTargets.length > 0) {
-			const { values, usedAI, aiError } = await resolveAITargetValues(
-				aiTargets,
-				pageUrl,
-				stack.summary,
-				hasAI,
-				provider,
-				apiKey,
-				model,
-				duplicateBank,
-			);
-			const applied = applyJsxAITargetValues(updatedContent, aiTargets, values, usedAI ? "ai" : "duplicate");
-			updatedContent = applied.content;
-			aiResults = applied.results;
-			if (usedAI) {
-				aiResults = fillFromDuplicateBank(aiResults, aiTargets, values, duplicateBank, (missing, fallbackValues) => {
-					const fallbackApplied = applyJsxAITargetValues(updatedContent, missing, fallbackValues, "duplicate");
-					updatedContent = fallbackApplied.content;
-					return fallbackApplied.results;
-				});
-				for (const t of aiTargets) {
-					if (values[t.id]) newDuplicateBankEntries[duplicateBankKey(t.kind, t.category)] = values[t.id];
+			};
+			const close = () => {
+				if (closed) return;
+				closed = true;
+				try {
+					controller.close();
+				} catch {
+					// already closed
 				}
-			}
-			if (aiError) {
-				aiResults.forEach((r) => {
-					if (r.status === "skipped") r.note = `AI call failed (${aiError}) — ${r.note}`;
+			};
+
+			try {
+				enqueue({
+					type: "status",
+					message: mode === "audit" ? `Auditing ${stack.summary} project…` : `Auto-fixing ${stack.summary} project…`,
 				});
+
+				const perFileSummaries: PerFileSummary[] = [];
+				const newDuplicateBankEntries: Record<string, string> = {};
+				let step = 0;
+
+				for (const file of htmlFilesToFix) {
+					const $ = load(file.content);
+					const pageUrl = siteUrl ? joinUrl(siteUrl, file.path) : file.path;
+					const { results, aiTargets } = runAutoFix($, pageUrl);
+					let aiResults: AutoFixResult[] = [];
+
+					if (aiTargets.length > 0) {
+						if (mode === "audit") {
+							aiResults = aiTargetsToAuditResults(aiTargets);
+						} else {
+							const { values, usedAI, aiError } = await resolveAITargetValues(
+								aiTargets,
+								pageUrl,
+								stack.summary,
+								hasAI,
+								provider,
+								apiKey,
+								model,
+								duplicateBank,
+							);
+							aiResults = applyAITargetValues($, aiTargets, values, usedAI ? "ai" : "duplicate");
+							if (usedAI) {
+								aiResults = fillFromDuplicateBank(aiResults, aiTargets, values, duplicateBank, (missing, fallbackValues) =>
+									applyAITargetValues($, missing, fallbackValues, "duplicate"),
+								);
+								for (const t of aiTargets) {
+									if (values[t.id]) newDuplicateBankEntries[duplicateBankKey(t.kind, t.category)] = values[t.id];
+								}
+							}
+							if (aiError) {
+								aiResults.forEach((r) => {
+									if (r.status === "skipped") r.note = `AI call failed (${aiError}) — ${r.note}`;
+								});
+							}
+						}
+					}
+
+					if (mode === "fix") file.content = $.html();
+					perFileSummaries.push({ path: file.path, results: [...results, ...aiResults] });
+					step += 1;
+					enqueue({ type: "progress", processed: step, total: totalSteps, currentFile: file.path });
+				}
+
+				// --- Same pass, but for non-full-document source files: JSX/TSX
+				// (Next.js pages/layouts, Vite/CRA components), Vue SFCs, Svelte
+				// components, Angular components/templates, markup-bearing plain JS,
+				// and HTML fragments that aren't complete documents. ---
+				for (const file of sourceFilesToFix) {
+					const pageUrl = siteUrl ? joinUrl(siteUrl, file.path) : file.path;
+					const { content, results, aiTargets } = runJsxAutoFix(file, files, pageUrl);
+					let updatedContent = content;
+					let aiResults: AutoFixResult[] = [];
+
+					if (aiTargets.length > 0) {
+						if (mode === "audit") {
+							aiResults = aiTargetsToAuditResults(aiTargets);
+						} else {
+							const { values, usedAI, aiError } = await resolveAITargetValues(
+								aiTargets,
+								pageUrl,
+								stack.summary,
+								hasAI,
+								provider,
+								apiKey,
+								model,
+								duplicateBank,
+							);
+							const applied = applyJsxAITargetValues(updatedContent, aiTargets, values, usedAI ? "ai" : "duplicate");
+							updatedContent = applied.content;
+							aiResults = applied.results;
+							if (usedAI) {
+								aiResults = fillFromDuplicateBank(aiResults, aiTargets, values, duplicateBank, (missing, fallbackValues) => {
+									const fallbackApplied = applyJsxAITargetValues(updatedContent, missing, fallbackValues, "duplicate");
+									updatedContent = fallbackApplied.content;
+									return fallbackApplied.results;
+								});
+								for (const t of aiTargets) {
+									if (values[t.id]) newDuplicateBankEntries[duplicateBankKey(t.kind, t.category)] = values[t.id];
+								}
+							}
+							if (aiError) {
+								aiResults.forEach((r) => {
+									if (r.status === "skipped") r.note = `AI call failed (${aiError}) — ${r.note}`;
+								});
+							}
+						}
+					}
+
+					if (mode === "fix") file.content = updatedContent;
+					perFileSummaries.push({ path: file.path, results: [...results, ...aiResults] });
+					step += 1;
+					enqueue({ type: "progress", processed: step, total: totalSteps, currentFile: file.path });
+				}
+
+				// --- Project-wide fixes: robots.txt, sitemap.xml, security headers.
+				// In audit mode this runs against a scratch copy of `files` so it can
+				// report what's missing without actually writing new files into the
+				// project the user uploaded. ---
+				enqueue({ type: "status", message: "Checking project-wide files (robots.txt, sitemap, security headers)…" });
+				const routePaths = htmlFiles.length > 0 ? htmlFiles.map((f) => f.path) : deriveNextAppRoutes(files);
+				const projectFilesTarget = mode === "audit" ? files.map((f) => ({ ...f })) : files;
+				const projectResults = runProjectFix(projectFilesTarget, siteUrl, routePaths);
+				if (mode === "fix") files = projectFilesTarget;
+				step += 1;
+				enqueue({ type: "progress", processed: step, total: totalSteps });
+
+				const summary = {
+					filesFixed: htmlFilesToFix.length + sourceFilesToFix.length,
+					filesSkippedTooMany: (htmlFiles.length - htmlFilesToFix.length) + (sourceFiles.length - sourceFilesToFix.length),
+					fixed:
+						perFileSummaries.reduce((n, f) => n + f.results.filter((r) => r.status === "fixed").length, 0) +
+						projectResults.filter((r) => r.status === "fixed").length,
+					duplicated: perFileSummaries.reduce((n, f) => n + f.results.filter((r) => r.status === "duplicated").length, 0),
+					aiNeeded: perFileSummaries.reduce((n, f) => n + f.results.filter((r) => r.status === "ai-needed").length, 0),
+					skipped:
+						perFileSummaries.reduce((n, f) => n + f.results.filter((r) => r.status === "skipped").length, 0) +
+						projectResults.filter((r) => r.status === "skipped").length,
+				};
+
+				const data: Record<string, unknown> = {
+					mode,
+					stack: stack.summary,
+					summary,
+					perFileResults: perFileSummaries,
+					projectResults,
+					duplicateBankUpdates: newDuplicateBankEntries,
+				};
+
+				if (mode === "fix") {
+					enqueue({ type: "status", message: "Packaging fixed project…" });
+					const outZip = new JSZip();
+					for (const f of files) outZip.file(f.path, f.content);
+					const zipBuffer = await outZip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+					data.zipBase64 = zipBuffer.toString("base64");
+				}
+
+				enqueue({ type: "done", data });
+			} catch (error) {
+				enqueue({ type: "error", message: getErrorMessage(error, "Internal server error") });
+			} finally {
+				close();
 			}
-		}
-
-		file.content = updatedContent;
-		perFileSummaries.push({ path: file.path, results: [...results, ...aiResults] });
-	}
-
-	// --- Project-wide fixes: robots.txt, sitemap.xml, security headers. Prefer
-	// enumerating actual rendered HTML files for the sitemap; fall back to
-	// statically-derivable Next.js App Router routes when there are none. ---
-	const routePaths = htmlFiles.length > 0 ? htmlFiles.map((f) => f.path) : deriveNextAppRoutes(files);
-	const projectResults = runProjectFix(files, siteUrl, routePaths);
-
-	// --- Rezip everything (files array now holds the fixed content, plus any
-	// newly created robots.txt/sitemap.xml/_headers/next.config.js entries). ---
-	const outZip = new JSZip();
-	for (const f of files) {
-		outZip.file(f.path, f.content);
-	}
-	const zipBuffer = await outZip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
-
-	const summary = {
-		filesFixed: htmlFilesToFix.length + sourceFilesToFix.length,
-		filesSkippedTooMany: (htmlFiles.length - htmlFilesToFix.length) + (sourceFiles.length - sourceFilesToFix.length),
-		fixed: perFileSummaries.reduce((n, f) => n + f.results.filter((r) => r.status === "fixed").length, 0) +
-			projectResults.filter((r) => r.status === "fixed").length,
-		duplicated: perFileSummaries.reduce((n, f) => n + f.results.filter((r) => r.status === "duplicated").length, 0),
-		skipped: perFileSummaries.reduce((n, f) => n + f.results.filter((r) => r.status === "skipped").length, 0) +
-			projectResults.filter((r) => r.status === "skipped").length,
-	};
-
-	return NextResponse.json({
-		zipBase64: zipBuffer.toString("base64"),
-		stack: stack.summary,
-		summary,
-		perFileResults: perFileSummaries,
-		projectResults,
-		duplicateBankUpdates: newDuplicateBankEntries,
+		},
 	});
-}
 
-function normalizePath(p: string): string {
-	return p.replace(/\\/g, "/").replace(/^\/+/, "");
-}
-
-function joinUrl(base: string, relPath: string): string {
-	try {
-		const cleanBase = base.replace(/\/$/, "");
-		const cleanRel = relPath.replace(/(^|\/)index\.html?$/i, "");
-		return `${cleanBase}/${cleanRel}`.replace(/([^:])\/{2,}/g, "$1/");
-	} catch {
-		return relPath;
-	}
+	return new Response(stream, {
+		headers: {
+			"Content-Type": "application/x-ndjson; charset=utf-8",
+			"Cache-Control": "no-cache, no-transform",
+			"X-Content-Type-Options": "nosniff",
+		},
+	});
 }

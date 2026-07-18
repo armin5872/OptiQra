@@ -6,19 +6,35 @@ import AIProviderSetup from "./AIProviderSetup";
 import { getErrorMessage } from "@/lib/errorUtils";
 import type { AutoFixResult } from "@/lib/autoFixEngine";
 
+type ProjectMode = "audit" | "fix";
+
 interface PerFileSummary {
 	path: string;
 	results: AutoFixResult[];
 }
 
-interface ProjectFixResponse {
-	zipBase64: string;
+interface ProjectResponseData {
+	mode: ProjectMode;
+	zipBase64?: string;
 	stack: string;
-	summary: { filesFixed: number; filesSkippedTooMany: number; fixed: number; duplicated: number; skipped: number };
+	summary: {
+		filesFixed: number;
+		filesSkippedTooMany: number;
+		fixed: number;
+		duplicated: number;
+		aiNeeded: number;
+		skipped: number;
+	};
 	perFileResults: PerFileSummary[];
 	projectResults: AutoFixResult[];
 	duplicateBankUpdates: Record<string, string>;
 }
+
+type StreamEvent =
+	| { type: "status"; message: string }
+	| { type: "progress"; processed: number; total: number; currentFile?: string }
+	| { type: "done"; data: ProjectResponseData }
+	| { type: "error"; message: string };
 
 const DUPLICATE_BANK_KEY = "optiqra_autofix_bank";
 
@@ -93,14 +109,24 @@ function downloadZip(base64: string, filename: string) {
 	URL.revokeObjectURL(href);
 }
 
+const STATUS_LABEL: Record<AutoFixResult["status"], string> = {
+	fixed: "Auto-fixable",
+	duplicated: "Auto-fixable",
+	"ai-needed": "Needs AI / manual",
+	skipped: "Left as-is",
+};
+
 export default function ProjectUploadPanel() {
 	const { provider, apiKey, model, isConfigured, hydrated } = useAIProvider();
+	const [mode, setMode] = useState<ProjectMode>("audit");
 	const [dragOver, setDragOver] = useState(false);
 	const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle");
 	const [error, setError] = useState<string | null>(null);
-	const [result, setResult] = useState<ProjectFixResponse | null>(null);
+	const [result, setResult] = useState<ProjectResponseData | null>(null);
 	const [showKeyPanel, setShowKeyPanel] = useState(false);
 	const [expandedFile, setExpandedFile] = useState<string | null>(null);
+	const [progress, setProgress] = useState<{ processed: number; total: number } | null>(null);
+	const [statusMessage, setStatusMessage] = useState("");
 	const folderInputRef = useRef<HTMLInputElement>(null);
 	const zipInputRef = useRef<HTMLInputElement>(null);
 
@@ -109,11 +135,14 @@ export default function ProjectUploadPanel() {
 		setStatus("uploading");
 		setError(null);
 		setResult(null);
+		setProgress(null);
+		setStatusMessage("Reading your project…");
 
 		const form = new FormData();
 		for (const f of files) form.append("project", f, f.name);
+		form.append("mode", mode);
 		form.append("siteUrl", "");
-		if (hydrated && isConfigured) {
+		if (mode === "fix" && hydrated && isConfigured) {
 			form.append("provider", provider || "");
 			form.append("apiKey", apiKey);
 			form.append("model", model);
@@ -122,13 +151,59 @@ export default function ProjectUploadPanel() {
 
 		try {
 			const res = await fetch("/api/auto-fix-project", { method: "POST", body: form });
-			const json = await res.json();
-			if (!res.ok) throw new Error(json.error || "Failed to auto-fix the project");
-			setResult(json);
-			writeDuplicateBankUpdates(json.duplicateBankUpdates || {});
-			setStatus("idle");
+			if (!res.ok || !res.body) {
+				let message = mode === "audit" ? "Failed to audit the project" : "Failed to auto-fix the project";
+				try {
+					const json = await res.json();
+					message = json.error || message;
+				} catch {
+					// non-JSON error body — fall back to the default message
+				}
+				throw new Error(message);
+			}
+
+			const reader = res.body.getReader();
+			const decoder = new TextDecoder();
+			let buffer = "";
+			let finished = false;
+
+			while (true) {
+				const { value, done } = await reader.read();
+				if (done) break;
+				buffer += decoder.decode(value, { stream: true });
+
+				let newlineIdx;
+				while ((newlineIdx = buffer.indexOf("\n")) >= 0) {
+					const line = buffer.slice(0, newlineIdx).trim();
+					buffer = buffer.slice(newlineIdx + 1);
+					if (!line) continue;
+
+					let evt: StreamEvent;
+					try {
+						evt = JSON.parse(line) as StreamEvent;
+					} catch {
+						continue;
+					}
+
+					if (evt.type === "status") {
+						setStatusMessage(evt.message);
+					} else if (evt.type === "progress") {
+						setProgress({ processed: evt.processed, total: evt.total });
+						if (evt.currentFile) setStatusMessage(evt.currentFile);
+					} else if (evt.type === "done") {
+						setResult(evt.data);
+						writeDuplicateBankUpdates(evt.data.duplicateBankUpdates || {});
+						setStatus("idle");
+						finished = true;
+					} else if (evt.type === "error") {
+						throw new Error(evt.message);
+					}
+				}
+			}
+
+			if (!finished) throw new Error("Connection closed before the scan finished.");
 		} catch (err) {
-			setError(getErrorMessage(err, "Failed to auto-fix the project"));
+			setError(getErrorMessage(err, mode === "audit" ? "Failed to audit the project" : "Failed to auto-fix the project"));
 			setStatus("error");
 		}
 	};
@@ -161,10 +236,43 @@ export default function ProjectUploadPanel() {
 		e.target.value = "";
 	};
 
+	const percent = progress && progress.total > 0 ? Math.round((progress.processed / progress.total) * 100) : 0;
+
 	return (
 		<div className="project-upload">
 			<div className="upload-divider">
 				<span>or</span>
+			</div>
+
+			<div className="upload-mode-toggle" role="tablist" aria-label="Project upload mode">
+				<button
+					type="button"
+					role="tab"
+					aria-selected={mode === "audit"}
+					className={`upload-mode-btn ${mode === "audit" ? "active" : ""}`}
+					onClick={() => setMode("audit")}
+					disabled={status === "uploading"}
+				>
+					<span className="upload-mode-icon" aria-hidden>🔍</span>
+					<span className="upload-mode-copy">
+						<span className="upload-mode-title">Audit</span>
+						<span className="upload-mode-sub">Scan &amp; report issues — nothing changes</span>
+					</span>
+				</button>
+				<button
+					type="button"
+					role="tab"
+					aria-selected={mode === "fix"}
+					className={`upload-mode-btn ${mode === "fix" ? "active" : ""}`}
+					onClick={() => setMode("fix")}
+					disabled={status === "uploading"}
+				>
+					<span className="upload-mode-icon" aria-hidden>🛠️</span>
+					<span className="upload-mode-copy">
+						<span className="upload-mode-title">Auto-fix</span>
+						<span className="upload-mode-sub">Apply fixes &amp; download the result</span>
+					</span>
+				</button>
 			</div>
 
 			<div
@@ -176,13 +284,28 @@ export default function ProjectUploadPanel() {
 				onDragLeave={() => setDragOver(false)}
 				onDrop={handleDrop}
 			>
+				<div className="upload-dropzone-icon" aria-hidden>
+					<svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+						<path
+							d="M12 4v11m0-11 4 4m-4-4-4 4M5 17v1a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-1"
+							stroke="currentColor"
+							strokeWidth="1.8"
+							strokeLinecap="round"
+							strokeLinejoin="round"
+						/>
+					</svg>
+				</div>
 				<p className="upload-dropzone-title">Drag &amp; drop or upload your project</p>
-				<p className="upload-dropzone-sub">We&apos;ll scan every HTML, JSX/TSX, Vue, Svelte, and Angular file we find (Next.js, Nuxt, Vite/CRA, SvelteKit, Angular, or plain static/vanilla JS) and auto-fix what it finds — right in your browser, nothing kept on our servers after.</p>
+				<p className="upload-dropzone-sub">
+					We&apos;ll scan every HTML, JSX/TSX, Vue, Svelte, and Angular file we find (Next.js, Nuxt, Vite/CRA, SvelteKit,
+					Angular, or plain static/vanilla JS) — {mode === "audit" ? "and report what it finds" : "and auto-fix what it finds"}{" "}
+					— right in your browser, nothing kept on our servers after.
+				</p>
 				<div className="upload-dropzone-actions">
-					<button type="button" className="apply-btn" onClick={() => folderInputRef.current?.click()}>
+					<button type="button" className="apply-btn" onClick={() => folderInputRef.current?.click()} disabled={status === "uploading"}>
 						Choose folder
 					</button>
-					<button type="button" className="link-btn" onClick={() => zipInputRef.current?.click()}>
+					<button type="button" className="link-btn" onClick={() => zipInputRef.current?.click()} disabled={status === "uploading"}>
 						or upload a .zip
 					</button>
 				</div>
@@ -199,19 +322,44 @@ export default function ProjectUploadPanel() {
 				<input ref={zipInputRef} type="file" hidden accept=".zip" onChange={handleZipPick} />
 			</div>
 
-			<button type="button" className="link-btn upload-key-toggle" onClick={() => setShowKeyPanel((v) => !v)}>
-				{hydrated && isConfigured ? "AI key configured — for better fixes" : "For better fixes, add your AI API key (optional)"}
-			</button>
-			{showKeyPanel && <AIProviderSetup />}
-			{hydrated && !isConfigured && (
+			{mode === "fix" && (
+				<>
+					<button type="button" className="link-btn upload-key-toggle" onClick={() => setShowKeyPanel((v) => !v)}>
+						{hydrated && isConfigured ? "AI key configured — for better fixes" : "For better fixes, add your AI API key (optional)"}
+					</button>
+					{showKeyPanel && <AIProviderSetup />}
+					{hydrated && !isConfigured && (
+						<p className="autofix-note">
+							No key? Auto-fix still handles every mechanical issue (headers, tags, attributes, structure). Anything
+							needing written content (titles, descriptions, alt text) will reuse a fix from elsewhere in your
+							project if one exists, or stay unfixed.
+						</p>
+					)}
+				</>
+			)}
+			{mode === "audit" && (
 				<p className="autofix-note">
-					No key? Auto-fix still handles every mechanical issue (headers, tags, attributes, structure). Anything
-					needing written content (titles, descriptions, alt text) will reuse a fix from elsewhere in your
-					project if one exists, or stay unfixed.
+					Audit only looks — it detects the same issues Auto-fix would touch and reports them, without changing or
+					downloading anything. Switch to Auto-fix any time to apply changes.
 				</p>
 			)}
 
-			{status === "uploading" && <p className="upload-status">Fixing your project…</p>}
+			{status === "uploading" && (
+				<div className="upload-progress">
+					<div className="crawl-progress-head">
+						<span>{mode === "audit" ? "Auditing…" : "Fixing…"}</span>
+						<span>{progress ? `${progress.processed} / ${progress.total}` : ""}</span>
+					</div>
+					<div className="progress-bar">
+						<div className="progress-bar-fill" style={{ width: progress ? `${percent}%` : "12%" }} />
+					</div>
+					{statusMessage && (
+						<p className="upload-status upload-status-file" title={statusMessage}>
+							{statusMessage}
+						</p>
+					)}
+				</div>
+			)}
 
 			{status === "error" && (
 				<div className="modal-error clone-modal-error">
@@ -222,23 +370,46 @@ export default function ProjectUploadPanel() {
 			{result && (
 				<div className="autofix-summary">
 					<div className="autofix-summary-row">
-						<span className="autofix-chip autofix-chip-fixed">{result.summary.fixed} fixed</span>
-						{result.summary.duplicated > 0 && (
-							<span className="autofix-chip autofix-chip-duplicated">
-								{result.summary.duplicated} reused from elsewhere in your project
-							</span>
-						)}
-						{result.summary.skipped > 0 && (
-							<span className="autofix-chip autofix-chip-skipped">{result.summary.skipped} left unfixed</span>
+						{result.mode === "fix" ? (
+							<>
+								<span className="autofix-chip autofix-chip-fixed">{result.summary.fixed} fixed</span>
+								{result.summary.duplicated > 0 && (
+									<span className="autofix-chip autofix-chip-duplicated">
+										{result.summary.duplicated} reused from elsewhere in your project
+									</span>
+								)}
+								{result.summary.skipped > 0 && (
+									<span className="autofix-chip autofix-chip-skipped">{result.summary.skipped} left unfixed</span>
+								)}
+							</>
+						) : (
+							<>
+								<span className="autofix-chip autofix-chip-fixed">{result.summary.fixed} auto-fixable</span>
+								{result.summary.aiNeeded > 0 && (
+									<span className="autofix-chip autofix-chip-ai-needed">
+										{result.summary.aiNeeded} need AI / manual content
+									</span>
+								)}
+								{result.summary.skipped > 0 && (
+									<span className="autofix-chip autofix-chip-skipped">{result.summary.skipped} intentionally left alone</span>
+								)}
+							</>
 						)}
 						<span className="autofix-stack-note">Detected stack: {result.stack}</span>
-						<button type="button" className="apply-btn" onClick={() => downloadZip(result.zipBase64, "optiqra-fixed-project.zip")}>
-							Download fixed project
-						</button>
+						{result.mode === "fix" && result.zipBase64 && (
+							<button type="button" className="apply-btn" onClick={() => downloadZip(result.zipBase64!, "optiqra-fixed-project.zip")}>
+								Download fixed project
+							</button>
+						)}
+						{result.mode === "audit" && (
+							<button type="button" className="apply-btn" onClick={() => setMode("fix")}>
+								Switch to Auto-fix
+							</button>
+						)}
 					</div>
 					{result.summary.filesSkippedTooMany > 0 && (
 						<p className="autofix-note">
-							Fixed the first {result.summary.filesFixed} files; {result.summary.filesSkippedTooMany} more were
+							Scanned the first {result.summary.filesFixed} files; {result.summary.filesSkippedTooMany} more were
 							left as-is to keep this request from running too long — re-upload just that subfolder to cover the rest.
 						</p>
 					)}
@@ -250,6 +421,7 @@ export default function ProjectUploadPanel() {
 								{result.projectResults.map((r) => (
 									<li key={r.id} className={`autofix-result autofix-result-${r.status}`}>
 										<strong>{r.title}</strong>
+										{result.mode === "audit" && <span className="autofix-result-badge">{STATUS_LABEL[r.status]}</span>}
 										<span>{r.note}</span>
 									</li>
 								))}
@@ -272,6 +444,7 @@ export default function ProjectUploadPanel() {
 									{f.results.map((r) => (
 										<li key={r.id} className={`autofix-result autofix-result-${r.status}`}>
 											<strong>{r.title}</strong>
+											{result.mode === "audit" && <span className="autofix-result-badge">{STATUS_LABEL[r.status]}</span>}
 											<span>{r.note}</span>
 										</li>
 									))}

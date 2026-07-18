@@ -3271,22 +3271,95 @@ ol.md-list li::before {
 	background: var(--line);
 }
 
+.upload-mode-toggle {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 8px;
+}
+
+.upload-mode-btn {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 12px;
+	border-radius: 10px;
+	border: 1.5px solid var(--line);
+	background: var(--surface);
+	cursor: pointer;
+	text-align: left;
+	transition: border-color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+}
+
+.upload-mode-btn:hover:not(:disabled) {
+	border-color: var(--accent);
+	transform: translateY(-1px);
+}
+
+.upload-mode-btn:disabled {
+	cursor: not-allowed;
+	opacity: 0.6;
+}
+
+.upload-mode-btn.active {
+	border-color: var(--accent);
+	background: var(--accent-soft);
+	box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
+.upload-mode-icon {
+	font-size: 20px;
+	line-height: 1;
+	flex: none;
+}
+
+.upload-mode-copy {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	min-width: 0;
+}
+
+.upload-mode-title {
+	font-weight: 700;
+	font-size: 13px;
+	color: var(--ink);
+}
+
+.upload-mode-sub {
+	font-size: 11px;
+	color: var(--ink-soft);
+	white-space: normal;
+}
+
 .upload-dropzone {
 	border: 1.5px dashed var(--line);
-	border-radius: 12px;
-	padding: 20px 16px;
+	border-radius: 14px;
+	padding: 24px 18px;
 	text-align: center;
 	display: flex;
 	flex-direction: column;
 	align-items: center;
 	gap: 6px;
-	background: var(--surface-2);
-	transition: border-color 0.15s ease, background 0.15s ease;
+	background: linear-gradient(180deg, var(--surface-2), var(--surface));
+	transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 
 .upload-dropzone.drag-over {
 	border-color: var(--accent, #4f7cff);
-	background: var(--surface);
+	background: var(--accent-soft);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.upload-dropzone-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 48px;
+	height: 48px;
+	border-radius: 50%;
+	background: var(--accent-soft);
+	color: var(--accent);
+	margin-bottom: 4px;
 }
 
 .upload-dropzone-title {
@@ -3318,6 +3391,46 @@ ol.md-list li::before {
 	margin: 0;
 	font-size: 13px;
 	color: var(--ink-soft);
+}
+
+.upload-progress {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 10px 12px;
+	border: 1px solid var(--line);
+	border-radius: 10px;
+	background: var(--surface-2);
+}
+
+.upload-status-file {
+	font-family: "IBM Plex Mono", monospace;
+	font-size: 11.5px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.autofix-chip-ai-needed {
+	background: var(--accent);
+}
+
+.autofix-result-ai-needed {
+	border-left-color: var(--accent);
+}
+
+.autofix-result-badge {
+	display: inline-block;
+	align-self: flex-start;
+	font-size: 10px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	color: var(--ink-soft);
+	background: var(--surface-2);
+	border: 1px solid var(--line);
+	border-radius: 999px;
+	padding: 1px 8px;
 }
 
 .autofix-file-group {
@@ -3452,6 +3565,12 @@ ol.md-list li::before {
 
 .autofix-result-skipped {
 	border-left-color: var(--sev-medium);
+}
+
+@media (max-width: 480px) {
+	.upload-mode-toggle {
+		grid-template-columns: 1fr;
+	}
 }
 
 /* Responsive modal on smaller screens */
