@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useSettings } from "@/lib/hooks/useSettings";
+import { useTranslation, type TranslationKey } from "@/lib/hooks/useTranslation";
 import { useAIProvider } from "@/lib/hooks/useAIProvider";
+import { LANGUAGES } from "@/lib/i18n";
 import {
 	ACCENT_PRESETS,
 	exportSettingsAsJSON,
@@ -44,31 +46,31 @@ type TabId =
 	| "reports"
 	| "privacy";
 
-const TABS: { id: TabId; label: string; icon: string }[] = [
-	{ id: "appearance", label: "Appearance", icon: "🎨" },
-	{ id: "layout", label: "Layout", icon: "📐" },
-	{ id: "typography", label: "Typography", icon: "🔤" },
-	{ id: "scanning", label: "Scanning", icon: "🔍" },
-	{ id: "crawler", label: "Crawler", icon: "🕸️" },
-	{ id: "analyzer", label: "Analyzer", icon: "📊" },
-	{ id: "ai", label: "AI Assistant", icon: "✨" },
-	{ id: "rules", label: "Custom rules", icon: "🧩" },
-	{ id: "advanced", label: "Advanced / Code", icon: "🛠️" },
-	{ id: "notifications", label: "Notifications", icon: "🔔" },
-	{ id: "reports", label: "Reports", icon: "📄" },
-	{ id: "privacy", label: "Privacy & data", icon: "🛡️" },
+const TABS: { id: TabId; labelKey: TranslationKey; icon: string }[] = [
+	{ id: "appearance", labelKey: "settings.tabs.appearance", icon: "🎨" },
+	{ id: "layout", labelKey: "settings.tabs.layout", icon: "📐" },
+	{ id: "typography", labelKey: "settings.tabs.typography", icon: "🔤" },
+	{ id: "scanning", labelKey: "settings.tabs.scanning", icon: "🔍" },
+	{ id: "crawler", labelKey: "settings.tabs.crawler", icon: "🕸️" },
+	{ id: "analyzer", labelKey: "settings.tabs.analyzer", icon: "📊" },
+	{ id: "ai", labelKey: "settings.tabs.ai", icon: "✨" },
+	{ id: "rules", labelKey: "settings.tabs.rules", icon: "🧩" },
+	{ id: "advanced", labelKey: "settings.tabs.advanced", icon: "🛠️" },
+	{ id: "notifications", labelKey: "settings.tabs.notifications", icon: "🔔" },
+	{ id: "reports", labelKey: "settings.tabs.reports", icon: "📄" },
+	{ id: "privacy", labelKey: "settings.tabs.privacy", icon: "🛡️" },
 ];
 
-const CATEGORY_LABELS: Record<keyof OptiqraSettings["analyzer"]["visibleCategories"], string> = {
-	seo: "SEO",
-	aeo: "AEO",
-	geo: "GEO",
-	speed: "Performance",
-	a11y: "Accessibility",
-	conversions: "Conversions",
-	security: "Security headers",
-	links: "Broken links",
-	duplicateContent: "Duplicate content",
+const CATEGORY_LABEL_KEYS: Record<keyof OptiqraSettings["analyzer"]["visibleCategories"], TranslationKey> = {
+	seo: "settings.categories.seo",
+	aeo: "settings.categories.aeo",
+	geo: "settings.categories.geo",
+	speed: "settings.categories.speed",
+	a11y: "settings.categories.a11y",
+	conversions: "settings.categories.conversions",
+	security: "settings.categories.security",
+	links: "settings.categories.links",
+	duplicateContent: "settings.categories.duplicateContent",
 };
 
 function Switch({ on, onToggle, label }: { on: boolean; onToggle: () => void; label: string }) {
@@ -88,6 +90,7 @@ export default function SettingsPanel() {
 	const [open, setOpen] = useState(false);
 	const [tab, setTab] = useState<TabId>("appearance");
 	const { settings, hydrated, update, replaceAll, reset } = useSettings();
+	const { t } = useTranslation();
 	const { provider, model, isConfigured, hydrated: aiHydrated } = useAIProvider();
 	const panelRef = useRef<HTMLDivElement>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
@@ -101,8 +104,8 @@ export default function SettingsPanel() {
 	// Show brief "Applied" feedback when appearance/layout/typography settings change
 	useEffect(() => {
 		if (!hydrated) return;
-		flashToast("✓ Applied");
-	}, [hydrated, settings.appearance, settings.layout, settings.typography, settings.advanced.customCSS]);
+		flashToast(t("settings.toasts.applied"));
+	}, [hydrated, settings.appearance, settings.layout, settings.typography, settings.advanced.customCSS, t]);
 
 	useEffect(() => {
 		if (!open) return;
@@ -131,7 +134,7 @@ export default function SettingsPanel() {
 		await clearScans();
 		clearScanCookies();
 		setScanCount(0);
-		flashToast("Scan history cleared");
+		flashToast(t("settings.toasts.scanHistoryCleared"));
 	};
 
 	const handleExport = () => {
@@ -142,18 +145,18 @@ export default function SettingsPanel() {
 		a.download = "optiqra-settings.json";
 		a.click();
 		URL.revokeObjectURL(url);
-		flashToast("Settings exported");
+		flashToast(t("settings.toasts.settingsExported"));
 	};
 
 	const handleImportFile = async (file: File) => {
 		const text = await file.text();
 		const parsed = parseImportedSettings(text);
 		if (!parsed) {
-			flashToast("Couldn't read that file");
+			flashToast(t("settings.toasts.couldntReadFile"));
 			return;
 		}
 		replaceAll(parsed);
-		flashToast("Settings imported");
+		flashToast(t("settings.toasts.settingsImported"));
 	};
 
 	const handleEnableNotifications = async () => {
@@ -190,7 +193,7 @@ export default function SettingsPanel() {
 						strokeWidth="1.6"
 					/>
 				</svg>
-				Settings
+				{t("header.settings")}
 			</button>
 
 			{open && (
@@ -198,21 +201,21 @@ export default function SettingsPanel() {
 					<div
 						className="settings-panel"
 						role="dialog"
-						aria-label="Settings"
+						aria-label={t("settings.title")}
 						ref={panelRef}
 						onClick={(e) => e.stopPropagation()}
 					>
 						<nav className="settings-nav">
-							<div className="settings-nav-title">⚙️ Settings</div>
-							{TABS.map((t) => (
+							<div className="settings-nav-title">⚙️ {t("settings.title")}</div>
+							{TABS.map((tabInfo) => (
 								<button
-									key={t.id}
+									key={tabInfo.id}
 									type="button"
-									className={`settings-nav-btn ${tab === t.id ? "active" : ""}`}
-									onClick={() => setTab(t.id)}
+									className={`settings-nav-btn ${tab === tabInfo.id ? "active" : ""}`}
+									onClick={() => setTab(tabInfo.id)}
 								>
-									<span className="settings-nav-icon">{t.icon}</span>
-									{t.label}
+									<span className="settings-nav-icon">{tabInfo.icon}</span>
+									{t(tabInfo.labelKey)}
 								</button>
 							))}
 						</nav>
@@ -220,14 +223,14 @@ export default function SettingsPanel() {
 						<div className="settings-main">
 							<div className="settings-header">
 								<div className="settings-header-title">
-									<h2>{TABS.find((t) => t.id === tab)?.label}</h2>
-									<p>Changes save automatically, right on this device.</p>
+									<h2>{t(TABS.find((tabInfo) => tabInfo.id === tab)?.labelKey ?? "settings.tabs.appearance")}</h2>
+									<p>{t("settings.changesSaveAutomatically")}</p>
 								</div>
 								<button
 									type="button"
 									className="modal-close"
 									onClick={() => setOpen(false)}
-									aria-label="Close settings"
+									aria-label={t("settings.closeSettings")}
 								>
 									×
 								</button>
@@ -237,13 +240,36 @@ export default function SettingsPanel() {
 								{tab === "appearance" && (
 									<>
 										<p className="settings-section-desc">
-											Make OptiQra look and feel like yours. These apply instantly, everywhere.
+											{t("settings.appearance.sectionDesc")}
 										</p>
 										<div className="settings-group">
 											<div className="settings-row">
 												<div className="settings-row-label">
-													<strong>Theme</strong>
-													<span>Light, dark, or match your system</span>
+													<strong>{t("settings.appearance.language")}</strong>
+													<span>{t("settings.appearance.languageHint")}</span>
+												</div>
+												<div className="settings-row-control">
+													<select
+														value={settings.general.language}
+														onChange={(e) =>
+															update("general", {
+																language: e.target.value as OptiqraSettings["general"]["language"],
+															})
+														}
+														aria-label={t("settings.appearance.language")}
+													>
+														{LANGUAGES.map((lang) => (
+															<option key={lang.code} value={lang.code}>
+																{lang.nativeName}
+															</option>
+														))}
+													</select>
+												</div>
+											</div>
+											<div className="settings-row">
+												<div className="settings-row-label">
+													<strong>{t("settings.appearance.theme")}</strong>
+													<span>{t("settings.appearance.themeHint")}</span>
 												</div>
 												<div className="settings-row-control">
 													<div className="settings-segmented">
@@ -254,7 +280,9 @@ export default function SettingsPanel() {
 																className={a.theme === v ? "active" : ""}
 																onClick={() => update("appearance", { theme: v })}
 															>
-																{v === "system" ? "Auto" : v[0].toUpperCase() + v.slice(1)}
+																{v === "system"
+																	? t("settings.appearance.auto")
+																	: t(`settings.appearance.${v}` as TranslationKey)}
 															</button>
 														))}
 													</div>
@@ -262,8 +290,8 @@ export default function SettingsPanel() {
 											</div>
 											<div className="settings-row">
 												<div className="settings-row-label">
-													<strong>Accent color</strong>
-													<span>Colors links, buttons, and highlights</span>
+													<strong>{t("settings.appearance.accentColor")}</strong>
+													<span>{t("settings.appearance.accentColorHint")}</span>
 												</div>
 												<div className="settings-row-control">
 													<div className="settings-swatches">
@@ -283,8 +311,8 @@ export default function SettingsPanel() {
 											</div>
 											<div className="settings-row">
 												<div className="settings-row-label">
-													<strong>Density</strong>
-													<span>How much breathing room cards & lists get</span>
+													<strong>{t("settings.appearance.density")}</strong>
+													<span>{t("settings.appearance.densityHint")}</span>
 												</div>
 												<div className="settings-row-control">
 													<div className="settings-segmented">
@@ -295,7 +323,9 @@ export default function SettingsPanel() {
 																className={a.density === v ? "active" : ""}
 																onClick={() => update("appearance", { density: v })}
 															>
-																{v === "comfortable" ? "Comfortable" : "Compact"}
+																{v === "comfortable"
+																	? t("settings.appearance.comfortable")
+																	: t("settings.appearance.compact")}
 															</button>
 														))}
 													</div>
@@ -303,8 +333,8 @@ export default function SettingsPanel() {
 											</div>
 											<div className="settings-row">
 												<div className="settings-row-label">
-													<strong>Text size</strong>
-													<span>Scales all body text</span>
+													<strong>{t("settings.appearance.textSize")}</strong>
+													<span>{t("settings.appearance.textSizeHint")}</span>
 												</div>
 												<div className="settings-row-control">
 													<div className="settings-segmented">
@@ -315,7 +345,7 @@ export default function SettingsPanel() {
 																className={a.fontScale === v ? "active" : ""}
 																onClick={() => update("appearance", { fontScale: v })}
 															>
-																{v === "default" ? "Default" : v[0].toUpperCase() + v.slice(1)}
+																{t(`settings.appearance.${v}` as TranslationKey)}
 															</button>
 														))}
 													</div>
@@ -323,12 +353,12 @@ export default function SettingsPanel() {
 											</div>
 											<div className="settings-row">
 												<div className="settings-row-label">
-													<strong>Reduce motion</strong>
-													<span>Turns off animations &amp; transitions</span>
+													<strong>{t("settings.appearance.reduceMotion")}</strong>
+													<span>{t("settings.appearance.reduceMotionHint")}</span>
 												</div>
 												<Switch
 													on={a.reduceMotion}
-													label="Reduce motion"
+													label={t("settings.appearance.reduceMotion")}
 													onToggle={() => update("appearance", { reduceMotion: !a.reduceMotion })}
 												/>
 											</div>
@@ -632,7 +662,7 @@ export default function SettingsPanel() {
 											hides it from view — handy if some checks aren't relevant to your site.
 										</p>
 										<div className="settings-cat-grid">
-											{(Object.keys(CATEGORY_LABELS) as (keyof typeof CATEGORY_LABELS)[]).map((key) => {
+											{(Object.keys(CATEGORY_LABEL_KEYS) as (keyof typeof CATEGORY_LABEL_KEYS)[]).map((key) => {
 												const on = settings.analyzer.visibleCategories[key];
 												return (
 													<label key={key} className={`settings-cat-chip ${on ? "on" : ""}`}>
@@ -648,7 +678,7 @@ export default function SettingsPanel() {
 																})
 															}
 														/>
-														{CATEGORY_LABELS[key]}
+														{t(CATEGORY_LABEL_KEYS[key])}
 													</label>
 												);
 											})}

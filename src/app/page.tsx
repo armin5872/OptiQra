@@ -14,6 +14,7 @@ import ScheduleManager from "./components/ScheduleManager";
 import SettingsPanel from "./components/SettingsPanel";
 import MissingFileBanner from "./components/MissingFileBanner";
 import { useSettings } from "@/lib/hooks/useSettings";
+import { useTranslation } from "@/lib/hooks/useTranslation";
 import {
 	saveScan,
 	getRecentScans,
@@ -80,6 +81,7 @@ type Category = {
 
 export default function Home() {
 	const { settings, hydrated: settingsHydrated } = useSettings();
+	const { t } = useTranslation();
 	const appliedDefaultsRef = useRef(false);
 	const [viewState, setViewState] = useState<ScanState>("hero");
 	const [url, setUrl] = useState("");
@@ -611,12 +613,9 @@ export default function Home() {
 
 			{viewState === "hero" && (
 				<section className="hero">
-					<p className="eyebrow">Diagnostic scan</p>
-					<h1>Find out what's actually wrong with your website.</h1>
-					<p className="sub">
-						Paste a URL. We check your SEO, speed, accessibility, and conversion
-						paths — then show you exactly what to fix.
-					</p>
+					<p className="eyebrow">{t("hero.eyebrow")}</p>
+					<h1>{t("hero.title")}</h1>
+					<p className="sub">{t("hero.subtitle")}</p>
 					<div className="mode-toggle" role="radiogroup" aria-label="Scan mode">
 						<button
 							type="button"
@@ -625,7 +624,7 @@ export default function Home() {
 							className={scanMode === "single" ? "active" : ""}
 							onClick={() => setScanMode("single")}
 						>
-							Single page
+							{t("hero.singlePage")}
 						</button>
 						<button
 							type="button"
@@ -634,7 +633,7 @@ export default function Home() {
 							className={scanMode === "site" ? "active" : ""}
 							onClick={() => setScanMode("site")}
 						>
-							Whole site
+							{t("hero.wholeSite")}
 						</button>
 					</div>
 					{scanMode === "site" && (
@@ -654,7 +653,7 @@ export default function Home() {
 								>
 									<span className="depth-label">{d.label}</span>
 									<span className="depth-hint">
-										{d.id === "custom" ? "your choice" : `${d.pages} pages`}
+										{d.id === "custom" ? t("hero.yourChoice") : `${d.pages} ${t("hero.pagesSuffix")}`}
 									</span>
 								</button>
 							))}
@@ -662,7 +661,7 @@ export default function Home() {
 					)}
 					{scanMode === "site" && scanDepth === "custom" && (
 						<div className="custom-pages">
-							<label htmlFor="customPages">Pages to scan</label>
+							<label htmlFor="customPages">{t("hero.pagesToScan")}</label>
 							<input
 								id="customPages"
 								type="number"
@@ -689,12 +688,12 @@ export default function Home() {
 							type="text"
 							value={url}
 							onChange={(e) => setUrl(e.target.value)}
-							placeholder="https://yoursite.com"
+							placeholder={t("hero.urlPlaceholder")}
 							required
 							aria-label="Website URL"
 						/>
 						<button type="submit">
-							{scanMode === "site" ? "Crawl site →" : "Run diagnostic →"}
+							{scanMode === "site" ? t("hero.crawlSite") : t("hero.runDiagnostic")}
 						</button>
 					</form>
 					{scanMode === "site" && (

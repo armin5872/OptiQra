@@ -1,4 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
+import { DEFAULT_LANGUAGE, isLanguageCode, type LanguageCode } from "./i18n/languages";
 
 /**
  * All user-facing customization for OptiQra lives here: appearance, scan
@@ -25,6 +26,12 @@ export type MotionSpeed = "slow" | "normal" | "fast";
 export type FontFamilyChoice = "default" | "system" | "serif" | "mono" | "custom";
 
 export interface OptiqraSettings {
+	/** App-wide, not tied to look-and-feel — currently just the UI language,
+	 *  kept separate from `appearance` since it affects text content rather
+	 *  than styling. */
+	general: {
+		language: LanguageCode;
+	};
 	appearance: {
 		theme: ThemeMode;
 		accentColor: string; // hex
@@ -97,6 +104,9 @@ export interface OptiqraSettings {
 }
 
 export const DEFAULT_SETTINGS: OptiqraSettings = {
+	general: {
+		language: DEFAULT_LANGUAGE,
+	},
 	appearance: {
 		theme: "system",
 		accentColor: "#6505ff",
@@ -210,6 +220,9 @@ function getDB() {
 function mergeWithDefaults(stored: unknown): OptiqraSettings {
 	const s = (stored ?? {}) as Partial<OptiqraSettings>;
 	return {
+		general: {
+			language: isLanguageCode(s.general?.language) ? s.general!.language : DEFAULT_SETTINGS.general.language,
+		},
 		appearance: { ...DEFAULT_SETTINGS.appearance, ...s.appearance },
 		scanning: { ...DEFAULT_SETTINGS.scanning, ...s.scanning },
 		crawler: { ...DEFAULT_SETTINGS.crawler, ...s.crawler },
@@ -234,6 +247,7 @@ function mergeWithDefaults(stored: unknown): OptiqraSettings {
 function setMirrorCookie(settings: OptiqraSettings) {
 	if (typeof document === "undefined") return;
 	const mirror = {
+		language: settings.general.language,
 		theme: settings.appearance.theme,
 		accentColor: settings.appearance.accentColor,
 		density: settings.appearance.density,
@@ -256,6 +270,7 @@ function setMirrorCookie(settings: OptiqraSettings) {
  *  theme/width/radius on reload. IndexedDB (read async, after hydration)
  *  always wins once it's finished loading; this is just the first paint. */
 export type SettingsMirror = {
+	language: LanguageCode;
 	theme: ThemeMode;
 	accentColor: string;
 	density: Density;
@@ -278,6 +293,7 @@ export function readAppearanceMirrorFromCookie(): SettingsMirror | null {
 	try {
 		const raw = JSON.parse(decodeURIComponent(match.split("=").slice(1).join("=")));
 		return {
+			language: isLanguageCode(raw.language) ? raw.language : DEFAULT_SETTINGS.general.language,
 			theme: raw.theme ?? DEFAULT_SETTINGS.appearance.theme,
 			accentColor: raw.accentColor ?? DEFAULT_SETTINGS.appearance.accentColor,
 			density: raw.density ?? DEFAULT_SETTINGS.appearance.density,

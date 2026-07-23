@@ -5,8 +5,11 @@ import {
 	Lexend,
 } from "next/font/google";
 import Script from "next/script";
+import { cookies } from "next/headers";
 import PWARegister from "./components/PWARegister";
 import AppearanceEffects from "./components/AppearanceEffects";
+import SiteFooter from "./components/SiteFooter";
+import { getLanguageInfo, isLanguageCode, DEFAULT_LANGUAGE } from "@/lib/i18n";
 import "./globals.css";
 
 const plexSans = IBM_Plex_Sans({
@@ -104,13 +107,26 @@ export const metadata = {
 	},
 };
 
-export default function RootLayout({
+export default async function RootLayout({
 	children,
 }: {
 	children: React.ReactNode;
 }) {
+	const cookieStore = await cookies();
+	const mirrorRaw = cookieStore.get("optiqra_settings_mirror")?.value;
+	let initialLanguage = DEFAULT_LANGUAGE;
+	if (mirrorRaw) {
+		try {
+			const parsed = JSON.parse(decodeURIComponent(mirrorRaw));
+			if (isLanguageCode(parsed.language)) initialLanguage = parsed.language;
+		} catch {
+			// Cookie missing/corrupt — fall back to the default language below.
+		}
+	}
+	const { dir } = getLanguageInfo(initialLanguage);
+
 	return (
-		<html lang="en">
+		<html lang={initialLanguage} dir={dir}>
 			<body
 				className={`${plexSans.variable} ${plexCondensed.variable} ${plexMono.variable} ${readable.variable} font-sans`}
 			>
@@ -132,6 +148,11 @@ export default function RootLayout({
 									? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
 									: theme;
 								var root = document.documentElement;
+								if (a.language) {
+									root.setAttribute("lang", a.language);
+									var rtlLangs = ["fa", "ar"];
+									root.setAttribute("dir", rtlLangs.indexOf(a.language) !== -1 ? "rtl" : "ltr");
+								}
 								root.setAttribute("data-theme", resolved);
 								root.setAttribute("data-density", a.density || "comfortable");
 								root.setAttribute("data-font-scale", a.fontScale || "default");
@@ -184,16 +205,7 @@ export default function RootLayout({
 
 				<PWARegister />
 
-				<footer className="site-footer">
-					<span>Made by</span>{" "}
-					<a
-						href="https://github.com/armin5872/OptiQra"
-						target="_blank"
-						rel="noopener noreferrer"
-					>
-						ArminNX and the community
-					</a>
-				</footer>
+				<SiteFooter />
 			</body>
 		</html>
 	);

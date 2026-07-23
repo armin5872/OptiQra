@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { useSettings } from "@/lib/hooks/useSettings";
 import { applyCustomCSS, runCustomJS } from "@/lib/customCode";
 import type { OptiqraSettings } from "@/lib/settingsStore";
+import { getLanguageInfo } from "@/lib/i18n";
 
 /** Mirrors the current appearance/layout/typography settings onto <html> as
  *  data-attributes and CSS variable overrides. Pairs with the inline
@@ -42,6 +43,13 @@ export default function AppearanceEffects() {
 		mq.addEventListener("change", onChange);
 		return () => mq.removeEventListener("change", onChange);
 	}, [hydrated, settings.appearance, settings.layout, settings.typography]);
+
+	useEffect(() => {
+		if (!hydrated) return;
+		const info = getLanguageInfo(settings.general.language);
+		document.documentElement.lang = settings.general.language;
+		document.documentElement.dir = info.dir;
+	}, [hydrated, settings.general.language]);
 
 	useEffect(() => {
 		if (!hydrated) return;
