@@ -80,7 +80,7 @@ const nextConfig: NextConfig = {
 	webpack: (config) => config,
 	// Optimize for production and Docker
 	output: process.env.DOCKER_BUILD ? "standalone" : undefined,
-	compress: true,
+	compress: false,
 	poweredByHeader: false,
 	reactStrictMode: true,
 
