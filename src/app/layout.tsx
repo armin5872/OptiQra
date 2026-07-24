@@ -10,6 +10,7 @@ import PWARegister from "./components/PWARegister";
 import AppearanceEffects from "./components/AppearanceEffects";
 import SiteFooter from "./components/SiteFooter";
 import { getLanguageInfo, isLanguageCode, DEFAULT_LANGUAGE } from "@/lib/i18n";
+import "./sentry.client";
 import "./globals.css";
 
 const plexSans = IBM_Plex_Sans({
