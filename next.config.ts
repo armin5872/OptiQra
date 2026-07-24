@@ -80,6 +80,13 @@ const nextConfig: NextConfig = {
 	webpack: (config) => config,
 	// Optimize for production and Docker
 	output: process.env.DOCKER_BUILD ? "standalone" : undefined,
+	// IMPORTANT: keep this false. Next's built-in gzip compression buffers
+	// the entire response before sending it, which silently breaks the
+	// NDJSON streaming used by /api/analyze and /api/auto-fix-project —
+	// their "progress" events all arrive at once instead of live, so both
+	// progress bars appear frozen and then jump to 100%. Let a reverse
+	// proxy / CDN (nginx, Vercel, Cloudflare, etc.) handle compression
+	// instead, since that layer streams properly.
 	compress: false,
 	poweredByHeader: false,
 	reactStrictMode: true,
