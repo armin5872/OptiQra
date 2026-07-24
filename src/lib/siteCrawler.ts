@@ -5,6 +5,7 @@
 import * as cheerio from "cheerio";
 import { extractLinks } from "@/lib/link-analyzer";
 import { getErrorMessage, isAbortError } from "@/lib/errorUtils";
+import { safeFetch } from "@/lib/urlSafety";
 
 const CRAWL_USER_AGENT = "OptiqraBot/1.0 (+https://optiqra.vercel.app/bot)";
 export const DEFAULT_MAX_PAGES = 15;
@@ -164,8 +165,12 @@ async function fetchWithTimeout(
 		// headers) — fetch() resolves as soon as headers arrive, before the body
 		// is read. Body-level timing is handled separately by the caller via
 		// readBodyWithLimits, which has its own stall timeout.
-		return await fetch(url, {
-			redirect: "follow",
+		//
+		// safeFetch (not a bare fetch) so that every redirect hop is
+		// re-validated against private/loopback/link-local ranges — a crawled
+		// page redirecting to an internal address would otherwise be followed
+		// blindly.
+		return await safeFetch(url, {
 			headers,
 			signal: controller.signal,
 			next: { revalidate: 3600 },

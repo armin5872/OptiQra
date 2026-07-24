@@ -1,4 +1,5 @@
 import { issue, pass, type Issue } from "@/lib/auditUtils";
+import { safeFetch } from "@/lib/urlSafety";
 
 export interface SecurityHeaderResult {
 	issues: Issue[];
@@ -56,8 +57,7 @@ async function fetchHeaders(
 	targetUrl: string,
 ): Promise<Record<string, string>> {
 	try {
-		const response = await fetch(targetUrl, {
-			redirect: "follow",
+		const response = await safeFetch(targetUrl, {
 			headers: { "User-Agent": "OptiqraBot/1.0 (+https://optiqra.vercel.app/bot)" },
 			next: { revalidate: 3600 },
 		});

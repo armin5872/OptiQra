@@ -3,6 +3,7 @@ import type { CheerioAPI } from "cheerio";
 import { issue, pass, scoreFromIssues, type Issue } from "@/lib/auditUtils";
 import { analyzeCrawlFiles } from "@/lib/crawlAudit";
 import { analyzeStructuredData } from "@/lib/structuredDataAudit";
+import { safeFetch } from "@/lib/urlSafety";
 
 export type { Issue } from "@/lib/auditUtils";
 export { issue, pass, scoreFromIssues } from "@/lib/auditUtils";
@@ -29,8 +30,7 @@ const TRUST_KEYWORDS = [
 export async function fetchPage(targetUrl: string, options?: { signal?: AbortSignal }) {
 	const started = Date.now();
 	// Next.js specific: Cache this raw HTML fetch for 1 hour to prevent redundant external loads
-	const response = await fetch(targetUrl, {
-		redirect: "follow",
+	const response = await safeFetch(targetUrl, {
 		headers: { "User-Agent": "OptiqraBot/1.0 (+https://optiqra.vercel.app/bot)" },
 		next: { revalidate: 3600 },
 		signal: options?.signal,

@@ -128,8 +128,19 @@ function deriveNextAppRoutes(files: ProjectFile[]): string[] {
 	return routes;
 }
 
+/** Normalizes a zip-entry / uploaded-file path and strips any "." / ".."
+ *  segments. Nothing here ever touches the real filesystem (both the fix and
+ *  audit pipelines keep everything in memory and re-zip in-process), so this
+ *  isn't a classic zip-slip write primitive — but a crafted "../../x" entry
+ *  could otherwise collide with or shadow a legitimate path in the output
+ *  zip, so segments are dropped rather than just having a leading slash
+ *  trimmed. */
 function normalizePath(p: string): string {
-	return p.replace(/\\/g, "/").replace(/^\/+/, "");
+	const cleaned = p.replace(/\\/g, "/").replace(/^\/+/, "");
+	return cleaned
+		.split("/")
+		.filter((seg) => seg !== "" && seg !== "." && seg !== "..")
+		.join("/");
 }
 
 function joinUrl(base: string, relPath: string): string {
@@ -168,9 +179,11 @@ export async function POST(req: NextRequest) {
 	const apiKey = (form.get("apiKey") as string) || "";
 	const model = (form.get("model") as string) || "";
 	const hasAI = mode === "fix" && !!provider && !!apiKey && !!AI_PROVIDERS[provider as AIProviderId];
+	const MAX_DUPLICATE_BANK_CHARS = 2 * 1024 * 1024; // 2MB of JSON — generous for a bank of short text snippets
+	const duplicateBankRaw = (form.get("duplicateBank") as string) || "{}";
 	let duplicateBank: Record<string, string> = {};
 	try {
-		duplicateBank = JSON.parse((form.get("duplicateBank") as string) || "{}");
+		duplicateBank = duplicateBankRaw.length > MAX_DUPLICATE_BANK_CHARS ? {} : JSON.parse(duplicateBankRaw);
 	} catch {
 		duplicateBank = {};
 	}
@@ -196,15 +209,39 @@ export async function POST(req: NextRequest) {
 			}
 			let totalBytes = 0;
 			for (const entry of entries) {
-				const content = await entry.async("string");
-				totalBytes += content.length;
-				if (totalBytes > MAX_TOTAL_UNCOMPRESSED_BYTES) {
-					return new Response(JSON.stringify({ error: "Project is too large to process in the browser (60MB limit)." }), {
-						status: 400,
-						headers: { "Content-Type": "application/json" },
-					});
+				// JSZip parses each entry's declared uncompressed size out of the
+				// zip's central directory as part of loadAsync — this is metadata,
+				// not decompressed bytes, so checking it here rejects an oversized
+				// (or bomb-style highly-compressed) entry BEFORE entry.async()
+				// inflates it into memory. It's an internal/undocumented field, so
+				// this falls back to the post-decompression check below if it's
+				// ever missing rather than skipping the cap entirely.
+				const declaredSize = (entry as unknown as { _data?: { uncompressedSize?: number } })._data?.uncompressedSize;
+				if (typeof declaredSize === "number") {
+					totalBytes += declaredSize;
+					if (totalBytes > MAX_TOTAL_UNCOMPRESSED_BYTES) {
+						return new Response(JSON.stringify({ error: "Project is too large to process in the browser (60MB limit)." }), {
+							status: 400,
+							headers: { "Content-Type": "application/json" },
+						});
+					}
 				}
-				files.push({ path: normalizePath(entry.name), content });
+
+				const content = await entry.async("string");
+
+				if (typeof declaredSize !== "number") {
+					totalBytes += content.length;
+					if (totalBytes > MAX_TOTAL_UNCOMPRESSED_BYTES) {
+						return new Response(JSON.stringify({ error: "Project is too large to process in the browser (60MB limit)." }), {
+							status: 400,
+							headers: { "Content-Type": "application/json" },
+						});
+					}
+				}
+
+				const path = normalizePath(entry.name);
+				if (!path) continue; // entry normalized away to nothing (e.g. was pure "../..")
+				files.push({ path, content });
 			}
 		} else {
 			if (allEntries.length > MAX_FILE_COUNT) {
@@ -215,15 +252,19 @@ export async function POST(req: NextRequest) {
 			}
 			let totalBytes = 0;
 			for (const f of allEntries) {
-				const content = await f.text();
-				totalBytes += content.length;
+				// File.size is known up front without reading the file, so check it
+				// before calling .text() rather than only measuring after the fact.
+				totalBytes += f.size;
 				if (totalBytes > MAX_TOTAL_UNCOMPRESSED_BYTES) {
 					return new Response(JSON.stringify({ error: "Project is too large to process in the browser (60MB limit)." }), {
 						status: 400,
 						headers: { "Content-Type": "application/json" },
 					});
 				}
-				files.push({ path: normalizePath(f.name), content });
+				const content = await f.text();
+				const path = normalizePath(f.name);
+				if (!path) continue;
+				files.push({ path, content });
 			}
 		}
 	} catch (err) {

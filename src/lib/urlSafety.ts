@@ -113,3 +113,48 @@ export async function assertSafeUrl(rawUrl: string): Promise<string> {
 
 	return parsed.toString();
 }
+
+export interface SafeFetchOptions extends RequestInit {
+	/** Max redirect hops to follow before giving up. Each hop is re-validated
+	 *  through assertSafeUrl, so a redirect to an internal address (or one
+	 *  that only resolves to one via DNS rebinding) is rejected instead of
+	 *  followed — this is what a plain `fetch(url, { redirect: "follow" })`
+	 *  would miss. */
+	maxRedirects?: number;
+}
+
+/**
+ * SSRF-safe replacement for `fetch()` when the URL (or anything it might
+ * redirect to) isn't fully trusted — i.e. any URL discovered while crawling
+ * or checking links on a page, not just the one the user typed in directly.
+ * Validates the initial URL, then follows redirects manually, validating
+ * every hop before requesting it.
+ */
+export async function safeFetch(rawUrl: string, options: SafeFetchOptions = {}): Promise<Response> {
+	const { maxRedirects = 5, ...init } = options;
+	let currentUrl = await assertSafeUrl(rawUrl);
+
+	for (let hop = 0; hop <= maxRedirects; hop++) {
+		const res = await fetch(currentUrl, { ...init, redirect: "manual" });
+
+		const isRedirect = res.status >= 300 && res.status < 400;
+		if (!isRedirect) return res;
+
+		const location = res.headers.get("location");
+		if (!location) return res; // redirect status with no Location — nothing to follow
+
+		let nextUrl: string;
+		try {
+			nextUrl = new URL(location, currentUrl).toString();
+		} catch {
+			throw new UnsafeUrlError("Redirected to an invalid URL.");
+		}
+
+		// Re-validates scheme, private/loopback/link-local ranges, and DNS
+		// resolution for the redirect target — this is the step a bare
+		// `redirect: "follow"` fetch skips entirely.
+		currentUrl = await assertSafeUrl(nextUrl);
+	}
+
+	throw new UnsafeUrlError("Too many redirects.");
+}

@@ -5,6 +5,7 @@
 import * as cheerio from "cheerio";
 import imageSize from "image-size";
 import { getErrorMessage } from "@/lib/errorUtils";
+import { safeFetch, UnsafeUrlError } from "@/lib/urlSafety";
 
 export interface ImageInfo {
 	src: string;
@@ -197,7 +198,7 @@ async function checkImage(
 	try {
 		let res: Response;
 		try {
-			res = await fetch(resolvedUrl, {
+			res = await safeFetch(resolvedUrl, {
 				headers: {
 					"User-Agent": options.userAgent,
 					Range: `bytes=0-${options.probeBytes - 1}`,
@@ -262,7 +263,9 @@ async function checkImage(
 		};
 	} catch (err: unknown) {
 		const msg =
-			err instanceof Error && err.name === "AbortError" ?
+			err instanceof UnsafeUrlError ?
+				`Blocked: ${err.message}`
+			: err instanceof Error && err.name === "AbortError" ?
 				"Timed out"
 			:	getErrorMessage(err, "Network error");
 		return {
@@ -287,7 +290,7 @@ export async function analyzeImages(
 ): Promise<ImageAnalysisReport> {
 	const options = { ...DEFAULTS, ...opts };
 
-	const pageRes = await fetch(scannedUrl, {
+	const pageRes = await safeFetch(scannedUrl, {
 		headers: { "User-Agent": options.userAgent },
 	});
 	if (!pageRes.ok)

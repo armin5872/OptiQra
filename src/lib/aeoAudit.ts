@@ -1,6 +1,7 @@
 import type { CheerioAPI } from "cheerio";
 import { issue, pass, type Issue } from "@/lib/auditUtils";
 import { collectJsonLdNodes, nodeTypes, type JsonLdNode } from "@/lib/jsonLd";
+import { safeFetch } from "@/lib/urlSafety";
 
 interface AuditResult {
 	issues: Issue[];
@@ -84,8 +85,7 @@ async function analyzeAiCrawlerAccess(targetUrl: string): Promise<AuditResult> {
 
 	let text: string;
 	try {
-		const response = await fetch(robotsUrl, {
-			redirect: "follow",
+		const response = await safeFetch(robotsUrl, {
 			headers: FETCH_HEADERS,
 			next: { revalidate: 3600 },
 		});
@@ -155,8 +155,7 @@ async function analyzeAiCrawlerFirewall(targetUrl: string): Promise<AuditResult>
 
 	let normalStatus: number | null = null;
 	try {
-		const normalRes = await fetch(targetUrl, {
-			redirect: "follow",
+		const normalRes = await safeFetch(targetUrl, {
 			headers: { "User-Agent": NORMAL_UA },
 			next: { revalidate: 3600 },
 		});
@@ -169,8 +168,7 @@ async function analyzeAiCrawlerFirewall(targetUrl: string): Promise<AuditResult>
 
 	let botStatus: number | null = null;
 	try {
-		const botRes = await fetch(targetUrl, {
-			redirect: "follow",
+		const botRes = await safeFetch(targetUrl, {
 			headers: { "User-Agent": AI_BOT_UA },
 			next: { revalidate: 3600 },
 		});
@@ -216,8 +214,7 @@ async function analyzeLlmsTxt(targetUrl: string): Promise<AuditResult> {
 	const llmsUrl = new URL("/llms.txt", targetUrl).toString();
 
 	try {
-		const response = await fetch(llmsUrl, {
-			redirect: "follow",
+		const response = await safeFetch(llmsUrl, {
 			headers: FETCH_HEADERS,
 			next: { revalidate: 3600 },
 		});

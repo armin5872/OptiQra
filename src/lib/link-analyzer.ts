@@ -5,6 +5,7 @@
 import * as cheerio from "cheerio";
 import { issue, pass, type Issue } from "@/lib/auditUtils";
 import { getErrorMessage } from "@/lib/errorUtils";
+import { assertSafeUrl, safeFetch, UnsafeUrlError } from "@/lib/urlSafety";
 
 export interface RawLink {
   href: string;           // original attribute value, unresolved
@@ -233,9 +234,8 @@ export function extractLinks(html: string, baseUrl: string): RawLink[] {
 /** Fast path: single fetch that follows redirects natively (no per-hop chain). */
 async function checkFast(resolvedUrl: string, timeoutMs: number, userAgent: string): Promise<LinkStatusResult> {
   try {
-    const res = await fetch(resolvedUrl, {
+    const res = await safeFetch(resolvedUrl, {
       method: "HEAD",
-      redirect: "follow",
       signal: AbortSignal.timeout(timeoutMs),
       headers: requestHeaders(userAgent),
     }).then(async (r) => {
@@ -244,9 +244,8 @@ async function checkFast(resolvedUrl: string, timeoutMs: number, userAgent: stri
       // browser opening the link would get GET treatment and often succeed.
       if (HEAD_FALLBACK_STATUSES.has(r.status)) {
         releaseBody(r);
-        return fetch(resolvedUrl, {
+        return safeFetch(resolvedUrl, {
           method: "GET",
-          redirect: "follow",
           signal: AbortSignal.timeout(timeoutMs),
           headers: requestHeaders(userAgent),
         });
@@ -266,15 +265,17 @@ async function checkFast(resolvedUrl: string, timeoutMs: number, userAgent: stri
       finalUrl: res.url || resolvedUrl,
     };
   } catch (err: unknown) {
+    if (err instanceof UnsafeUrlError) {
+      return { href: resolvedUrl, resolvedUrl, ok: false, statusCode: null, error: `Blocked: ${err.message}`, redirectChain: [], finalUrl: resolvedUrl };
+    }
     const errName = err instanceof Error ? err.name : undefined;
     const errMsg = getErrorMessage(err, "");
     // Retry once for transient network errors
     if ((errMsg.includes("ECONNRESET") || errMsg.includes("ETIMEDOUT") || errName === "TypeError") && timeoutMs < 15000) {
       await delay(Math.random() * 500 + 200); // Random backoff 200-700ms
       try {
-        const res = await fetch(resolvedUrl, {
+        const res = await safeFetch(resolvedUrl, {
           method: "GET",
-          redirect: "follow",
           signal: AbortSignal.timeout(Math.min(timeoutMs * 1.5, 15000)),
           headers: requestHeaders(userAgent),
         });
@@ -289,7 +290,10 @@ async function checkFast(resolvedUrl: string, timeoutMs: number, userAgent: stri
           redirectChain: [],
           finalUrl: res.url || resolvedUrl,
         };
-      } catch {
+      } catch (retryErr) {
+        if (retryErr instanceof UnsafeUrlError) {
+          return { href: resolvedUrl, resolvedUrl, ok: false, statusCode: null, error: `Blocked: ${retryErr.message}`, redirectChain: [], finalUrl: resolvedUrl };
+        }
         // Retry failed, fall through to error handling below
       }
     }
@@ -305,6 +309,11 @@ async function checkWithChain(resolvedUrl: string, maxRedirects: number, timeout
   let hops = 0;
 
   try {
+    // Validates scheme + private/loopback/link-local ranges + DNS resolution
+    // up front, so a link pointing at an internal address never even gets
+    // its first request sent.
+    currentUrl = await assertSafeUrl(resolvedUrl);
+
     // hops < maxRedirects means at most maxRedirects redirects are followed
     // before giving up (previously "<=" silently allowed maxRedirects + 1).
     while (hops < maxRedirects) {
@@ -348,13 +357,15 @@ async function checkWithChain(resolvedUrl: string, maxRedirects: number, timeout
           return { href: resolvedUrl, resolvedUrl, ok: false, statusCode: res.status, error: "Redirect with no Location header", redirectChain: chain, finalUrl: currentUrl };
         }
         chain.push(currentUrl);
-        const nextUrl = new URL(location, currentUrl).toString();
-        if (chain.includes(nextUrl)) {
+        const nextUrlRaw = new URL(location, currentUrl).toString();
+        if (chain.includes(nextUrlRaw)) {
           // A→B→A style loop — no point burning the rest of the hop budget
           // fetching URLs we've already seen; report it clearly instead.
-          return { href: resolvedUrl, resolvedUrl, ok: false, statusCode: res.status, error: "Redirect loop detected", redirectChain: chain, finalUrl: nextUrl };
+          return { href: resolvedUrl, resolvedUrl, ok: false, statusCode: res.status, error: "Redirect loop detected", redirectChain: chain, finalUrl: nextUrlRaw };
         }
-        currentUrl = nextUrl;
+        // Re-validates the redirect target — a redirect to an internal
+        // address is rejected here instead of being followed.
+        currentUrl = await assertSafeUrl(nextUrlRaw);
         hops++;
         continue;
       }
@@ -366,6 +377,9 @@ async function checkWithChain(resolvedUrl: string, maxRedirects: number, timeout
 
     return { href: resolvedUrl, resolvedUrl, ok: false, statusCode: null, error: `Too many redirects (>${maxRedirects})`, redirectChain: chain, finalUrl: currentUrl };
   } catch (err: unknown) {
+    if (err instanceof UnsafeUrlError) {
+      return { href: resolvedUrl, resolvedUrl, ok: false, statusCode: null, error: `Blocked: ${err.message}`, redirectChain: chain, finalUrl: currentUrl };
+    }
     const errName = err instanceof Error ? err.name : undefined;
     const errMsg = getErrorMessage(err, "");
     // Retry once for transient network errors
@@ -375,9 +389,8 @@ async function checkWithChain(resolvedUrl: string, maxRedirects: number, timeout
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), Math.min(timeoutMs * 1.5, 15000));
         try {
-          const res = await fetch(resolvedUrl, {
+          const res = await safeFetch(resolvedUrl, {
             method: "GET",
-            redirect: "follow",
             signal: controller.signal,
             headers: requestHeaders(userAgent),
           });
@@ -387,7 +400,10 @@ async function checkWithChain(resolvedUrl: string, maxRedirects: number, timeout
         } finally {
           clearTimeout(timeout);
         }
-      } catch {
+      } catch (retryErr) {
+        if (retryErr instanceof UnsafeUrlError) {
+          return { href: resolvedUrl, resolvedUrl, ok: false, statusCode: null, error: `Blocked: ${retryErr.message}`, redirectChain: chain, finalUrl: currentUrl };
+        }
         // Retry failed, fall through to error handling below
       }
     }
@@ -441,7 +457,7 @@ export async function checkLinkStatus(
 export async function analyzeLinks(scannedUrl: string, opts: AnalyzeOptions = {}): Promise<LinkAnalysisReport> {
   const options = { ...DEFAULTS, ...opts };
 
-  const pageRes = await fetch(scannedUrl, {
+  const pageRes = await safeFetch(scannedUrl, {
     headers: { "User-Agent": options.userAgent },
     signal: AbortSignal.timeout(options.fetchTimeoutMs),
   });

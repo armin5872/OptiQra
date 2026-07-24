@@ -1,5 +1,6 @@
 import * as cheerio from 'cheerio';
 import { issue, pass, type Issue } from '@/lib/auditUtils';
+import { safeFetch } from '@/lib/urlSafety';
 
 const FETCH_HEADERS = { 'User-Agent': 'OptiqraBot/1.0 (+https://optiqra.vercel.app/bot)' };
 const SITEMAP_FALLBACK_PATHS = ['/sitemap.xml', '/sitemap_index.xml', '/sitemap-index.xml'];
@@ -15,9 +16,13 @@ interface AuditResult {
   passed: Issue[];
 }
 
+// safeFetch validates the URL (and every redirect hop) against
+// private/loopback/link-local ranges. This matters here specifically because
+// sitemap <loc> entries are attacker-influenced content, not just the URL
+// the user typed in — a malicious sitemap could otherwise point our server
+// at an internal address.
 async function fetchText(url: string) {
-  const response = await fetch(url, {
-    redirect: 'follow',
+  const response = await safeFetch(url, {
     headers: FETCH_HEADERS,
     next: { revalidate: 3600 },
   });
@@ -395,9 +400,11 @@ async function validateSitemapIndex($: cheerio.CheerioAPI, sitemapUrl: string): 
     }
 
     try {
-      const child = await fetch(loc, { method: 'HEAD', redirect: 'follow', headers: FETCH_HEADERS });
+      const child = await safeFetch(loc, { method: 'HEAD', headers: FETCH_HEADERS });
       if (!child.ok) unreachable++;
     } catch {
+      // Includes UnsafeUrlError (a sitemap pointing at an internal address) —
+      // treated the same as any other unreachable entry.
       unreachable++;
     }
   }
