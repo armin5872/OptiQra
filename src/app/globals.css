@@ -4361,3 +4361,320 @@ body {
 		flex-wrap: wrap;
 	}
 }
+
+/* ---------- Experimental: scan animation picker ---------- */
+.crawl-progress {
+	max-width: 640px;
+}
+.scan-anim-picker-row {
+	display: flex;
+	justify-content: center;
+	margin-bottom: 14px;
+}
+.scan-anim-picker {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	justify-content: center;
+}
+.scan-anim-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 5px 11px;
+	border-radius: 999px;
+	border: 1px solid var(--line);
+	background: var(--surface);
+	color: var(--ink-soft);
+	font-size: 12px;
+	cursor: pointer;
+	transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.scan-anim-pill:hover {
+	border-color: var(--accent);
+	color: var(--ink);
+}
+.scan-anim-pill.active {
+	background: var(--accent);
+	border-color: var(--accent);
+	color: #fff;
+}
+
+/* ---------- Experimental: network pulse (three.js) ---------- */
+.scan-anim-network {
+	position: relative;
+	width: 100%;
+	height: 220px;
+	margin-bottom: 10px;
+	border-radius: var(--radius);
+	background: radial-gradient(circle at 50% 45%, var(--surface-2), var(--bg));
+	overflow: hidden;
+}
+.scan-anim-network canvas {
+	display: block;
+	width: 100% !important;
+	height: 100% !important;
+}
+
+/* ---------- Experimental: radar sweep ---------- */
+.scan-anim-radar {
+	position: relative;
+	width: 220px;
+	height: 220px;
+	margin: 0 auto 14px;
+	border-radius: 50%;
+	background: radial-gradient(circle, var(--surface-2) 0%, var(--bg) 78%);
+	overflow: hidden;
+	border: 1px solid var(--line);
+}
+.scan-anim-radar-rings span {
+	position: absolute;
+	inset: 0;
+	margin: auto;
+	border: 1px solid color-mix(in srgb, var(--good) 35%, transparent);
+	border-radius: 50%;
+}
+.scan-anim-radar-rings span:nth-child(1) { width: 25%; height: 25%; }
+.scan-anim-radar-rings span:nth-child(2) { width: 50%; height: 50%; }
+.scan-anim-radar-rings span:nth-child(3) { width: 75%; height: 75%; }
+.scan-anim-radar-rings span:nth-child(4) { width: 100%; height: 100%; }
+.scan-anim-radar-crosshair {
+	position: absolute;
+	inset: 0;
+}
+.scan-anim-radar-crosshair::before,
+.scan-anim-radar-crosshair::after {
+	content: "";
+	position: absolute;
+	background: color-mix(in srgb, var(--good) 25%, transparent);
+}
+.scan-anim-radar-crosshair::before {
+	left: 0; right: 0; top: 50%; height: 1px;
+}
+.scan-anim-radar-crosshair::after {
+	top: 0; bottom: 0; left: 50%; width: 1px;
+}
+.scan-anim-radar-sweep {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 50%;
+	height: 2px;
+	transform-origin: left center;
+	background: linear-gradient(90deg, transparent, var(--good));
+	animation: scan-radar-spin 2.4s linear infinite;
+}
+.scan-anim-radar-sweep::before {
+	content: "";
+	position: absolute;
+	inset: -110px 0 0 -110px;
+	width: 220px;
+	height: 220px;
+	border-radius: 50%;
+	background: conic-gradient(from 0deg, color-mix(in srgb, var(--good) 30%, transparent), transparent 28%);
+	transform-origin: 110px 110px;
+}
+@keyframes scan-radar-spin {
+	to { transform: rotate(360deg); }
+}
+.scan-anim-radar-blips {
+	position: absolute;
+	inset: 0;
+}
+.scan-anim-radar-blip {
+	position: absolute;
+	width: 7px;
+	height: 7px;
+	margin: -3.5px 0 0 -3.5px;
+	border-radius: 50%;
+	background: var(--good);
+	box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 60%, transparent);
+	animation: scan-radar-blip 2.2s ease-out forwards;
+}
+@keyframes scan-radar-blip {
+	0% {
+		transform: scale(0.4);
+		opacity: 1;
+		box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 60%, transparent);
+	}
+	60% {
+		opacity: 1;
+	}
+	100% {
+		transform: scale(1);
+		opacity: 0;
+		box-shadow: 0 0 0 16px transparent;
+	}
+}
+
+/* ---------- Experimental: digital rain ---------- */
+.scan-anim-matrix {
+	position: relative;
+	width: 100%;
+	height: 220px;
+	margin-bottom: 10px;
+	border-radius: var(--radius);
+	background: #0d1512;
+	overflow: hidden;
+	border: 1px solid var(--line);
+}
+.scan-anim-matrix canvas {
+	display: block;
+	width: 100%;
+	height: 100%;
+}
+
+/* ---------- Experimental: live crawl tree toolbar ---------- */
+.live-crawl-tree-toolbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	margin-top: 18px;
+}
+.report-tree-toggle {
+	margin-top: 0;
+	margin-bottom: 10px;
+}
+.live-crawl-tree-label {
+	font-size: 12.5px;
+	color: var(--ink-soft);
+	font-family: "IBM Plex Mono", monospace;
+}
+.live-crawl-tree-toggle {
+	display: flex;
+	border: 1px solid var(--line);
+	border-radius: 999px;
+	overflow: hidden;
+}
+.live-crawl-tree-toggle button {
+	border: none;
+	background: var(--surface);
+	color: var(--ink-soft);
+	font-size: 12px;
+	padding: 5px 14px;
+	cursor: pointer;
+}
+.live-crawl-tree-toggle button + button {
+	border-left: 1px solid var(--line);
+}
+.live-crawl-tree-toggle button.active {
+	background: var(--accent);
+	color: #fff;
+}
+.live-crawl-tree-wrap {
+	margin-top: 12px;
+	max-height: 480px;
+	overflow: auto;
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	padding: 6px;
+	background: var(--surface);
+}
+
+/* ---------- Experimental: 3D crawl tree ---------- */
+.crawl-tree-3d-section {
+	position: relative;
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	padding: 16px;
+	margin: 18px 0;
+}
+.crawl-tree-3d-toolbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	margin: 8px 0 12px;
+	flex-wrap: wrap;
+}
+.crawl-tree-3d-rotate-btn {
+	border: 1px solid var(--line);
+	background: var(--surface);
+	color: var(--ink-soft);
+	border-radius: 999px;
+	padding: 5px 12px;
+	font-size: 12px;
+	cursor: pointer;
+}
+.crawl-tree-3d-rotate-btn.active {
+	border-color: var(--accent);
+	color: var(--accent);
+}
+.crawl-tree-3d-canvas {
+	position: relative;
+	width: 100%;
+	height: 420px;
+	border-radius: var(--radius);
+	background: radial-gradient(circle at 50% 35%, var(--surface-2), var(--bg));
+	overflow: hidden;
+	touch-action: none;
+}
+.crawl-tree-3d-canvas canvas {
+	display: block;
+	width: 100% !important;
+	height: 100% !important;
+}
+.crawl-tree-3d-panel {
+	position: absolute;
+	right: 32px;
+	bottom: 32px;
+	max-width: 280px;
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	padding: 14px 16px;
+	box-shadow: 0 8px 28px rgba(0, 0, 0, 0.14);
+}
+.crawl-tree-3d-panel-close {
+	position: absolute;
+	top: 6px;
+	right: 8px;
+	border: none;
+	background: none;
+	font-size: 16px;
+	line-height: 1;
+	color: var(--ink-soft);
+	cursor: pointer;
+}
+.crawl-tree-3d-panel-path {
+	font-family: "IBM Plex Mono", monospace;
+	font-size: 12.5px;
+	color: var(--ink);
+	margin: 0 0 6px;
+	word-break: break-all;
+	padding-right: 16px;
+}
+.crawl-tree-3d-panel-score {
+	font-size: 13px;
+	color: var(--ink-soft);
+	margin: 0 0 8px;
+}
+.crawl-tree-3d-panel-cats {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+.crawl-tree-3d-panel-cats li {
+	display: flex;
+	justify-content: space-between;
+	font-size: 12px;
+	color: var(--ink-soft);
+}
+
+@media (max-width: 720px) {
+	.crawl-tree-3d-canvas,
+	.crawl-tree-3d-panel {
+		position: relative;
+		right: auto;
+		bottom: auto;
+	}
+	.crawl-tree-3d-panel {
+		margin-top: 10px;
+		max-width: none;
+	}
+}

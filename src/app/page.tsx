@@ -3,6 +3,14 @@
 import { useState, useEffect, useRef } from "react";
 import CrawlTree from "./components/CrawlTree";
 import type { PageNode, Issue } from "./components/CrawlTree";
+import CrawlTree3D from "./components/CrawlTree3D";
+import {
+	ScanAnimationPicker,
+	NetworkPulse3D,
+	RadarSweep,
+	MatrixRain,
+	type ScanAnimationStyle,
+} from "./components/ScanAnimations";
 import AIProviderSetup from "./components/AIProviderSetup";
 import AIFixButton from "./components/AIFixButton";
 import AISiteInsights from "./components/AISiteInsights";
@@ -102,6 +110,15 @@ export default function Home() {
 	 *  available to build a report from without needing anything else from
 	 *  the server. */
 	const pageNodesRef = useRef<PageNode[]>([]);
+	/** Mirrors `pageNodesRef` but as state, purely so the experimental live
+	 *  crawl-tree view (2D or 3D) below can re-render as pages stream in
+	 *  during an active site scan. Kept separate from the ref so the rest of
+	 *  the scan-handling logic above doesn't pay for extra re-renders it
+	 *  doesn't need. */
+	const [livePageNodes, setLivePageNodes] = useState<PageNode[]>([]);
+	const [liveCrawlView, setLiveCrawlView] = useState<"off" | "2d" | "3d">("off");
+	const [scanAnimStyle, setScanAnimStyle] = useState<ScanAnimationStyle>("classic");
+	const [reportTreeView, setReportTreeView] = useState<"2d" | "3d">("2d");
 	/** Set right before we deliberately abort the live connection (pause /
 	 *  create-report-now / cancel), so the stream-reading code below knows
 	 *  whether an AbortError means "the user cancelled, go back to the start
@@ -249,6 +266,7 @@ export default function Home() {
 		setLinkCheckProgress(null);
 		setIsPaused(false);
 		pageNodesRef.current = [];
+		setLivePageNodes([]);
 		stopIntentRef.current = null;
 
 		const controller = new AbortController();
@@ -386,7 +404,11 @@ export default function Home() {
 					// previous phase no longer applies.
 					setLinkCheckProgress(null);
 				} else if (evt.type === "progress") {
-					if (evt.pageNode) pageNodesRef.current.push(evt.pageNode);
+					if (evt.pageNode) {
+						pageNodesRef.current.push(evt.pageNode);
+						const node = evt.pageNode;
+						setLivePageNodes((prev) => [...prev, node]);
+					}
 					setCrawlProgress({
 						scanned: evt.scanned,
 						total: evt.total,
@@ -769,50 +791,69 @@ export default function Home() {
 
 					{scanMode === "site" && crawlProgress && (
 						<div className="crawl-progress">
-							<div className="crawl-scanner" aria-hidden="true">
-								{Array.from({ length: 7 }).map((_, i) => (
-									<span
-										key={i}
-										className="crawl-scanner-page"
-										style={{ animationDelay: `${i * 0.18}s` }}
-									>
-										<svg viewBox="0 0 24 24" width="16" height="16">
-											<path
-												d="M6 2h9l4 4v16H6z"
+							<div className="scan-anim-picker-row">
+								<ScanAnimationPicker value={scanAnimStyle} onChange={setScanAnimStyle} />
+							</div>
+
+							{scanAnimStyle === "classic" && (
+								<div className="crawl-scanner" aria-hidden="true">
+									{Array.from({ length: 7 }).map((_, i) => (
+										<span
+											key={i}
+											className="crawl-scanner-page"
+											style={{ animationDelay: `${i * 0.18}s` }}
+										>
+											<svg viewBox="0 0 24 24" width="16" height="16">
+												<path
+													d="M6 2h9l4 4v16H6z"
+													fill="none"
+													stroke="currentColor"
+													strokeWidth="1.6"
+													strokeLinejoin="round"
+												/>
+												<path
+													d="M9 12h7M9 16h7M9 8h3"
+													stroke="currentColor"
+													strokeWidth="1.4"
+													strokeLinecap="round"
+												/>
+											</svg>
+										</span>
+									))}
+									<span className="crawl-scanner-bot">
+										<svg viewBox="0 0 24 24" width="18" height="18">
+											<circle
+												cx="12"
+												cy="12"
+												r="7"
 												fill="none"
 												stroke="currentColor"
-												strokeWidth="1.6"
-												strokeLinejoin="round"
+												strokeWidth="1.8"
 											/>
+											<circle cx="12" cy="12" r="2" fill="currentColor" />
 											<path
-												d="M9 12h7M9 16h7M9 8h3"
+												d="M12 2v3M12 19v3"
 												stroke="currentColor"
-												strokeWidth="1.4"
+												strokeWidth="1.8"
 												strokeLinecap="round"
 											/>
 										</svg>
 									</span>
-								))}
-								<span className="crawl-scanner-bot">
-									<svg viewBox="0 0 24 24" width="18" height="18">
-										<circle
-											cx="12"
-											cy="12"
-											r="7"
-											fill="none"
-											stroke="currentColor"
-											strokeWidth="1.8"
-										/>
-										<circle cx="12" cy="12" r="2" fill="currentColor" />
-										<path
-											d="M12 2v3M12 19v3"
-											stroke="currentColor"
-											strokeWidth="1.8"
-											strokeLinecap="round"
-										/>
-									</svg>
-								</span>
-							</div>
+								</div>
+							)}
+							{scanAnimStyle === "network" && (
+								<NetworkPulse3D scanned={crawlProgress.scanned} />
+							)}
+							{scanAnimStyle === "radar" && (
+								<RadarSweep
+									scanned={crawlProgress.scanned}
+									currentUrl={crawlProgress.currentUrl}
+								/>
+							)}
+							{scanAnimStyle === "matrix" && (
+								<MatrixRain currentUrl={crawlProgress.currentUrl} />
+							)}
+
 							<div className="crawl-progress-head">
 								<span>
 									Scanned {crawlProgress.scanned} of {crawlProgress.total} page
@@ -882,6 +923,40 @@ export default function Home() {
 											}}
 										/>
 									</div>
+								</div>
+							)}
+
+							<div className="live-crawl-tree-toolbar">
+								<span className="live-crawl-tree-label">Live crawl tree</span>
+								<div className="live-crawl-tree-toggle">
+									<button
+										type="button"
+										className={liveCrawlView === "off" ? "active" : ""}
+										onClick={() => setLiveCrawlView("off")}
+									>
+										Off
+									</button>
+									<button
+										type="button"
+										className={liveCrawlView === "2d" ? "active" : ""}
+										onClick={() => setLiveCrawlView("2d")}
+									>
+										2D
+									</button>
+									<button
+										type="button"
+										className={liveCrawlView === "3d" ? "active" : ""}
+										onClick={() => setLiveCrawlView("3d")}
+									>
+										3D
+									</button>
+								</div>
+							</div>
+							{liveCrawlView !== "off" && livePageNodes.length > 0 && (
+								<div className="live-crawl-tree-wrap">
+									{liveCrawlView === "2d" ?
+										<CrawlTree pages={livePageNodes} title="Live crawl tree" />
+									:	<CrawlTree3D pages={livePageNodes} title="Live crawl tree (3D)" />}
 								</div>
 							)}
 						</div>
@@ -958,10 +1033,38 @@ export default function Home() {
 					{reportData.mode === "site" &&
 						reportData.pages &&
 						reportData.pages.length > 1 && (
-							<CrawlTree
-								pages={reportData.pages}
-								title="Site structure & performance"
-							/>
+							<>
+								<div className="live-crawl-tree-toolbar report-tree-toggle">
+									<span className="live-crawl-tree-label">Site structure & performance</span>
+									<div className="live-crawl-tree-toggle">
+										<button
+											type="button"
+											className={reportTreeView === "2d" ? "active" : ""}
+											onClick={() => setReportTreeView("2d")}
+										>
+											2D
+										</button>
+										<button
+											type="button"
+											className={reportTreeView === "3d" ? "active" : ""}
+											onClick={() => setReportTreeView("3d")}
+										>
+											3D
+										</button>
+									</div>
+								</div>
+								{reportTreeView === "2d" ? (
+									<CrawlTree
+										pages={reportData.pages}
+										title="Site structure & performance"
+									/>
+								) : (
+									<CrawlTree3D
+										pages={reportData.pages}
+										title="Site structure & performance (3D)"
+									/>
+								)}
+							</>
 						)}
 
 					{reportData.mode === "site" && reportData.pagesScanned && (
