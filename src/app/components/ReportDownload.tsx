@@ -12,7 +12,7 @@
 // Requires two extra dependencies for the PDF/DOCX formats:
 //   npm install jspdf docx
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
 	buildReportModel,
 	reportFileBaseName,
@@ -31,15 +31,6 @@ import { getErrorMessage } from "@/lib/errorUtils";
 import type { exportReportPdf } from "@/lib/reportExport/pdf";
 import type { exportReportDocx } from "@/lib/reportExport/docx";
 import type { exportReportXlsx } from "@/lib/reportExport/xlsx";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-	DropdownMenu,
-	DropdownMenuTrigger,
-	DropdownMenuContent,
-	DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
-import { ChevronDown } from "lucide-react";
 
 type Format = "pdf" | "docx" | "xlsx" | "csv" | "tsv" | "md" | "txt" | "json" | "yaml";
 
@@ -65,6 +56,7 @@ export default function ReportDownload({
 	const [open, setOpen] = useState(false);
 	const [pending, setPending] = useState<Format | null>(null);
 	const [error, setError] = useState("");
+	const menuRef = useRef<HTMLDivElement>(null);
 	const { settings, hydrated } = useSettings();
 
 	const orderedFormats =
@@ -75,6 +67,24 @@ export default function ReportDownload({
 				: 0,
 			)
 		:	FORMATS;
+
+	useEffect(() => {
+		if (!open) return;
+		const onClick = (e: MouseEvent) => {
+			if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+				setOpen(false);
+			}
+		};
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === "Escape") setOpen(false);
+		};
+		document.addEventListener("mousedown", onClick);
+		document.addEventListener("keydown", onKey);
+		return () => {
+			document.removeEventListener("mousedown", onClick);
+			document.removeEventListener("keydown", onKey);
+		};
+	}, [open]);
 
 	const handleDownload = async (format: Format) => {
 		setError("");
@@ -138,41 +148,42 @@ export default function ReportDownload({
 	};
 
 	return (
-		<div className="relative">
-			<DropdownMenu open={open} onOpenChange={setOpen}>
-				<DropdownMenuTrigger asChild>
-					<Button type="button" variant="outline">
-						Download report
-						<ChevronDown className="size-3.5" />
-					</Button>
-				</DropdownMenuTrigger>
-				<DropdownMenuContent align="start" className="min-w-64">
+		<div className="report-download" ref={menuRef}>
+			<button
+				className="report-download-btn"
+				onClick={() => setOpen((v) => !v)}
+				aria-haspopup="menu"
+				aria-expanded={open}
+			>
+				Download report
+				<span className="report-download-caret">{open ? "▲" : "▼"}</span>
+			</button>
+
+			{open && (
+				<div className="report-download-menu" role="menu">
 					{orderedFormats.map((f) => (
-						<DropdownMenuItem
+						<button
 							key={f.id}
+							role="menuitem"
+							className="report-download-item"
 							disabled={pending !== null}
-							onSelect={() => handleDownload(f.id)}
-							className="flex-col items-start gap-0.5 py-2"
+							onClick={() => handleDownload(f.id)}
 						>
-							<span className="flex items-center gap-2 text-sm font-medium text-ink">
+							<span className="report-download-item-label">
 								{pending === f.id ? "Preparing…" : f.label}
 								{hydrated && f.id === settings.reports.defaultExportFormat && (
-									<Badge variant="secondary" className="text-[10px]">
+									<span className="settings-slider-value" style={{ marginLeft: 8 }}>
 										default
-									</Badge>
+									</span>
 								)}
 							</span>
-							<span className="text-xs text-ink-soft">{f.hint}</span>
-						</DropdownMenuItem>
+							<span className="report-download-item-hint">{f.hint}</span>
+						</button>
 					))}
-				</DropdownMenuContent>
-			</DropdownMenu>
-
-			{error && (
-				<div className="absolute top-full left-0 mt-1 max-w-64 text-xs text-critical">
-					{error}
 				</div>
 			)}
+
+			{error && <div className="report-download-error">{error}</div>}
 		</div>
 	);
 }

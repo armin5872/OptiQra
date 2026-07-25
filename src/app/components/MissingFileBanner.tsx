@@ -3,8 +3,6 @@
 import { useState } from "react";
 import { buildRobotsTxt, buildSitemapXml } from "@/lib/generateCrawlFiles";
 import { downloadText } from "@/lib/reportExport/download";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 
 interface Props {
 	kind: "sitemap" | "robots";
@@ -50,24 +48,23 @@ export default function MissingFileBanner({ kind, siteUrl, pagesScanned }: Props
 	};
 
 	return (
-		<div className="flex items-start gap-3 rounded-(--radius) border border-warn/30 bg-warn-bg p-4">
-			<span className="text-xl" aria-hidden="true">
+		<div className="missing-file-banner">
+			<span className="missing-file-banner-icon" aria-hidden="true">
 				{copy.icon}
 			</span>
-			<div className="flex flex-1 flex-col gap-2">
-				<div className="text-sm font-semibold text-ink">{copy.title}</div>
-				<div className="text-sm text-ink-soft">{copy.detail}</div>
-				<div className="flex flex-wrap items-center gap-3">
-					<Button
+			<div className="missing-file-banner-body">
+				<div className="missing-file-banner-title">{copy.title}</div>
+				<div className="missing-file-banner-detail">{copy.detail}</div>
+				<div className="missing-file-banner-actions">
+					<button
 						type="button"
-						size="sm"
-						variant={generated ? "secondary" : "brand"}
+						className={`missing-file-banner-generate${generated ? " done" : ""}`}
 						onClick={handleGenerate}
 					>
 						{generated ? "Downloaded ✓ Generate again" : copy.action}
-					</Button>
+					</button>
 					{generated && (
-						<span className="text-xs text-ink-soft">
+						<span className="missing-file-banner-hint">
 							Upload it to your site root as {copy.path}
 						</span>
 					)}
@@ -75,9 +72,7 @@ export default function MissingFileBanner({ kind, siteUrl, pagesScanned }: Props
 			</div>
 			<button
 				type="button"
-				className={cn(
-					"flex size-6 shrink-0 items-center justify-center rounded text-ink-soft hover:bg-secondary hover:text-ink",
-				)}
+				className="missing-file-banner-dismiss"
 				aria-label={`Dismiss ${kind} suggestion`}
 				onClick={() => setDismissed(true)}
 			>
@@ -86,4 +81,3 @@ export default function MissingFileBanner({ kind, siteUrl, pagesScanned }: Props
 		</div>
 	);
 }
-

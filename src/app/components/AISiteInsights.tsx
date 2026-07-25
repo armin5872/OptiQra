@@ -6,8 +6,6 @@ import { useAIProvider } from "@/lib/hooks/useAIProvider";
 import type { InsightsCategorySummary } from "@/lib/aiInsights";
 import { getErrorMessage } from "@/lib/errorUtils";
 import MarkdownLite from "./MarkdownLite";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 
 type Category = {
 	label: string;
@@ -155,75 +153,58 @@ export default function AISiteInsights({
 	};
 
 	return (
-		<Card className="mb-6 gap-3 border-t-2 border-t-brand p-[18px_20px]">
-			<CardContent className="flex flex-col gap-3 p-0">
-				<div className="flex flex-wrap items-start justify-between gap-4">
-					<div>
-						<h3 className="m-0 mb-1 text-[15px] font-semibold">
-							✨ AI insights for {scopeLabel}
-						</h3>
-						<p className="m-0 max-w-[46ch] font-(family-name:--font-readable) text-[12.5px] text-ink-soft">
-							A synthesized overview and prioritized action plan across every category above.
-						</p>
-					</div>
-
-					{status !== "loading" && (
-						<Button
-							type="button"
-							variant="brand"
-							size="sm"
-							disabled={!isConfigured}
-							onClick={handleGenerate}
-							title={!isConfigured ? "Set up an AI provider above first" : undefined}
-						>
-							{status === "done" ? "Regenerate" : "Generate insights"}
-						</Button>
-					)}
+		<div className="ai-insights-card">
+			<div className="ai-insights-head">
+				<div>
+					<h3>✨ AI insights for {scopeLabel}</h3>
+					<p className="ai-insights-subtitle">
+						A synthesized overview and prioritized action plan across every category above.
+					</p>
 				</div>
 
-				{!isConfigured && (
-					<p className="m-0 text-[12.5px] text-ink-soft">
-						Set up an AI provider above to enable this.
-					</p>
+				{status !== "loading" && (
+					<button
+						type="button"
+						className="apply-btn"
+						disabled={!isConfigured}
+						onClick={handleGenerate}
+						title={!isConfigured ? "Set up an AI provider above first" : undefined}
+					>
+						{status === "done" ? "Regenerate" : "Generate insights"}
+					</button>
 				)}
+			</div>
 
-				{status === "loading" && !output && (
-					<p className="m-0 text-[12.5px] text-ink-soft">
-						Reading through the full report…
-					</p>
-				)}
+			{!isConfigured && (
+				<p className="ai-insights-hint">Set up an AI provider above to enable this.</p>
+			)}
 
-				{status === "error" && (
-					<div className="text-left text-[12.5px] text-critical">
-						{error}{" "}
-						<button
-							type="button"
-							className="text-brand underline-offset-2 hover:underline"
-							onClick={handleGenerate}
-						>
-							retry
-						</button>
+			{status === "loading" && !output && (
+				<p className="ai-insights-hint">Reading through the full report…</p>
+			)}
+
+			{status === "error" && (
+				<div className="ai-fix-error" style={{ textAlign: "left" }}>
+					{error}
+					<button type="button" className="link-btn" onClick={handleGenerate}>
+						retry
+					</button>
+				</div>
+			)}
+
+			{output && (
+				<>
+					<div className="ai-insights-output">
+						<MarkdownLite text={output} />
+						{status === "loading" && <span className="md-cursor" aria-hidden="true" />}
 					</div>
-				)}
-
-				{output && (
-					<>
-						<div className="font-(family-name:--font-readable) rounded-lg border border-line bg-surface-2 px-5 py-4 text-ink">
-							<MarkdownLite text={output} />
-							{status === "loading" && <span className="md-cursor" aria-hidden="true" />}
-						</div>
-						{status === "done" && (
-							<button
-								type="button"
-								className="mt-2 self-start text-sm text-brand underline-offset-2 hover:underline"
-								onClick={handleCopy}
-							>
-								{copied ? "copied!" : "copy"}
-							</button>
-						)}
-					</>
-				)}
-			</CardContent>
-		</Card>
+					{status === "done" && (
+						<button type="button" className="link-btn ai-insights-copy" onClick={handleCopy}>
+							{copied ? "copied!" : "copy"}
+						</button>
+					)}
+				</>
+			)}
+		</div>
 	);
 }

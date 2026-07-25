@@ -5,9 +5,6 @@ import { useAIProvider } from "@/lib/hooks/useAIProvider";
 import type { EngineTestMode } from "@/lib/aiEngineTest";
 import { getErrorMessage } from "@/lib/errorUtils";
 import MarkdownLite from "./MarkdownLite";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 
 interface Props {
 	url: string;
@@ -35,10 +32,10 @@ const COPY: Record<EngineTestMode, { title: string; subtitle: string; label: str
 
 const VERDICT_LINE = /^VERDICT:\s*(Likely|Possible|Unlikely)\s*/i;
 
-const VERDICT_STYLE: Record<string, { className: string; text: string }> = {
-	likely: { className: "bg-sev-info border border-sev-info-border text-good", text: "Likely to be cited" },
-	possible: { className: "bg-sev-medium-bg text-sev-medium", text: "Might be cited" },
-	unlikely: { className: "bg-sev-critical-bg text-sev-critical", text: "Unlikely to be cited" },
+const VERDICT_STYLE: Record<string, { bg: string; color: string; text: string }> = {
+	likely: { bg: "var(--sev-info)", color: "var(--good)", text: "Likely to be cited" },
+	possible: { bg: "var(--sev-medium-bg)", color: "var(--sev-medium)", text: "Might be cited" },
+	unlikely: { bg: "var(--sev-critical-bg)", color: "var(--sev-critical)", text: "Unlikely to be cited" },
 };
 
 export default function AIEngineTest({ url, mode, siteWide }: Props) {
@@ -102,75 +99,64 @@ export default function AIEngineTest({ url, mode, siteWide }: Props) {
 	const body = verdictMatch ? output.slice(verdictMatch[0].length).replace(/^\s+/, "") : output;
 
 	return (
-		<Card className="mb-6 gap-3 border-t-2 border-t-brand p-[18px_20px]">
-			<CardContent className="flex flex-col gap-3 p-0">
-				<div className="flex flex-wrap items-start justify-between gap-4">
-					<div>
-						<h3 className="m-0 mb-1 text-[15px] font-semibold">{copy.title}</h3>
-						<p className="m-0 max-w-[46ch] font-(family-name:--font-readable) text-[12.5px] text-ink-soft">
-							{copy.subtitle}
-							{siteWide && " Checks the URL you entered — not every crawled page."}
-						</p>
-					</div>
-
-					{status !== "loading" && (
-						<Button
-							type="button"
-							variant="brand"
-							size="sm"
-							disabled={!isConfigured}
-							onClick={handleRun}
-							title={!isConfigured ? "Set up an AI provider above first" : undefined}
-						>
-							{status === "done" ? "Run again" : "Run live test"}
-						</Button>
-					)}
+		<div className="ai-insights-card ai-engine-test-card">
+			<div className="ai-insights-head">
+				<div>
+					<h3>{copy.title}</h3>
+					<p className="ai-insights-subtitle">
+						{copy.subtitle}
+						{siteWide && " Checks the URL you entered — not every crawled page."}
+					</p>
 				</div>
 
-				{!isConfigured && (
-					<p className="m-0 text-[12.5px] text-ink-soft">
-						Set up an AI provider above to enable this.
-					</p>
+				{status !== "loading" && (
+					<button
+						type="button"
+						className="apply-btn"
+						disabled={!isConfigured}
+						onClick={handleRun}
+						title={!isConfigured ? "Set up an AI provider above first" : undefined}
+					>
+						{status === "done" ? "Run again" : "Run live test"}
+					</button>
 				)}
+			</div>
 
-				{status === "loading" && !output && (
-					<p className="m-0 text-[12.5px] text-ink-soft">
-						Asking your {copy.label} to read this page…
-					</p>
-				)}
+			{!isConfigured && (
+				<p className="ai-insights-hint">Set up an AI provider above to enable this.</p>
+			)}
 
-				{status === "error" && (
-					<div className="text-left text-[12.5px] text-critical">
-						{error}{" "}
-						<button
-							type="button"
-							className="text-brand underline-offset-2 hover:underline"
-							onClick={handleRun}
+			{status === "loading" && !output && (
+				<p className="ai-insights-hint">
+					Asking your {copy.label} to read this page…
+				</p>
+			)}
+
+			{status === "error" && (
+				<div className="ai-fix-error" style={{ textAlign: "left" }}>
+					{error}
+					<button type="button" className="link-btn" onClick={handleRun}>
+						retry
+					</button>
+				</div>
+			)}
+
+			{output && (
+				<>
+					{verdictStyle && (
+						<span
+							className="engine-test-verdict"
+							style={{ background: verdictStyle.bg, color: verdictStyle.color }}
 						>
-							retry
-						</button>
+							{verdictStyle.text}
+						</span>
+					)}
+					<div className="ai-insights-output">
+						<MarkdownLite text={body} />
+						{status === "loading" && <span className="md-cursor" aria-hidden="true" />}
 					</div>
-				)}
-
-				{output && (
-					<>
-						{verdictStyle && (
-							<span
-								className={cn(
-									"inline-block self-start rounded-full px-2.5 py-0.5 font-(family-name:--font-mono) text-[11px] font-semibold tracking-[0.04em]",
-									verdictStyle.className,
-								)}
-							>
-								{verdictStyle.text}
-							</span>
-						)}
-						<div className="font-(family-name:--font-readable) rounded-lg border border-line bg-surface-2 px-5 py-4 text-ink">
-							<MarkdownLite text={body} />
-							{status === "loading" && <span className="md-cursor" aria-hidden="true" />}
-						</div>
-					</>
-				)}
-			</CardContent>
-		</Card>
+				</>
+			)}
+		</div>
 	);
 }

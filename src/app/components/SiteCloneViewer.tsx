@@ -4,16 +4,6 @@ import { useMemo, useState } from "react";
 import { getErrorMessage } from "@/lib/errorUtils";
 import { useAIProvider } from "@/lib/hooks/useAIProvider";
 import type { Severity } from "@/lib/auditUtils";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-	Dialog,
-	DialogContent,
-	DialogHeader,
-	DialogTitle,
-	DialogBody,
-} from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
 
 export interface CloneAnnotation {
 	id: string;
@@ -208,7 +198,7 @@ export default function SiteCloneViewer({
 	url,
 	renderJs = true,
 	label = "🔍 View site with issues highlighted",
-	className,
+	className = "clone-view-btn",
 }: {
 	url: string;
 	renderJs?: boolean;
@@ -306,186 +296,182 @@ export default function SiteCloneViewer({
 
 	return (
 		<>
-			<Button
-				type="button"
-				variant="outline"
-				size="sm"
-				className={className}
-				onClick={handleOpen}
-			>
+			<button type="button" className={className} onClick={handleOpen}>
 				{label}
-			</Button>
+			</button>
 
-			<Dialog open={open} onOpenChange={setOpen}>
-				<DialogContent
-					className="flex h-[min(880px,92vh)] w-[min(1200px,94vw)] max-w-none flex-col"
-					aria-label={`Highlighted clone of ${url}`}
+			{open && (
+				<div
+					className="modal-overlay clone-modal-overlay"
+					onClick={() => setOpen(false)}
+					role="presentation"
 				>
-					<DialogHeader className="items-start">
-						<div>
-							<DialogTitle>Highlighted clone</DialogTitle>
-							<p className="mt-1 truncate text-[13px] text-ink-soft">{url}</p>
+					<div
+						className="clone-modal"
+						role="dialog"
+						aria-modal="true"
+						aria-label={`Highlighted clone of ${url}`}
+						onClick={(e) => e.stopPropagation()}
+					>
+						<div className="modal-header clone-modal-header">
+							<div>
+								<h2>Highlighted clone</h2>
+								<p className="clone-modal-url">{url}</p>
+							</div>
+							<button
+								type="button"
+								className="modal-close"
+								onClick={() => setOpen(false)}
+								aria-label="Close"
+							>
+								×
+							</button>
 						</div>
-					</DialogHeader>
 
-					{status === "loading" && (
-						<div className="flex-1 py-10 text-center text-ink-soft italic">
-							Rendering a highlighted clone of the page…
-						</div>
-					)}
+						{status === "loading" && (
+							<div className="modal-loading clone-modal-loading">
+								Rendering a highlighted clone of the page…
+							</div>
+						)}
 
-					{status === "error" && (
-						<div className="flex-1 py-10 text-center">
-							<p className="mb-3 text-critical">{error}</p>
-							<Button type="button" variant="brand" size="sm" onClick={load}>
-								Try again
-							</Button>
-						</div>
-					)}
+						{status === "error" && (
+							<div className="modal-error clone-modal-error">
+								<p>{error}</p>
+								<button type="button" className="apply-btn" onClick={load}>
+									Try again
+								</button>
+							</div>
+						)}
 
-					{status === "ready" && data && (
-						<DialogBody className="flex flex-1 flex-col gap-4 overflow-y-auto">
-							<div className="flex flex-wrap items-center gap-2 border-b border-line pb-4">
-								<span className="text-sm font-semibold text-ink">
-									{allIssues.length} issue{allIssues.length === 1 ? "" : "s"}{" "}
-									found
-								</span>
-								{(["critical", "high", "medium", "low"] as Severity[]).map((sev) =>
-									counts[sev] ?
-										<Badge key={sev} variant={`sev-${sev}` as never}>
-											{counts[sev]} {sev}
-										</Badge>
-									:	null,
-								)}
-								{!data.renderJsApplied && renderJs && (
-									<span className="text-xs text-ink-soft italic">
-										Showing static HTML — JS rendering wasn&apos;t applied
+						{status === "ready" && data && (
+							<div className="clone-modal-body">
+								<div className="clone-legend">
+									<span className="clone-legend-total">
+										{allIssues.length} issue{allIssues.length === 1 ? "" : "s"}{" "}
+										found
 									</span>
-								)}
-								<span className="ml-auto flex items-center gap-3">
-									{autoFixResult && (
+									{(["critical", "high", "medium", "low"] as Severity[]).map(
+										(sev) =>
+											counts[sev] ? (
+												<span
+													key={sev}
+													className={`clone-legend-chip clone-sev-${sev}`}
+												>
+													{counts[sev]} {sev}
+												</span>
+											) : null,
+									)}
+									{!data.renderJsApplied && renderJs && (
+										<span className="clone-legend-note">
+											Showing static HTML — JS rendering wasn&apos;t applied
+										</span>
+									)}
+									<span className="autofix-legend-actions">
+										{autoFixResult && (
+											<button
+												type="button"
+												className="link-btn"
+												onClick={() => setShowFixed((v) => !v)}
+											>
+												{showFixed ? "View original" : "View fixed"}
+											</button>
+										)}
 										<button
 											type="button"
-											className="text-sm text-brand underline-offset-2 hover:underline"
-											onClick={() => setShowFixed((v) => !v)}
+											className="apply-btn autofix-btn"
+											onClick={runAutoFix}
+											disabled={autoFixStatus === "running"}
 										>
-											{showFixed ? "View original" : "View fixed"}
+											{autoFixStatus === "running" ? "Auto-fixing…" : "⚡ Auto-fix all issues"}
 										</button>
-									)}
-									<Button
-										type="button"
-										variant="brand"
-										size="sm"
-										onClick={runAutoFix}
-										disabled={autoFixStatus === "running"}
-									>
-										{autoFixStatus === "running" ? "Auto-fixing…" : "⚡ Auto-fix all issues"}
-									</Button>
-								</span>
-							</div>
+									</span>
+								</div>
 
-							{!hydrated ? null : (
-								!isConfigured && (
-									<p className="text-xs text-ink-soft">
+								{!hydrated ? null : !isConfigured && (
+									<p className="autofix-note">
 										No AI provider configured — issues needing generated content (titles,
 										descriptions, alt text…) will reuse a fix from elsewhere on your site if
 										one exists, or stay unfixed. Everything mechanical still gets fixed.
 									</p>
-								)
-							)}
+								)}
 
-							{autoFixStatus === "error" && (
-								<div className="text-center">
-									<p className="mb-3 text-critical">{autoFixError}</p>
-									<Button type="button" variant="brand" size="sm" onClick={runAutoFix}>
-										Try again
-									</Button>
-								</div>
-							)}
-
-							{autoFixResult && (
-								<div className="flex flex-col gap-3">
-									<div className="flex flex-wrap items-center gap-2">
-										<Badge variant="good">{autoFixResult.summary.fixed} fixed</Badge>
-										{autoFixResult.summary.duplicated > 0 && (
-											<Badge variant="secondary">
-												{autoFixResult.summary.duplicated} reused from another page
-											</Badge>
-										)}
-										{autoFixResult.summary.skipped > 0 && (
-											<Badge variant="outline">
-												{autoFixResult.summary.skipped} left unfixed
-											</Badge>
-										)}
-										<span className="text-xs text-ink-soft">
-											Detected stack: {autoFixResult.stack.summary}
-										</span>
-										<Button
-											type="button"
-											variant="brand"
-											size="sm"
-											onClick={() => downloadHtml(autoFixResult.html, url)}
-										>
-											Download fixed HTML
-										</Button>
+								{autoFixStatus === "error" && (
+									<div className="modal-error clone-modal-error">
+										<p>{autoFixError}</p>
+										<button type="button" className="apply-btn" onClick={runAutoFix}>
+											Try again
+										</button>
 									</div>
-									<ul className="flex flex-col gap-1.5">
-										{autoFixResult.results.map((r) => (
-											<li
-												key={r.id}
-												className={cn(
-													"flex flex-wrap items-baseline gap-2 rounded-(--radius) border-l-2 bg-card px-3 py-2 text-sm",
-													r.status === "fixed" || r.status === "duplicated" ?
-														"border-l-good"
-													: r.status === "ai-needed" ?
-														"border-l-warn"
-													:	"border-l-line",
-												)}
-											>
-												<strong className="text-ink">{r.title}</strong>
-												<span className="text-ink-soft">{r.note}</span>
-											</li>
-										))}
-									</ul>
-								</div>
-							)}
+								)}
 
-							<div className="min-h-[300px] flex-1 overflow-hidden rounded-(--radius) border border-line">
-								<iframe
-									title={`${showFixed ? "Fixed" : "Highlighted"} clone of ${url}`}
-									srcDoc={srcDoc}
-									sandbox="allow-scripts"
-									className="size-full"
-								/>
+								{autoFixResult && (
+									<div className="autofix-summary">
+										<div className="autofix-summary-row">
+											<span className="autofix-chip autofix-chip-fixed">
+												{autoFixResult.summary.fixed} fixed
+											</span>
+											{autoFixResult.summary.duplicated > 0 && (
+												<span className="autofix-chip autofix-chip-duplicated">
+													{autoFixResult.summary.duplicated} reused from another page
+												</span>
+											)}
+											{autoFixResult.summary.skipped > 0 && (
+												<span className="autofix-chip autofix-chip-skipped">
+													{autoFixResult.summary.skipped} left unfixed
+												</span>
+											)}
+											<span className="autofix-stack-note">
+												Detected stack: {autoFixResult.stack.summary}
+											</span>
+											<button
+												type="button"
+												className="apply-btn"
+												onClick={() => downloadHtml(autoFixResult.html, url)}
+											>
+												Download fixed HTML
+											</button>
+										</div>
+										<ul className="autofix-results-list">
+											{autoFixResult.results.map((r) => (
+												<li key={r.id} className={`autofix-result autofix-result-${r.status}`}>
+													<strong>{r.title}</strong>
+													<span>{r.note}</span>
+												</li>
+											))}
+										</ul>
+									</div>
+								)}
+
+								<div className="clone-frame-wrap">
+									<iframe
+										title={`${showFixed ? "Fixed" : "Highlighted"} clone of ${url}`}
+										srcDoc={srcDoc}
+										sandbox="allow-scripts"
+										className="clone-iframe"
+									/>
+								</div>
+
+								{!showFixed && data.pageIssues.length > 0 && (
+									<div className="clone-page-issues">
+										<h3>Page-level issues</h3>
+										<ul>
+											{data.pageIssues.map((iss) => (
+												<li
+													key={iss.id}
+													className={`clone-page-issue clone-sev-${iss.severity}`}
+												>
+													<strong>{iss.title}</strong>
+													<span>{iss.detail}</span>
+												</li>
+											))}
+										</ul>
+									</div>
+								)}
 							</div>
-
-							{!showFixed && data.pageIssues.length > 0 && (
-								<div className="flex flex-col gap-2">
-									<h3 className="m-0 text-sm font-semibold text-ink">Page-level issues</h3>
-									<ul className="flex flex-col gap-1.5">
-										{data.pageIssues.map((iss) => (
-											<li
-												key={iss.id}
-												className={cn(
-													"flex flex-wrap items-baseline gap-2 rounded-(--radius) border-l-2 bg-card px-3 py-2 text-sm",
-													iss.severity === "critical" ? "border-l-sev-critical"
-													: iss.severity === "high" ? "border-l-sev-high"
-													: iss.severity === "medium" ? "border-l-sev-medium"
-													: iss.severity === "low" ? "border-l-sev-low"
-													:	"border-l-line",
-												)}
-											>
-												<strong className="text-ink">{iss.title}</strong>
-												<span className="text-ink-soft">{iss.detail}</span>
-											</li>
-										))}
-									</ul>
-								</div>
-							)}
-						</DialogBody>
-					)}
-				</DialogContent>
-			</Dialog>
+						)}
+					</div>
+				</div>
+			)}
 		</>
 	);
 }
