@@ -3,6 +3,19 @@
 import { useState } from "react";
 import { AI_PROVIDERS, type AIProviderId } from "@/lib/aiFix";
 import { useAIProvider } from "@/lib/hooks/useAIProvider";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+	Select,
+	SelectTrigger,
+	SelectValue,
+	SelectContent,
+	SelectItem,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 type TestState = { status: "idle" | "testing" | "ok" | "error"; message?: string };
 
@@ -57,15 +70,25 @@ export default function AIProviderSetup() {
 
 	if (!open && isConfigured && provider) {
 		return (
-			<div className="ai-setup-summary">
+			<div className="mt-[-2px] mb-5 flex items-center gap-2.5 font-(family-name:--font-sans) text-[13px] text-ink-soft">
 				<span>
-					AI fixes: <strong>{AI_PROVIDERS[provider].label}</strong>
-					<span className="ai-setup-model-tag">{model}</span>
+					AI fixes: <strong className="text-ink">{AI_PROVIDERS[provider].label}</strong>
+					<Badge variant="secondary" className="ml-2 font-(family-name:--font-mono) text-[11px]">
+						{model}
+					</Badge>
 				</span>
-				<button type="button" className="link-btn" onClick={() => setOpen(true)}>
+				<button
+					type="button"
+					className="text-brand underline-offset-2 hover:underline"
+					onClick={() => setOpen(true)}
+				>
 					change
 				</button>
-				<button type="button" className="link-btn" onClick={clear}>
+				<button
+					type="button"
+					className="text-brand underline-offset-2 hover:underline"
+					onClick={clear}
+				>
 					disconnect
 				</button>
 			</div>
@@ -73,104 +96,136 @@ export default function AIProviderSetup() {
 	}
 
 	return (
-		<div className="ai-setup-card">
-			<div className="ai-setup-row">
-				<label htmlFor="ai-provider-select">AI provider</label>
-				<select
-					id="ai-provider-select"
-					value={selected}
-					onChange={(e) => handleProviderChange(e.target.value as AIProviderId)}
-				>
-					{Object.values(AI_PROVIDERS).map((p) => (
-						<option key={p.id} value={p.id}>
-							{p.label}
-						</option>
-					))}
-				</select>
-			</div>
+		<Card className="mb-6 gap-3 border-t-2 border-t-brand p-5">
+			<CardContent className="flex flex-col gap-3 p-0">
+				<div className="flex flex-col gap-1.5">
+					<Label htmlFor="ai-provider-select" className="text-xs text-ink-soft">
+						AI provider
+					</Label>
+					<Select value={selected} onValueChange={(v) => handleProviderChange(v as AIProviderId)}>
+						<SelectTrigger id="ai-provider-select" className="w-full">
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							{Object.values(AI_PROVIDERS).map((p) => (
+								<SelectItem key={p.id} value={p.id}>
+									{p.label}
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
+				</div>
 
-			<div className="ai-setup-row">
-				<label htmlFor="ai-model-select">Model</label>
-				{!useCustomModel ? (
-					<select
-						id="ai-model-select"
-						value={selectedModel}
-						onChange={(e) => {
-							if (e.target.value === "__custom__") {
-								setUseCustomModel(true);
-							} else {
-								setSelectedModel(e.target.value);
-							}
-							setTest({ status: "idle" });
-						}}
-					>
-						{config.models.map((m) => (
-							<option key={m} value={m}>
-								{m}
-							</option>
-						))}
-						{config.allowCustomModel && <option value="__custom__">Custom model id…</option>}
-					</select>
-				) : (
-					<div className="ai-setup-custom-model">
-						<input
-							type="text"
-							value={customModel}
-							onChange={(e) => {
-								setCustomModel(e.target.value);
+				<div className="flex flex-col gap-1.5">
+					<Label htmlFor="ai-model-select" className="text-xs text-ink-soft">
+						Model
+					</Label>
+					{!useCustomModel ? (
+						<Select
+							value={selectedModel}
+							onValueChange={(v) => {
+								if (v === "__custom__") {
+									setUseCustomModel(true);
+								} else {
+									setSelectedModel(v);
+								}
 								setTest({ status: "idle" });
 							}}
-							placeholder="e.g. anthropic/claude-opus-4.5"
-							autoComplete="off"
-						/>
-						<button
-							type="button"
-							className="link-btn"
-							onClick={() => {
-								setUseCustomModel(false);
-								setCustomModel("");
-							}}
 						>
-							use preset instead
-						</button>
-					</div>
+							<SelectTrigger id="ai-model-select" className="w-full">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								{config.models.map((m) => (
+									<SelectItem key={m} value={m}>
+										{m}
+									</SelectItem>
+								))}
+								{config.allowCustomModel && (
+									<SelectItem value="__custom__">Custom model id…</SelectItem>
+								)}
+							</SelectContent>
+						</Select>
+					) : (
+						<div className="flex items-center gap-2">
+							<Input
+								type="text"
+								value={customModel}
+								onChange={(e) => {
+									setCustomModel(e.target.value);
+									setTest({ status: "idle" });
+								}}
+								placeholder="e.g. anthropic/claude-opus-4.5"
+								autoComplete="off"
+								className="font-(family-name:--font-mono)"
+							/>
+							<button
+								type="button"
+								className="shrink-0 text-sm text-brand underline-offset-2 hover:underline"
+								onClick={() => {
+									setUseCustomModel(false);
+									setCustomModel("");
+								}}
+							>
+								use preset instead
+							</button>
+						</div>
+					)}
+					{config.hint && (
+						<p className="font-(family-name:--font-readable) text-xs text-ink-soft">
+							{config.hint}
+						</p>
+					)}
+				</div>
+
+				<div className="flex flex-col gap-1.5">
+					<Label htmlFor="ai-key-input" className="text-xs text-ink-soft">
+						API key
+					</Label>
+					<Input
+						id="ai-key-input"
+						type="password"
+						value={key}
+						onChange={(e) => {
+							setKey(e.target.value);
+							setTest({ status: "idle" });
+						}}
+						placeholder={config.keyPrefix ? `${config.keyPrefix}...` : "paste key…"}
+						autoComplete="off"
+						className="font-(family-name:--font-mono)"
+					/>
+				</div>
+				<p className="font-(family-name:--font-readable) text-xs leading-relaxed text-ink-soft">
+					Stored only in this browser tab&apos;s session storage. Sent directly to {config.label} per request —
+					never saved on our servers.{" "}
+					<a href={config.keyUrl} target="_blank" rel="noreferrer" className="text-brand underline">
+						Get a {config.label} key ↗
+					</a>
+				</p>
+
+				<div className="flex items-center justify-between gap-2.5">
+					<button
+						type="button"
+						className="text-sm text-brand underline-offset-2 hover:underline disabled:pointer-events-none disabled:opacity-50"
+						disabled={!canSave || test.status === "testing"}
+						onClick={handleTest}
+					>
+						{test.status === "testing" ? "Testing…" : "Test connection"}
+					</button>
+					<Button type="button" variant="brand" size="sm" disabled={!canSave} onClick={handleSave}>
+						Save &amp; enable AI fixes
+					</Button>
+				</div>
+
+				{test.status === "ok" && (
+					<p className={cn("mt-[-2px] text-[12.5px]", "text-good")}>
+						Key works — connected to {config.label}.
+					</p>
 				)}
-				{config.hint && <p className="ai-setup-hint">{config.hint}</p>}
-			</div>
-
-			<div className="ai-setup-row">
-				<label htmlFor="ai-key-input">API key</label>
-				<input
-					id="ai-key-input"
-					type="password"
-					value={key}
-					onChange={(e) => {
-						setKey(e.target.value);
-						setTest({ status: "idle" });
-					}}
-					placeholder={config.keyPrefix ? `${config.keyPrefix}...` : "paste key…"}
-					autoComplete="off"
-				/>
-			</div>
-			<p className="ai-setup-hint">
-				Stored only in this browser tab&apos;s session storage. Sent directly to {config.label} per request —
-				never saved on our servers.{" "}
-				<a href={config.keyUrl} target="_blank" rel="noreferrer">
-					Get a {config.label} key ↗
-				</a>
-			</p>
-
-			<div className="ai-setup-actions">
-				<button type="button" className="link-btn" disabled={!canSave || test.status === "testing"} onClick={handleTest}>
-					{test.status === "testing" ? "Testing…" : "Test connection"}
-				</button>
-				<button type="button" className="apply-btn" disabled={!canSave} onClick={handleSave}>
-					Save &amp; enable AI fixes
-				</button>
-			</div>
-
-			{test.status === "ok" && <p className="ai-setup-test ok">Key works — connected to {config.label}.</p>}
-			{test.status === "error" && <p className="ai-setup-test error">{test.message}</p>}
-		</div>
+				{test.status === "error" && (
+					<p className="mt-[-2px] text-[12.5px] text-critical">{test.message}</p>
+				)}
+			</CardContent>
+		</Card>
 	);
 }

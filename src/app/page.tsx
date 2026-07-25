@@ -1,7 +1,17 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 import CrawlTree from "./components/CrawlTree";
+import { useTranslation } from "@/lib/hooks/useTranslation";
 import type { PageNode, Issue } from "./components/CrawlTree";
 import AIProviderSetup from "./components/AIProviderSetup";
 import AIFixButton from "./components/AIFixButton";
@@ -14,7 +24,6 @@ import ScheduleManager from "./components/ScheduleManager";
 import SettingsPanel from "./components/SettingsPanel";
 import MissingFileBanner from "./components/MissingFileBanner";
 import { useSettings } from "@/lib/hooks/useSettings";
-import { useTranslation } from "@/lib/hooks/useTranslation";
 import {
 	saveScan,
 	getRecentScans,
@@ -80,8 +89,8 @@ type Category = {
 };
 
 export default function Home() {
-	const { settings, hydrated: settingsHydrated } = useSettings();
 	const { t } = useTranslation();
+	const { settings, hydrated: settingsHydrated } = useSettings();
 	const appliedDefaultsRef = useRef(false);
 	const [viewState, setViewState] = useState<ScanState>("hero");
 	const [url, setUrl] = useState("");
@@ -589,9 +598,9 @@ export default function Home() {
 
 	return (
 		<div className="wrap">
-			<header>
-				<div className="brand">
-					<span className="brand-mark">
+			<header className="flex items-center justify-between py-7">
+				<div className="flex items-center gap-2 font-(family-name:--font-cond) text-lg font-bold">
+					<span className="flex size-6 items-center justify-center rounded-md bg-brand">
 						<svg width="14" height="14" viewBox="0 0 14 14">
 							<path
 								d="M1 7 L4 7 L5.5 2 L8 12 L9.5 7 L13 7"
@@ -605,40 +614,37 @@ export default function Home() {
 					</span>
 					OptiQra
 				</div>
-				<div className="header-actions">
+				<div className="flex items-center gap-2">
 					<ScheduleManager />
 					<SettingsPanel />
 				</div>
 			</header>
 
 			{viewState === "hero" && (
-				<section className="hero">
-					<p className="eyebrow">{t("hero.eyebrow")}</p>
-					<h1>{t("hero.title")}</h1>
-					<p className="sub">{t("hero.subtitle")}</p>
-					<div className="mode-toggle" role="radiogroup" aria-label="Scan mode">
-						<button
-							type="button"
-							role="radio"
-							aria-checked={scanMode === "single"}
-							className={scanMode === "single" ? "active" : ""}
-							onClick={() => setScanMode("single")}
-						>
-							{t("hero.singlePage")}
-						</button>
-						<button
-							type="button"
-							role="radio"
-							aria-checked={scanMode === "site"}
-							className={scanMode === "site" ? "active" : ""}
-							onClick={() => setScanMode("site")}
-						>
-							{t("hero.wholeSite")}
-						</button>
-					</div>
+				<section className="pt-8 pb-20">
+					<p className="mb-3 flex items-center gap-2 font-(family-name:--font-mono) text-xs font-medium tracking-[0.08em] text-ink-soft uppercase">
+						<span className="eyebrow-dot inline-block size-1.5 rounded-full bg-brand" />
+						{t("hero.eyebrow")}
+					</p>
+					<h1 className="mb-5 max-w-[14ch] font-(family-name:--font-cond) text-[clamp(34px,5vw,52px)] leading-[1.05] font-bold tracking-[-0.01em]">
+						{t("hero.title")}
+					</h1>
+					<p className="mb-8 max-w-[52ch] font-(family-name:--font-readable) text-[15.5px] leading-relaxed text-ink-soft">
+						{t("hero.subtitle")}
+					</p>
+					<Tabs
+						value={scanMode}
+						onValueChange={(v) => setScanMode(v as ScanMode)}
+						className="mb-5"
+					>
+						<TabsList aria-label="Scan mode">
+							<TabsTrigger value="single">{t("hero.singlePage")}</TabsTrigger>
+							<TabsTrigger value="site">{t("hero.wholeSite")}</TabsTrigger>
+						</TabsList>
+					</Tabs>
 					{scanMode === "site" && (
 						<div
-							className="depth-select"
+							className="mb-5 flex flex-wrap gap-2"
 							role="radiogroup"
 							aria-label="Scan depth"
 						>
@@ -648,11 +654,23 @@ export default function Home() {
 									type="button"
 									role="radio"
 									aria-checked={scanDepth === d.id}
-									className={`depth-btn ${scanDepth === d.id ? "active" : ""}`}
 									onClick={() => setScanDepth(d.id)}
+									className={cn(
+										"flex flex-col items-start gap-0.5 rounded-(--radius) border px-3.5 py-2.5 text-left transition-colors",
+										scanDepth === d.id ?
+											"border-brand bg-brand-soft"
+										:	"border-line bg-card hover:border-brand/50",
+									)}
 								>
-									<span className="depth-label">{d.label}</span>
-									<span className="depth-hint">
+									<span
+										className={cn(
+											"text-sm font-semibold",
+											scanDepth === d.id ? "text-brand" : "text-ink",
+										)}
+									>
+										{d.label}
+									</span>
+									<span className="text-xs text-ink-soft">
 										{d.id === "custom" ? t("hero.yourChoice") : `${d.pages} ${t("hero.pagesSuffix")}`}
 									</span>
 								</button>
@@ -660,9 +678,11 @@ export default function Home() {
 						</div>
 					)}
 					{scanMode === "site" && scanDepth === "custom" && (
-						<div className="custom-pages">
-							<label htmlFor="customPages">{t("hero.pagesToScan")}</label>
-							<input
+						<div className="mb-5 flex items-center gap-3">
+							<Label htmlFor="customPages" className="text-sm text-ink-soft">
+								{t("hero.pagesToScan")}
+							</Label>
+							<Input
 								id="customPages"
 								type="number"
 								min={MIN_CUSTOM_PAGES}
@@ -680,36 +700,41 @@ export default function Home() {
 									setCustomPages(String(n));
 								}}
 								aria-label="Custom number of pages (unlimited)"
+								className="w-28"
 							/>
 						</div>
 					)}
-					<form className="intake" onSubmit={runScan}>
-						<input
+					<form className="mb-4 flex gap-2" onSubmit={runScan}>
+						<Input
 							type="text"
 							value={url}
 							onChange={(e) => setUrl(e.target.value)}
 							placeholder={t("hero.urlPlaceholder")}
 							required
 							aria-label="Website URL"
+							className="h-11 max-w-md text-[15px]"
 						/>
-						<button type="submit">
+						<Button type="submit" variant="brand" size="lg" className="h-11">
 							{scanMode === "site" ? t("hero.crawlSite") : t("hero.runDiagnostic")}
-						</button>
+						</Button>
 					</form>
 					{scanMode === "site" && (
-						<p className="demo-note">
-							We'll follow internal links (and your sitemap, if there is one) to
+						<p className="mb-2 max-w-md text-sm text-ink-soft">
+							We&apos;ll follow internal links (and your sitemap, if there is one) to
 							scan up to {resolvedMaxPages} page
 							{resolvedMaxPages === 1 ? "" : "s"}.
 						</p>
 					)}
 					{errorMsg && (
-						<p className="demo-note error-note show" role="alert">
+						<p
+							className="mb-2 max-w-md text-sm text-critical"
+							role="alert"
+						>
 							{errorMsg}
 						</p>
 					)}
 					{stoppedNote && (
-						<p className="demo-note stopped-note show" role="status">
+						<p className="mb-2 max-w-md text-sm text-ink-soft" role="status">
 							{stoppedNote}
 						</p>
 					)}
@@ -717,28 +742,42 @@ export default function Home() {
 					<ProjectUploadPanel />
 
 					{recentScansLoaded && recentScans.length > 0 && (
-						<div className="recent-scans">
-							<div className="recent-scans-head">
-								<p className="recent-scans-title">
-									Recent scans <span className="recent-scans-hint">(saved on this device)</span>
-								</p>
-							</div>
-							<ul className="recent-scans-list">
+						<div className="mt-10 max-w-xl">
+							<p className="mb-3 text-sm font-semibold text-ink">
+								Recent scans{" "}
+								<span className="font-normal text-ink-soft">
+									(saved on this device)
+								</span>
+							</p>
+							<ul className="flex flex-col gap-2">
 								{recentScans.map((scan) => (
-									<li key={scan.id} className="recent-scan-item">
+									<li
+										key={scan.id}
+										className="flex items-center gap-2 rounded-(--radius) border border-line bg-card"
+									>
 										<button
 											type="button"
-											className="recent-scan-open"
+											className="flex flex-1 items-center gap-3 px-4 py-3 text-left"
 											onClick={() => openStoredScan(scan.id)}
 										>
 											<span
-												className={`recent-scan-score ${scoreColorClass(scan.overallScore)}`}
+												className={cn(
+													"flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-bold",
+													scoreColorClass(scan.overallScore) === "score-good" &&
+														"bg-good-bg text-good",
+													scoreColorClass(scan.overallScore) === "score-warn" &&
+														"bg-warn-bg text-warn",
+													scoreColorClass(scan.overallScore) === "score-critical" &&
+														"bg-critical-bg text-critical",
+												)}
 											>
 												{scan.overallScore}
 											</span>
-											<span className="recent-scan-meta">
-												<span className="recent-scan-url">{scan.url}</span>
-												<span className="recent-scan-sub">
+											<span className="flex min-w-0 flex-col">
+												<span className="truncate text-sm font-medium text-ink">
+													{scan.url}
+												</span>
+												<span className="text-xs text-ink-soft">
 													{scan.mode === "site" ? "Whole site" : "Single page"} ·{" "}
 													{new Date(scan.createdAt).toLocaleDateString()}
 												</span>
@@ -746,11 +785,11 @@ export default function Home() {
 										</button>
 										<button
 											type="button"
-											className="recent-scan-delete"
+											className="mr-3 flex size-6 shrink-0 items-center justify-center rounded text-ink-soft hover:bg-secondary hover:text-critical"
 											aria-label={`Delete saved scan of ${scan.url}`}
 											onClick={() => deleteScanEverywhere(scan.id)}
 										>
-											×
+											<X className="size-3.5" />
 										</button>
 									</li>
 								))}
@@ -761,19 +800,24 @@ export default function Home() {
 			)}
 
 			{viewState === "scanning" && (
-				<section className="scan active">
-					<p className="scan-url">{url}</p>
-					<p className="scan-title">
+				<section className="py-14 pb-20">
+					<p className="mb-1.5 font-(family-name:--font-mono) text-sm text-ink-soft">
+						{url}
+					</p>
+					<p className="mb-8 font-(family-name:--font-cond) text-2xl font-bold">
 						{scanMode === "site" ? "Crawling the site…" : "Running diagnostic…"}
 					</p>
 
 					{scanMode === "site" && crawlProgress && (
-						<div className="crawl-progress">
-							<div className="crawl-scanner" aria-hidden="true">
+						<div className="mb-9 max-w-md">
+							<div
+								className="relative mb-2.5 flex h-[30px] items-center justify-between px-0.5"
+								aria-hidden="true"
+							>
 								{Array.from({ length: 7 }).map((_, i) => (
 									<span
 										key={i}
-										className="crawl-scanner-page"
+										className="crawl-scanner-page flex text-line"
 										style={{ animationDelay: `${i * 0.18}s` }}
 									>
 										<svg viewBox="0 0 24 24" width="16" height="16">
@@ -793,7 +837,7 @@ export default function Home() {
 										</svg>
 									</span>
 								))}
-								<span className="crawl-scanner-bot">
+								<span className="crawl-scanner-bot absolute top-1/2 left-0 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-card text-brand">
 									<svg viewBox="0 0 24 24" width="18" height="18">
 										<circle
 											cx="12"
@@ -813,7 +857,7 @@ export default function Home() {
 									</svg>
 								</span>
 							</div>
-							<div className="crawl-progress-head">
+							<div className="mb-2 flex justify-between font-(family-name:--font-mono) text-[13px] text-ink-soft">
 								<span>
 									Scanned {crawlProgress.scanned} of {crawlProgress.total} page
 									{crawlProgress.total === 1 ? "" : "s"}
@@ -828,20 +872,15 @@ export default function Home() {
 									%
 								</span>
 							</div>
-							<div className="progress-bar">
-								<div
-									className="progress-bar-fill"
-									style={{
-										width: `${Math.min(
-											100,
-											Math.round(
-												(crawlProgress.scanned / crawlProgress.total) * 100,
-											),
-										)}%`,
-									}}
-								/>
-							</div>
-							<p className="crawl-current-url">
+							<Progress
+								value={Math.min(
+									100,
+									Math.round(
+										(crawlProgress.scanned / crawlProgress.total) * 100,
+									),
+								)}
+							/>
+							<p className="mt-2.5 truncate font-(family-name:--font-mono) text-xs text-ink-soft">
 								{isPaused ?
 									"⏸ Paused — press Resume to keep going."
 								:	crawlProgress.currentUrl ||
@@ -849,8 +888,8 @@ export default function Home() {
 									"Getting started…"}
 							</p>
 							{linkCheckProgress && linkCheckProgress.total > 0 && (
-								<div className="link-check-progress">
-									<div className="crawl-progress-head">
+								<div className="mt-4">
+									<div className="mb-2 flex justify-between font-(family-name:--font-mono) text-[13px] text-ink-soft">
 										<span>
 											Checking links: {linkCheckProgress.checked} of{" "}
 											{linkCheckProgress.total}
@@ -867,28 +906,23 @@ export default function Home() {
 											%
 										</span>
 									</div>
-									<div className="progress-bar">
-										<div
-											className="progress-bar-fill"
-											style={{
-												width: `${Math.min(
+									<Progress
+										value={Math.min(
+											100,
+											Math.round(
+												(linkCheckProgress.checked /
+													linkCheckProgress.total) *
 													100,
-													Math.round(
-														(linkCheckProgress.checked /
-															linkCheckProgress.total) *
-															100,
-													),
-												)}%`,
-											}}
-										/>
-									</div>
+											),
+										)}
+									/>
 								</div>
 							)}
 						</div>
 					)}
 
 					{scanMode === "single" && (
-						<ul className="steps">
+						<ul className="max-w-md list-none p-0">
 							{[
 								"Reading page structure",
 								"Checking meta tags & schema",
@@ -900,54 +934,64 @@ export default function Home() {
 							].map((stepText, i) => (
 								<li
 									key={i}
-									className={`${
-										activeStep === i ? "active"
-										: activeStep > i ? "done"
-										: ""
-									}`}
+									className={cn(
+										"flex items-center gap-3 border-b border-line py-2.5 text-[14.5px] transition-colors last:border-b-0",
+										activeStep === i ? "text-ink"
+										: activeStep > i ? "text-ink-soft"
+										: "text-ink-soft/60",
+									)}
 								>
-									<span className="dot"></span> {stepText}
+									<span
+										className={cn(
+											"flex size-4 shrink-0 items-center justify-center rounded-full border-[1.5px]",
+											activeStep > i ?
+												"step-dot-done border-good bg-good"
+											: activeStep === i ?
+												"step-dot-active border-brand"
+											:	"border-line",
+										)}
+									/>{" "}
+									{stepText}
 								</li>
 							))}
 						</ul>
 					)}
 
-					<div className="stop-menu-actions">
+					<div className="mt-8 flex flex-wrap items-center gap-3">
 						{scanMode === "site" && (
-							<button
+							<Button
 								type="button"
-								className="stop-menu-btn stop-menu-resume"
+								variant="secondary"
 								onClick={isPaused ? resumeScan : pauseScan}
 							>
 								{isPaused ? "Resume" : "Pause"}
-							</button>
+							</Button>
 						)}
 						{scanMode === "site" && (
-							<button
-								type="button"
-								className="stop-menu-btn stop-menu-report"
-								onClick={createReportNow}
-							>
+							<Button type="button" variant="outline" onClick={createReportNow}>
 								Create report now
-							</button>
+							</Button>
 						)}
-						<button
+						<Button
 							type="button"
-							className="stop-menu-btn stop-menu-cancel"
+							variant="ghost"
+							className="text-ink-soft hover:text-critical"
 							onClick={cancelScan}
 						>
 							Cancel scan
-						</button>
+						</Button>
 					</div>
 				</section>
 			)}
 
 
 			{viewState === "report" && reportData && (
-				<section className="report active">
-					<p className="report-url">{reportData.url}</p>
+				<section className="pt-8 pb-20">
+					<p className="mb-1 truncate font-(family-name:--font-mono) text-sm text-ink-soft">
+						{reportData.url}
+					</p>
 					{reportData.partial && (
-						<p className="demo-note stopped-note show" role="status">
+						<p className="mb-3 max-w-2xl text-sm text-ink-soft" role="status">
 							⏸ Report generated early — this only includes the{" "}
 							{reportData.pagesScanned?.length ?? 0} page
 							{reportData.pagesScanned?.length === 1 ? "" : "s"} scanned before
@@ -965,7 +1009,7 @@ export default function Home() {
 						)}
 
 					{reportData.mode === "site" && reportData.pagesScanned && (
-						<p className="demo-note">
+						<p className="mb-2 text-sm text-ink-soft">
 							Scanned {reportData.pagesScanned.length} page
 							{reportData.pagesScanned.length === 1 ? "" : "s"}
 							{reportData.crawlTruncated ?
@@ -974,7 +1018,7 @@ export default function Home() {
 							.{" "}
 							<button
 								type="button"
-								className="link-btn"
+								className="text-brand underline-offset-2 hover:underline"
 								onClick={() => setShowPageList((v) => !v)}
 							>
 								{showPageList ? "Hide list" : "Show list"}
@@ -982,15 +1026,19 @@ export default function Home() {
 						</p>
 					)}
 					{showPageList && reportData.pagesScanned && (
-						<ul className="crawled-pages">
+						<ul className="mb-4 flex max-h-56 flex-col gap-1 overflow-y-auto rounded-(--radius) border border-line bg-card p-3 font-(family-name:--font-mono) text-xs text-ink-soft">
 							{reportData.pagesScanned.map((pageUrl) => (
-								<li key={pageUrl}>{pageUrl}</li>
+								<li key={pageUrl} className="truncate">
+									{pageUrl}
+								</li>
 							))}
 						</ul>
 					)}
-					<div className="report-top">
-						<h2>Diagnostic report</h2>
-						<div className="report-top-actions">
+					<div className="mt-8 mb-6 flex flex-wrap items-center justify-between gap-4">
+						<h2 className="font-(family-name:--font-cond) text-2xl font-bold">
+							Diagnostic report
+						</h2>
+						<div className="flex flex-wrap items-center gap-2">
 							<ReportDownload reportData={reportData} overallScore={overall} />
 							<SiteCloneViewer
 								url={reportData.url}
@@ -1001,33 +1049,28 @@ export default function Home() {
 								mode={reportData.mode ?? scanMode}
 								maxPages={resolvedMaxPages}
 							/>
-							<button
-								className="fix-all"
-								onClick={fixAll}
-								disabled={allResolved}
-							>
+							<Button variant="outline" onClick={fixAll} disabled={allResolved}>
 								Mark everything resolved
-							</button>
+							</Button>
 						</div>
 					</div>
 
 					<AIProviderSetup />
 
-					<div className="overall">
+					<div className="my-8 flex items-center gap-5">
 						<div
-							className="score"
-							style={{
-								color:
-									overall >= 80 ? "var(--good)"
-									: overall >= 60 ? "var(--warn)"
-									: "var(--critical)",
-							}}
+							className={cn(
+								"font-(family-name:--font-cond) text-6xl font-bold",
+								overall >= 80 ? "text-good"
+								: overall >= 60 ? "text-warn"
+								: "text-critical",
+							)}
 						>
 							{overall}
-							<span>/100</span>
+							<span className="text-2xl font-medium text-ink-soft">/100</span>
 						</div>
-						<div className="meta">
-							<div className="label">Overall vitals</div>
+						<div className="text-sm font-semibold text-ink-soft">
+							Overall vitals
 						</div>
 					</div>
 
@@ -1042,17 +1085,17 @@ export default function Home() {
 						stack={reportData.stack}
 					/>
 
-					<div className="cards">
+					<div className="density-cards my-6 grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3.5">
 						{Object.entries(visibleCategories).map(([key, cat]) => {
 							const openIssues = cat.issues.filter((i) => !i.resolved).length;
-							const color =
-								cat.score >= 80 ? "var(--good)"
-								: cat.score >= 60 ? "var(--warn)"
-								: "var(--critical)";
+							const colorClass =
+								cat.score >= 80 ? "good"
+								: cat.score >= 60 ? "warn"
+								: "critical";
 							return (
-								<div
+								<Card
 									key={key}
-									className="card"
+									className="density-card cursor-pointer gap-2 p-4 shadow-none transition-colors hover:border-brand/50"
 									role="button"
 									tabIndex={0}
 									aria-expanded={openPanel === key}
@@ -1064,28 +1107,41 @@ export default function Home() {
 										}
 									}}
 								>
-									<div className="card-head">
-										<div className="card-name">{cat.label}</div>
-										<div className="card-score" style={{ color }}>
+									<div className="flex items-center justify-between gap-2">
+										<div className="text-sm font-semibold">{cat.label}</div>
+										<div
+											className={cn(
+												"text-lg font-bold",
+												colorClass === "good" && "text-good",
+												colorClass === "warn" && "text-warn",
+												colorClass === "critical" && "text-critical",
+											)}
+										>
 											{cat.score}
 										</div>
 									</div>
-									<div className="card-count">
+									<div className="text-xs text-ink-soft">
 										{openIssues} open issue{openIssues === 1 ? "" : "s"}
 									</div>
-									<div className="card-bar">
+									<div className="h-1.5 overflow-hidden rounded-full bg-secondary">
 										<div
-											style={{ width: `${cat.score}%`, background: color }}
-										></div>
+											className={cn(
+												"h-full rounded-full",
+												colorClass === "good" && "bg-good",
+												colorClass === "warn" && "bg-warn",
+												colorClass === "critical" && "bg-critical",
+											)}
+											style={{ width: `${cat.score}%` }}
+										/>
 									</div>
-									<div className="card-source">
+									<div className="text-[11px] text-ink-soft">
 										{cat.source === "lighthouse" ?
 											"Google Lighthouse"
 										: cat.pagesAnalyzed && cat.pagesAnalyzed > 1 ?
 											`Live HTML scan · ${cat.pagesAnalyzed} pages`
 										:	"Live HTML scan"}
 									</div>
-								</div>
+								</Card>
 							);
 						})}
 					</div>
@@ -1094,67 +1150,92 @@ export default function Home() {
 						{Object.entries(visibleCategories).map(([key, cat]) => (
 							<div
 								key={key}
-								className={`panel ${openPanel === key ? "open" : ""}`}
+								className={cn(
+									"grid transition-[grid-template-rows] duration-200",
+									openPanel === key ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+								)}
 							>
-								{key === "seo" && (
-									<div key={activeScanId ?? reportData.url}>
-										{cat.issues.some(
-											(i) => i.id === "sitemap-missing" && !i.resolved,
-										) && (
-											<MissingFileBanner
-												kind="sitemap"
-												siteUrl={reportData.url}
-												pagesScanned={reportData.pagesScanned}
-											/>
-										)}
-										{cat.issues.some(
-											(i) => i.id === "robots-missing" && !i.resolved,
-										) && (
-											<MissingFileBanner kind="robots" siteUrl={reportData.url} />
-										)}
-									</div>
-								)}
-								{(key === "aeo" || key === "geo") && (
-									<AIEngineTest
-										key={`${key}-${activeScanId ?? reportData.url}`}
-										url={reportData.url}
-										mode={key}
-										siteWide={reportData.mode === "site"}
-									/>
-								)}
-								{cat.issues.map((iss, idx) => (
-									<div
-										key={idx}
-										className={`finding ${iss.resolved ? "resolved" : ""}`}
-									>
-										<span
-											className={`sev-dot ${iss.resolved ? "sev-good" : `sev-${iss.severity}`}`}
-										></span>
-										<div className="finding-body">
-											{!iss.resolved && (
-												<span className={`sev-badge sev-badge-${iss.severity}`}>
-													{iss.severity}
-												</span>
+								<div className="flex flex-col gap-3 overflow-hidden">
+									{key === "seo" && (
+										<div key={activeScanId ?? reportData.url}>
+											{cat.issues.some(
+												(i) => i.id === "sitemap-missing" && !i.resolved,
+											) && (
+												<MissingFileBanner
+													kind="sitemap"
+													siteUrl={reportData.url}
+													pagesScanned={reportData.pagesScanned}
+												/>
 											)}
-											<div className="finding-title">{iss.title}</div>
-											<div className="finding-detail">{iss.detail}</div>
-											<div className="finding-fix">Fix: {iss.fix}</div>
+											{cat.issues.some(
+												(i) => i.id === "robots-missing" && !i.resolved,
+											) && (
+												<MissingFileBanner kind="robots" siteUrl={reportData.url} />
+											)}
 										</div>
-										<AIFixButton
-											issue={iss}
-											pageUrl={reportData.url}
-											category={cat.label}
-											stack={reportData.stack}
-											onResolve={() => applyFix(key, idx)}
+									)}
+									{(key === "aeo" || key === "geo") && (
+										<AIEngineTest
+											key={`${key}-${activeScanId ?? reportData.url}`}
+											url={reportData.url}
+											mode={key}
+											siteWide={reportData.mode === "site"}
 										/>
-									</div>
-								))}
+									)}
+									{cat.issues.map((iss, idx) => (
+										<div
+											key={idx}
+											className={cn(
+												"density-finding flex items-start gap-3 rounded-(--radius) border border-line bg-card p-4",
+												iss.resolved && "opacity-60",
+											)}
+										>
+											<span
+												className={cn(
+													"mt-1 size-2 shrink-0 rounded-full",
+													iss.resolved ? "bg-good"
+													: iss.severity === "critical" ? "bg-sev-critical"
+													: iss.severity === "high" ? "bg-sev-high"
+													: iss.severity === "medium" ? "bg-sev-medium"
+													: iss.severity === "low" ? "bg-sev-low"
+													: "bg-sev-info border border-sev-info-border",
+												)}
+											/>
+											<div className="flex flex-1 flex-col gap-1">
+												{!iss.resolved && (
+													<Badge
+														variant={`sev-${iss.severity}` as never}
+														className="self-start capitalize"
+													>
+														{iss.severity}
+													</Badge>
+												)}
+												<div className="text-sm font-semibold text-ink">
+													{iss.title}
+												</div>
+												<div className="text-sm text-ink-soft">{iss.detail}</div>
+												<div className="text-sm text-ink-soft italic">
+													Fix: {iss.fix}
+												</div>
+											</div>
+											<AIFixButton
+												issue={iss}
+												pageUrl={reportData.url}
+												category={cat.label}
+												stack={reportData.stack}
+												onResolve={() => applyFix(key, idx)}
+											/>
+										</div>
+									))}
+								</div>
 							</div>
 						))}
 					</div>
 
-					<div className="again">
-						<button
+					<div className="mt-10 flex justify-center">
+						<Button
+							variant="outline"
+							size="lg"
 							onClick={() => {
 								setViewState("hero");
 								setUrl("");
@@ -1164,7 +1245,7 @@ export default function Home() {
 							}}
 						>
 							Run another scan
-						</button>
+						</Button>
 					</div>
 				</section>
 			)}

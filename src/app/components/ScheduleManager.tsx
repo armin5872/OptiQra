@@ -20,6 +20,29 @@ import {
 	requestNotificationPermission,
 	type NotificationPermissionState,
 } from "@/lib/notifications";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+	Select,
+	SelectTrigger,
+	SelectValue,
+	SelectContent,
+	SelectItem,
+} from "@/components/ui/select";
+import {
+	Dialog,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+	DialogBody,
+} from "@/components/ui/dialog";
+import { Clock } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type Props = {
 	/** Pre-fills the "new schedule" form with the scan currently on screen.
@@ -34,7 +57,6 @@ export default function ScheduleManager({ url, mode, maxPages }: Props) {
 	const [schedules, setSchedules] = useState<ScanSchedule[]>([]);
 	const [loaded, setLoaded] = useState(false);
 	const [permission, setPermission] = useState<NotificationPermissionState>("default");
-	const panelRef = useRef<HTMLDivElement>(null);
 
 	const [targetUrl, setTargetUrl] = useState(url ?? "");
 	const [targetMode, setTargetMode] = useState<"single" | "site">(mode ?? "single");
@@ -83,21 +105,7 @@ export default function ScheduleManager({ url, mode, maxPages }: Props) {
 
 	useEffect(() => {
 		if (!open) return;
-		const onClick = (e: MouseEvent) => {
-			if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-				setOpen(false);
-			}
-		};
-		const onKey = (e: KeyboardEvent) => {
-			if (e.key === "Escape") setOpen(false);
-		};
-		document.addEventListener("mousedown", onClick);
-		document.addEventListener("keydown", onKey);
 		refresh();
-		return () => {
-			document.removeEventListener("mousedown", onClick);
-			document.removeEventListener("keydown", onKey);
-		};
 	}, [open]);
 
 	const enableNotifications = async () => {
@@ -160,184 +168,210 @@ export default function ScheduleManager({ url, mode, maxPages }: Props) {
 
 	const resultBadge = (schedule: ScanSchedule) => {
 		const r = schedule.lastResult;
-		if (!r) return <span className="schedule-badge schedule-badge-pending">Not run yet</span>;
+		if (!r) return <Badge variant="secondary">Not run yet</Badge>;
 		if (!r.ok)
 			return (
-				<span className="schedule-badge schedule-badge-error" title={r.error}>
+				<Badge variant="critical" title={r.error}>
 					Last run failed
-				</span>
+				</Badge>
 			);
 		if (r.scoreDelta === undefined)
-			return <span className="schedule-badge">Scored {r.overallScore}/100</span>;
+			return <Badge variant="secondary">Scored {r.overallScore}/100</Badge>;
 		if (r.scoreDelta === 0 && !r.newIssueCount && !r.resolvedIssueCount)
-			return <span className="schedule-badge schedule-badge-neutral">No change</span>;
+			return <Badge variant="secondary">No change</Badge>;
 		return (
-			<span
-				className={`schedule-badge ${r.scoreDelta >= 0 ? "schedule-badge-good" : "schedule-badge-bad"}`}
-			>
+			<Badge variant={r.scoreDelta >= 0 ? "good" : "critical"}>
 				{r.scoreDelta > 0 ? "+" : ""}
 				{r.scoreDelta} score
 				{r.newIssueCount ? ` · ${r.newIssueCount} new issue${r.newIssueCount === 1 ? "" : "s"}` : ""}
 				{r.resolvedIssueCount ? ` · ${r.resolvedIssueCount} resolved` : ""}
-			</span>
+			</Badge>
 		);
 	};
 
 	return (
-		<div className="schedule-manager" ref={panelRef}>
-			<button
+		<>
+			<Button
 				type="button"
-				className="schedule-manager-btn"
+				variant="outline"
+				size="sm"
 				onClick={() => setOpen((v) => !v)}
 				aria-haspopup="dialog"
 				aria-expanded={open}
+				className="gap-1.5"
 			>
-				⏱ {url ? "Schedule this scan" : "Scheduled scans"}
+				<Clock className="size-3.5" />
+				{url ? "Schedule this scan" : "Scheduled scans"}
 				{schedules.some((s) => s.enabled) && (
-					<span className="schedule-manager-count">
+					<Badge variant="secondary" className="ml-0.5">
 						{schedules.filter((s) => s.enabled).length}
-					</span>
+					</Badge>
 				)}
-			</button>
+			</Button>
 
-			{open && (
-				<div className="schedule-panel" role="dialog" aria-label="Periodic scans">
-					<div className="schedule-panel-section">
-						<p className="schedule-panel-title">New periodic scan</p>
-						{!url && (
-							<input
-								type="text"
-								className="schedule-url-input"
-								value={targetUrl}
-								onChange={(e) => setTargetUrl(e.target.value)}
-								placeholder="https://yoursite.com"
-								aria-label="Website URL to schedule"
-							/>
-						)}
-						{url && <p className="schedule-panel-url">{url}</p>}
+			<Dialog open={open} onOpenChange={setOpen}>
+				<DialogContent className="max-w-lg" aria-label="Periodic scans">
+					<DialogHeader>
+						<DialogTitle>Scheduled scans</DialogTitle>
+					</DialogHeader>
+					<DialogBody className="flex flex-col gap-5">
+						<div className="flex flex-col gap-3">
+							<p className="text-sm font-semibold text-ink">New periodic scan</p>
+							{!url && (
+								<Input
+									type="text"
+									value={targetUrl}
+									onChange={(e) => setTargetUrl(e.target.value)}
+									placeholder="https://yoursite.com"
+									aria-label="Website URL to schedule"
+								/>
+							)}
+							{url && (
+								<p className="truncate font-(family-name:--font-mono) text-sm text-ink-soft">
+									{url}
+								</p>
+							)}
 
-						{!mode && (
-							<div className="schedule-mode-toggle" role="radiogroup" aria-label="Scan mode">
-								<button
-									type="button"
-									className={targetMode === "single" ? "active" : ""}
-									onClick={() => setTargetMode("single")}
+							{!mode && (
+								<Tabs
+									value={targetMode}
+									onValueChange={(v) => setTargetMode(v as "single" | "site")}
 								>
-									Single page
-								</button>
-								<button
-									type="button"
-									className={targetMode === "site" ? "active" : ""}
-									onClick={() => setTargetMode("site")}
+									<TabsList aria-label="Scan mode">
+										<TabsTrigger value="single">Single page</TabsTrigger>
+										<TabsTrigger value="site">Whole site</TabsTrigger>
+									</TabsList>
+								</Tabs>
+							)}
+
+							<div className="flex flex-col gap-1.5">
+								<Label htmlFor="schedule-frequency" className="text-xs text-ink-soft">
+									Run
+								</Label>
+								<Select
+									value={frequency}
+									onValueChange={(v) => setFrequency(v as ScanFrequency)}
 								>
-									Whole site
-								</button>
+									<SelectTrigger id="schedule-frequency" className="w-full">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										{FREQUENCY_OPTIONS.map((f) => (
+											<SelectItem key={f.id} value={f.id}>
+												{f.label}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
 							</div>
-						)}
 
-						<label className="schedule-field-label" htmlFor="schedule-frequency">
-							Run
-						</label>
-						<select
-							id="schedule-frequency"
-							value={frequency}
-							onChange={(e) => setFrequency(e.target.value as ScanFrequency)}
-							className="schedule-frequency-select"
-						>
-							{FREQUENCY_OPTIONS.map((f) => (
-								<option key={f.id} value={f.id}>
-									{f.label}
-								</option>
-							))}
-						</select>
+							<label className="flex items-center gap-2.5 text-sm text-ink-soft">
+								<Switch
+									checked={compareWithPrevious}
+									onCheckedChange={setCompareWithPrevious}
+								/>
+								Compare against the previous scan each time
+							</label>
 
-						<label className="schedule-checkbox-row">
-							<input
-								type="checkbox"
-								checked={compareWithPrevious}
-								onChange={(e) => setCompareWithPrevious(e.target.checked)}
-							/>
-							Compare against the previous scan each time
-						</label>
+							<label className="flex items-center gap-2.5 text-sm text-ink-soft">
+								<Switch checked={notify} onCheckedChange={setNotify} />
+								Notify me when a scan finishes
+							</label>
 
-						<label className="schedule-checkbox-row">
-							<input
-								type="checkbox"
-								checked={notify}
-								onChange={(e) => setNotify(e.target.checked)}
-							/>
-							Notify me when a scan finishes
-						</label>
+							{notify && permission === "denied" && (
+								<p className="text-xs text-warn">
+									Notifications are blocked in this browser — enable them in your browser's site
+									settings to get alerts.
+								</p>
+							)}
+							{notify && permission === "default" && (
+								<button
+									type="button"
+									className="self-start text-sm text-brand underline-offset-2 hover:underline"
+									onClick={enableNotifications}
+								>
+									Enable browser notifications
+								</button>
+							)}
 
-						{notify && permission === "denied" && (
-							<p className="schedule-note schedule-note-warn">
-								Notifications are blocked in this browser — enable them in your browser's site
-								settings to get alerts.
+							{formError && <p className="text-xs text-critical">{formError}</p>}
+
+							<Button
+								type="button"
+								variant="brand"
+								onClick={createSchedule}
+								disabled={saving}
+							>
+								{saving ? "Saving…" : "Create schedule"}
+							</Button>
+
+							<p className="text-xs text-ink-soft">
+								Runs in the background while OptiQra is open in a tab (or installed as an app) —
+								no need to keep this page in view.
 							</p>
-						)}
-						{notify && permission === "default" && (
-							<button type="button" className="schedule-enable-notif" onClick={enableNotifications}>
-								Enable browser notifications
-							</button>
-						)}
-
-						{formError && <p className="schedule-note schedule-note-error">{formError}</p>}
-
-						<button
-							type="button"
-							className="schedule-create-btn"
-							onClick={createSchedule}
-							disabled={saving}
-						>
-							{saving ? "Saving…" : "Create schedule"}
-						</button>
-
-						<p className="schedule-note">
-							Runs in the background while OptiQra is open in a tab (or installed as an app) —
-							no need to keep this page in view.
-						</p>
-					</div>
-
-					{loaded && schedules.length > 0 && (
-						<div className="schedule-panel-section schedule-list-section">
-							<p className="schedule-panel-title">Active schedules</p>
-							<ul className="schedule-list">
-								{schedules.map((s) => (
-									<li key={s.id} className={`schedule-item ${s.enabled ? "" : "schedule-item-paused"}`}>
-										<div className="schedule-item-main">
-											<span className="schedule-item-url">{s.url}</span>
-											<span className="schedule-item-meta">
-												{s.mode === "site" ? "Whole site" : "Single page"} · {frequencyLabel(s.frequency)}
-												{" · "}
-												{s.enabled ?
-													`next: ${new Date(s.nextRunAt).toLocaleString()}`
-												:	"paused"}
-											</span>
-											<div className="schedule-item-result">{resultBadge(s)}</div>
-										</div>
-										<div className="schedule-item-actions">
-											<button type="button" onClick={() => runNow(s)} title="Run now">
-												Run now
-											</button>
-											<button type="button" onClick={() => toggleEnabled(s)}>
-												{s.enabled ? "Pause" : "Resume"}
-											</button>
-											<button
-												type="button"
-												className="schedule-item-delete"
-												onClick={() => removeSchedule(s.id)}
-												aria-label={`Delete schedule for ${s.url}`}
-											>
-												×
-											</button>
-										</div>
-									</li>
-								))}
-							</ul>
 						</div>
-					)}
-				</div>
-			)}
-		</div>
+
+						{loaded && schedules.length > 0 && (
+							<>
+								<Separator />
+								<div className="flex flex-col gap-3">
+									<p className="text-sm font-semibold text-ink">Active schedules</p>
+									<ul className="flex flex-col gap-2">
+										{schedules.map((s) => (
+											<li
+												key={s.id}
+												className={cn(
+													"flex items-start justify-between gap-3 rounded-(--radius) border border-line bg-card p-3",
+													!s.enabled && "opacity-60",
+												)}
+											>
+												<div className="flex min-w-0 flex-col gap-1">
+													<span className="truncate text-sm font-medium text-ink">
+														{s.url}
+													</span>
+													<span className="text-xs text-ink-soft">
+														{s.mode === "site" ? "Whole site" : "Single page"} · {frequencyLabel(s.frequency)}
+														{" · "}
+														{s.enabled ?
+															`next: ${new Date(s.nextRunAt).toLocaleString()}`
+														:	"paused"}
+													</span>
+													<div>{resultBadge(s)}</div>
+												</div>
+												<div className="flex shrink-0 items-center gap-1.5">
+													<button
+														type="button"
+														className="text-xs text-brand underline-offset-2 hover:underline"
+														onClick={() => runNow(s)}
+														title="Run now"
+													>
+														Run now
+													</button>
+													<button
+														type="button"
+														className="text-xs text-brand underline-offset-2 hover:underline"
+														onClick={() => toggleEnabled(s)}
+													>
+														{s.enabled ? "Pause" : "Resume"}
+													</button>
+													<button
+														type="button"
+														className="flex size-5 items-center justify-center rounded text-ink-soft hover:bg-secondary hover:text-critical"
+														onClick={() => removeSchedule(s.id)}
+														aria-label={`Delete schedule for ${s.url}`}
+													>
+														×
+													</button>
+												</div>
+											</li>
+										))}
+									</ul>
+								</div>
+							</>
+						)}
+					</DialogBody>
+				</DialogContent>
+			</Dialog>
+		</>
 	);
 }

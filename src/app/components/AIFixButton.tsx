@@ -5,6 +5,15 @@ import type { Issue } from "@/lib/auditUtils";
 import { useAIProvider } from "@/lib/hooks/useAIProvider";
 import { getErrorMessage } from "@/lib/errorUtils";
 import MarkdownLite from "./MarkdownLite";
+import { Button } from "@/components/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+	DialogBody,
+	DialogFooter,
+} from "@/components/ui/dialog";
 
 interface Props {
 	issue: Issue;
@@ -36,9 +45,9 @@ export default function AIFixButton({ issue, pageUrl, category, stack, onResolve
 
 	if (issue.resolved) {
 		return (
-			<button className="apply-btn done" disabled>
+			<Button size="sm" variant="secondary" disabled className="shrink-0">
 				Resolved
-			</button>
+			</Button>
 		);
 	}
 
@@ -46,9 +55,9 @@ export default function AIFixButton({ issue, pageUrl, category, stack, onResolve
 	// behavior rather than blocking the workflow entirely.
 	if (!hydrated || !isConfigured) {
 		return (
-			<button className="apply-btn" onClick={onResolve}>
+			<Button size="sm" variant="brand" className="shrink-0" onClick={onResolve}>
 				Mark resolved
-			</button>
+			</Button>
 		);
 	}
 
@@ -113,103 +122,112 @@ export default function AIFixButton({ issue, pageUrl, category, stack, onResolve
 	return (
 		<>
 			{/* Main button area */}
-			<div className="ai-fix-block">
+			<div className="flex w-full max-w-[380px] shrink-0 flex-col items-end gap-2">
 				{status === "idle" && (
-					<button type="button" className="apply-btn" onClick={handleGenerate}>
+					<Button size="sm" variant="brand" onClick={handleGenerate}>
 						Generate fix with AI
-					</button>
+					</Button>
 				)}
 
 				{status === "loading" && !output && (
-					<button type="button" className="apply-btn" disabled>
+					<Button size="sm" variant="brand" disabled>
 						Generating…
-					</button>
+					</Button>
 				)}
 
 				{status === "error" && !output && (
-					<div className="ai-fix-error">
-						{error}
-						<button type="button" className="link-btn" onClick={handleGenerate}>
+					<div className="text-right text-[12.5px] text-critical">
+						{error}{" "}
+						<button
+							type="button"
+							className="text-brand underline-offset-2 hover:underline"
+							onClick={handleGenerate}
+						>
 							retry
 						</button>
 					</div>
 				)}
 
 				{output && status === "done" && (
-					<button type="button" className="apply-btn" onClick={openModal}>
+					<Button size="sm" variant="brand" onClick={openModal}>
 						Show AI fix
-					</button>
+					</Button>
 				)}
 			</div>
 
-			{/* Modal overlay and content */}
-			{modalOpen && (
-				<>
-					<div className="modal-overlay" onClick={closeModal} />
-					<div className="modal-container">
-						<div className="modal-header">
-							<h2>AI-Generated Fix</h2>
-							<button
-								type="button"
-								className="modal-close"
-								onClick={closeModal}
-								aria-label="Close modal"
-							>
-								✕
-							</button>
-						</div>
+			{/* Modal */}
+			<Dialog open={modalOpen} onOpenChange={(open) => !open && closeModal()}>
+				<DialogContent className="max-w-2xl">
+					<DialogHeader>
+						<DialogTitle>AI-Generated Fix</DialogTitle>
+					</DialogHeader>
 
-						{status === "loading" && !output && (
-							<div className="modal-body">
-								<p className="modal-loading">Generating fix…</p>
+					{status === "loading" && !output && (
+						<DialogBody>
+							<p className="my-10 text-center text-ink-soft italic">
+								Generating fix…
+							</p>
+						</DialogBody>
+					)}
+
+					{status === "error" && output === "" && (
+						<DialogBody>
+							<div className="text-center">
+								<p className="mb-3 text-critical">{error}</p>
+								<button
+									type="button"
+									className="text-brand underline-offset-2 hover:underline"
+									onClick={handleGenerate}
+								>
+									retry
+								</button>
 							</div>
-						)}
+						</DialogBody>
+					)}
 
-						{status === "error" && output === "" && (
-							<div className="modal-body">
-								<div className="modal-error">
-									<p>{error}</p>
-									<button type="button" className="link-btn" onClick={handleGenerate}>
-										retry
+					{output && (
+						<>
+							<DialogBody>
+								<div className="font-(family-name:--font-readable) leading-relaxed text-ink">
+									<MarkdownLite text={output} />
+									{status === "loading" && (
+										<span className="md-cursor" aria-hidden="true" />
+									)}
+								</div>
+							</DialogBody>
+
+							{status === "done" && (
+								<DialogFooter>
+									<button
+										type="button"
+										className="text-sm text-brand underline-offset-2 hover:underline"
+										onClick={handleCopy}
+									>
+										{copied ? "copied!" : "copy"}
 									</button>
-								</div>
-							</div>
-						)}
-
-						{output && (
-							<>
-								<div className="modal-body">
-									<div className="ai-fix-output-modal">
-										<MarkdownLite text={output} />
-										{status === "loading" && <span className="md-cursor" aria-hidden="true" />}
-									</div>
-								</div>
-
-								{status === "done" && (
-									<div className="modal-footer">
-										<button type="button" className="link-btn" onClick={handleCopy}>
-											{copied ? "copied!" : "copy"}
-										</button>
-										<button type="button" className="link-btn" onClick={handleGenerate}>
-											regenerate
-										</button>
-										<button
-											type="button"
-											className="apply-btn"
-											onClick={() => {
-												onResolve();
-												closeModal();
-											}}
-										>
-											Mark resolved
-										</button>
-									</div>
-								)}
-							</>
-						)}
-					</div>
-				</>
-			)}
+									<button
+										type="button"
+										className="text-sm text-brand underline-offset-2 hover:underline"
+										onClick={handleGenerate}
+									>
+										regenerate
+									</button>
+									<Button
+										size="sm"
+										variant="brand"
+										onClick={() => {
+											onResolve();
+											closeModal();
+										}}
+									>
+										Mark resolved
+									</Button>
+								</DialogFooter>
+							)}
+						</>
+					)}
+				</DialogContent>
+			</Dialog>
 		</>
 	);
 }

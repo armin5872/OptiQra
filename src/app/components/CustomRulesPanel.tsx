@@ -11,6 +11,10 @@ import {
 import { runCustomRule, type CustomRuleFinding } from "@/lib/customCode";
 import { getRecentScans } from "@/lib/scanStore";
 import { buildRuleContributeUrl } from "@/lib/githubContribute";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 type RunState =
 	| { status: "idle" }
@@ -114,141 +118,121 @@ export default function CustomRulesPanel() {
 
 	return (
 		<>
-			<p className="settings-section-desc">
+			<p className="mb-4 text-sm text-ink-soft">
 				Write a small JS rule that post-processes your last scan&apos;s results and surfaces
-				extra findings — right here, in this browser. <strong>Enabled rules run automatically</strong>{" "}
+				extra findings — right here, in this browser. <strong className="text-ink">Enabled rules run automatically</strong>{" "}
 				against your latest scan. This can&apos;t reach the actual crawler/analyzer running on
 				the server (that would mean letting any visitor run code on the server, which
 				isn&apos;t safe to offer anyone), so rules work on scan data you already have. Happy
-				with a rule? Use <strong>&quot;Propose to upstream repo&quot;</strong> to draft a
+				with a rule? Use <strong className="text-ink">&quot;Propose to upstream repo&quot;</strong> to draft a
 				real pull request for it via your own GitHub account — no tokens involved, the repo
 				owner reviews and merges it like any other contribution.
 			</p>
 
-			<div className="settings-group">
-				<div className="settings-danger-row">
-					<div className="settings-row-label">
-						<strong>Your rules</strong>
-						<span>{rules.length === 0 ? "None yet" : `${rules.length} saved`}</span>
+			<div className="rounded-(--radius) border border-line bg-card px-4">
+				<div className="flex items-center justify-between gap-4 border-b border-line py-3.5 last:border-b-0">
+					<div className="flex flex-col gap-0.5">
+						<strong className="text-sm font-semibold text-critical">Your rules</strong>
+						<span className="text-xs text-ink-soft">
+							{rules.length === 0 ? "None yet" : `${rules.length} saved`}
+						</span>
 					</div>
-					<button type="button" className="settings-btn-outline" onClick={startNew}>
+					<Button type="button" variant="outline" size="sm" onClick={startNew}>
 						+ New rule
-					</button>
+					</Button>
 				</div>
-
-				{rules.map((rule) => {
-					const state = runState[rule.id] ?? { status: "idle" as const };
-					return (
-						<div key={rule.id} className="settings-group" style={{ marginTop: 8 }}>
-							<div className="settings-row">
-								<div className="settings-row-label">
-									<strong>{rule.name}</strong>
-									<span>
-										{rule.description || "No description"}
-										{rule.enabled ? " · Enabled (auto-running)" : " · Disabled"}
-									</span>
-								</div>
-								<div className="settings-row-control" style={{ gap: 6, flexWrap: "wrap" }}>
-									<button
-										type="button"
-										className="settings-btn-outline"
-										onClick={() => handleToggle(rule)}
-									>
-										{rule.enabled ? "Disable" : "Enable"}
-									</button>
-									<button
-										type="button"
-										className="settings-btn-outline"
-										onClick={() => startEdit(rule)}
-									>
-										Edit
-									</button>
-									<button
-										type="button"
-										className="settings-btn-outline"
-										onClick={() => handlePropose(rule)}
-									>
-										Propose to upstream repo
-									</button>
-									<button
-										type="button"
-										className="settings-btn-danger"
-										onClick={() => handleDelete(rule.id)}
-									>
-										Delete
-									</button>
-								</div>
-							</div>
-
-							{state.status === "no-scan" && (
-								<p className="settings-section-desc">
-									Run a scan first — this rule needs a finished report to check.
-								</p>
-							)}
-							{state.status === "error" && (
-								<p className="settings-section-desc" style={{ color: "var(--critical)" }}>
-									Error: {state.error}
-								</p>
-							)}
-							{state.status === "ok" && (
-								<div className="settings-section-desc">
-									{state.findings.length === 0 ?
-										`No findings against ${state.scanUrl}.`
-									:	<>
-											{state.findings.length} finding{state.findings.length === 1 ? "" : "s"} against{" "}
-											{state.scanUrl}:
-											<ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
-												{state.findings.map((f, i) => (
-													<li key={i}>
-														<strong>{f.title}</strong>
-														{f.detail ? ` — ${f.detail}` : ""}
-													</li>
-												))}
-											</ul>
-										</>
-									}
-								</div>
-							)}
-						</div>
-					);
-				})}
 			</div>
 
+			{rules.map((rule) => {
+				const state = runState[rule.id] ?? { status: "idle" as const };
+				return (
+					<div key={rule.id} className="mt-2 rounded-(--radius) border border-line bg-card px-4 py-3.5">
+						<div className="flex flex-wrap items-start justify-between gap-3">
+							<div className="flex flex-col gap-0.5">
+								<strong className="text-sm font-semibold text-ink">{rule.name}</strong>
+								<span className="text-xs text-ink-soft">
+									{rule.description || "No description"}
+									{rule.enabled ? " · Enabled (auto-running)" : " · Disabled"}
+								</span>
+							</div>
+							<div className="flex flex-wrap items-center gap-1.5">
+								<Button type="button" variant="outline" size="sm" onClick={() => handleToggle(rule)}>
+									{rule.enabled ? "Disable" : "Enable"}
+								</Button>
+								<Button type="button" variant="outline" size="sm" onClick={() => startEdit(rule)}>
+									Edit
+								</Button>
+								<Button type="button" variant="outline" size="sm" onClick={() => handlePropose(rule)}>
+									Propose to upstream repo
+								</Button>
+								<Button type="button" variant="destructive" size="sm" onClick={() => handleDelete(rule.id)}>
+									Delete
+								</Button>
+							</div>
+						</div>
+
+						{state.status === "no-scan" && (
+							<p className="mt-2 text-xs text-ink-soft">
+								Run a scan first — this rule needs a finished report to check.
+							</p>
+						)}
+						{state.status === "error" && (
+							<p className="mt-2 text-xs text-critical">Error: {state.error}</p>
+						)}
+						{state.status === "ok" && (
+							<div className="mt-2 text-xs text-ink-soft">
+								{state.findings.length === 0 ?
+									`No findings against ${state.scanUrl}.`
+								:	<>
+										{state.findings.length} finding{state.findings.length === 1 ? "" : "s"} against{" "}
+										{state.scanUrl}:
+										<ul className="mt-1.5 list-disc pl-4.5">
+											{state.findings.map((f, i) => (
+												<li key={i}>
+													<strong className="text-ink">{f.title}</strong>
+													{f.detail ? ` — ${f.detail}` : ""}
+												</li>
+											))}
+										</ul>
+									</>
+								}
+							</div>
+						)}
+					</div>
+				);
+			})}
+
 			{editingId !== null && (
-				<div className="settings-group">
-					<div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
-						<div className="settings-row-label">
-							<strong>{editingId === "new" ? "New rule" : "Edit rule"}</strong>
-						</div>
-						<input
-							type="text"
-							placeholder="Rule name"
-							value={draftName}
-							onChange={(e) => setDraftName(e.target.value)}
-							className="settings-text-input"
-						/>
-						<input
-							type="text"
-							placeholder="Short description (optional)"
-							value={draftDesc}
-							onChange={(e) => setDraftDesc(e.target.value)}
-							className="settings-text-input"
-						/>
-						<textarea
-							value={draftCode}
-							onChange={(e) => setDraftCode(e.target.value)}
-							className="settings-code-textarea"
-							spellCheck={false}
-							rows={12}
-						/>
-						<div className="settings-row-control" style={{ marginTop: 8 }}>
-							<button type="button" className="settings-btn-outline" onClick={cancelEdit}>
-								Cancel
-							</button>
-							<button type="button" className="settings-btn-primary" onClick={submitDraft}>
-								Save rule
-							</button>
-						</div>
+				<div className="mt-4 flex flex-col gap-2.5 rounded-(--radius) border border-line bg-card px-4 py-3.5">
+					<strong className="text-sm font-semibold text-ink">
+						{editingId === "new" ? "New rule" : "Edit rule"}
+					</strong>
+					<Input
+						type="text"
+						placeholder="Rule name"
+						value={draftName}
+						onChange={(e) => setDraftName(e.target.value)}
+					/>
+					<Input
+						type="text"
+						placeholder="Short description (optional)"
+						value={draftDesc}
+						onChange={(e) => setDraftDesc(e.target.value)}
+					/>
+					<Textarea
+						value={draftCode}
+						onChange={(e) => setDraftCode(e.target.value)}
+						spellCheck={false}
+						rows={12}
+						className="font-(family-name:--font-mono) text-xs"
+					/>
+					<div className="flex items-center gap-2">
+						<Button type="button" variant="outline" size="sm" onClick={cancelEdit}>
+							Cancel
+						</Button>
+						<Button type="button" variant="brand" size="sm" onClick={submitDraft}>
+							Save rule
+						</Button>
 					</div>
 				</div>
 			)}

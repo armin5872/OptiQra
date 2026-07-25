@@ -5,6 +5,11 @@ import { useAIProvider } from "@/lib/hooks/useAIProvider";
 import AIProviderSetup from "./AIProviderSetup";
 import { getErrorMessage } from "@/lib/errorUtils";
 import type { AutoFixResult } from "@/lib/autoFixEngine";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
+import { Upload } from "lucide-react";
 
 type ProjectMode = "audit" | "fix";
 
@@ -239,44 +244,61 @@ export default function ProjectUploadPanel() {
 	const percent = progress && progress.total > 0 ? Math.round((progress.processed / progress.total) * 100) : 0;
 
 	return (
-		<div className="project-upload">
-			<div className="upload-divider">
-				<span>or</span>
+		<div className="mt-8 flex max-w-xl flex-col gap-4">
+			<div className="relative flex items-center justify-center text-xs text-ink-soft before:absolute before:inset-x-0 before:top-1/2 before:h-px before:bg-line">
+				<span className="relative bg-bg px-3">or</span>
 			</div>
 
-			<div className="upload-mode-toggle" role="tablist" aria-label="Project upload mode">
+			<div
+				className="grid grid-cols-2 gap-2"
+				role="tablist"
+				aria-label="Project upload mode"
+			>
 				<button
 					type="button"
 					role="tab"
 					aria-selected={mode === "audit"}
-					className={`upload-mode-btn ${mode === "audit" ? "active" : ""}`}
+					className={cn(
+						"flex items-start gap-2.5 rounded-(--radius) border p-3.5 text-left transition-colors",
+						mode === "audit" ?
+							"border-brand bg-brand-soft"
+						:	"border-line bg-card hover:border-brand/50",
+					)}
 					onClick={() => setMode("audit")}
 					disabled={status === "uploading"}
 				>
-					<span className="upload-mode-icon" aria-hidden>🔍</span>
-					<span className="upload-mode-copy">
-						<span className="upload-mode-title">Audit</span>
-						<span className="upload-mode-sub">Scan &amp; report issues — nothing changes</span>
+					<span className="text-lg" aria-hidden>🔍</span>
+					<span className="flex flex-col gap-0.5">
+						<span className="text-sm font-semibold text-ink">Audit</span>
+						<span className="text-xs text-ink-soft">Scan &amp; report issues — nothing changes</span>
 					</span>
 				</button>
 				<button
 					type="button"
 					role="tab"
 					aria-selected={mode === "fix"}
-					className={`upload-mode-btn ${mode === "fix" ? "active" : ""}`}
+					className={cn(
+						"flex items-start gap-2.5 rounded-(--radius) border p-3.5 text-left transition-colors",
+						mode === "fix" ?
+							"border-brand bg-brand-soft"
+						:	"border-line bg-card hover:border-brand/50",
+					)}
 					onClick={() => setMode("fix")}
 					disabled={status === "uploading"}
 				>
-					<span className="upload-mode-icon" aria-hidden>🛠️</span>
-					<span className="upload-mode-copy">
-						<span className="upload-mode-title">Auto-fix</span>
-						<span className="upload-mode-sub">Apply fixes &amp; download the result</span>
+					<span className="text-lg" aria-hidden>🛠️</span>
+					<span className="flex flex-col gap-0.5">
+						<span className="text-sm font-semibold text-ink">Auto-fix</span>
+						<span className="text-xs text-ink-soft">Apply fixes &amp; download the result</span>
 					</span>
 				</button>
 			</div>
 
 			<div
-				className={`upload-dropzone ${dragOver ? "drag-over" : ""}`}
+				className={cn(
+					"flex flex-col items-center gap-3 rounded-(--radius) border-2 border-dashed border-line bg-card px-6 py-10 text-center transition-colors",
+					dragOver && "border-brand bg-brand-soft",
+				)}
 				onDragOver={(e) => {
 					e.preventDefault();
 					setDragOver(true);
@@ -284,28 +306,31 @@ export default function ProjectUploadPanel() {
 				onDragLeave={() => setDragOver(false)}
 				onDrop={handleDrop}
 			>
-				<div className="upload-dropzone-icon" aria-hidden>
-					<svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-						<path
-							d="M12 4v11m0-11 4 4m-4-4-4 4M5 17v1a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-1"
-							stroke="currentColor"
-							strokeWidth="1.8"
-							strokeLinecap="round"
-							strokeLinejoin="round"
-						/>
-					</svg>
+				<div className="text-ink-soft" aria-hidden>
+					<Upload className="size-7" strokeWidth={1.8} />
 				</div>
-				<p className="upload-dropzone-title">Drag &amp; drop or upload your project</p>
-				<p className="upload-dropzone-sub">
+				<p className="text-sm font-semibold text-ink">Drag &amp; drop or upload your project</p>
+				<p className="max-w-md font-(family-name:--font-readable) text-xs text-ink-soft">
 					We&apos;ll scan every HTML, JSX/TSX, Vue, Svelte, and Angular file we find (Next.js, Nuxt, Vite/CRA, SvelteKit,
 					Angular, or plain static/vanilla JS) — {mode === "audit" ? "and report what it finds" : "and auto-fix what it finds"}{" "}
 					— right in your browser, nothing kept on our servers after.
 				</p>
-				<div className="upload-dropzone-actions">
-					<button type="button" className="apply-btn" onClick={() => folderInputRef.current?.click()} disabled={status === "uploading"}>
+				<div className="mt-1 flex items-center gap-4">
+					<Button
+						type="button"
+						variant="brand"
+						size="sm"
+						onClick={() => folderInputRef.current?.click()}
+						disabled={status === "uploading"}
+					>
 						Choose folder
-					</button>
-					<button type="button" className="link-btn" onClick={() => zipInputRef.current?.click()} disabled={status === "uploading"}>
+					</Button>
+					<button
+						type="button"
+						className="text-sm text-brand underline-offset-2 hover:underline disabled:pointer-events-none disabled:opacity-50"
+						onClick={() => zipInputRef.current?.click()}
+						disabled={status === "uploading"}
+					>
 						or upload a .zip
 					</button>
 				</div>
@@ -324,12 +349,16 @@ export default function ProjectUploadPanel() {
 
 			{mode === "fix" && (
 				<>
-					<button type="button" className="link-btn upload-key-toggle" onClick={() => setShowKeyPanel((v) => !v)}>
+					<button
+						type="button"
+						className="self-start text-xs text-brand underline-offset-2 hover:underline"
+						onClick={() => setShowKeyPanel((v) => !v)}
+					>
 						{hydrated && isConfigured ? "AI key configured — for better fixes" : "For better fixes, add your AI API key (optional)"}
 					</button>
 					{showKeyPanel && <AIProviderSetup />}
 					{hydrated && !isConfigured && (
-						<p className="autofix-note">
+						<p className="text-xs text-ink-soft">
 							No key? Auto-fix still handles every mechanical issue (headers, tags, attributes, structure). Anything
 							needing written content (titles, descriptions, alt text) will reuse a fix from elsewhere in your
 							project if one exists, or stay unfixed.
@@ -338,23 +367,21 @@ export default function ProjectUploadPanel() {
 				</>
 			)}
 			{mode === "audit" && (
-				<p className="autofix-note">
+				<p className="text-xs text-ink-soft">
 					Audit only looks — it detects the same issues Auto-fix would touch and reports them, without changing or
 					downloading anything. Switch to Auto-fix any time to apply changes.
 				</p>
 			)}
 
 			{status === "uploading" && (
-				<div className="upload-progress">
-					<div className="crawl-progress-head">
+				<div className="flex flex-col gap-2">
+					<div className="flex justify-between font-(family-name:--font-mono) text-[13px] text-ink-soft">
 						<span>{mode === "audit" ? "Auditing…" : "Fixing…"}</span>
 						<span>{progress ? `${progress.processed} / ${progress.total}` : ""}</span>
 					</div>
-					<div className="progress-bar">
-						<div className="progress-bar-fill" style={{ width: progress ? `${percent}%` : "12%" }} />
-					</div>
+					<Progress value={progress ? percent : 12} />
 					{statusMessage && (
-						<p className="upload-status upload-status-file" title={statusMessage}>
+						<p className="truncate text-xs text-ink-soft" title={statusMessage}>
 							{statusMessage}
 						</p>
 					)}
@@ -362,90 +389,125 @@ export default function ProjectUploadPanel() {
 			)}
 
 			{status === "error" && (
-				<div className="modal-error clone-modal-error">
-					<p>{error}</p>
+				<div className="text-center">
+					<p className="text-sm text-critical">{error}</p>
 				</div>
 			)}
 
 			{result && (
-				<div className="autofix-summary">
-					<div className="autofix-summary-row">
+				<div className="flex flex-col gap-4">
+					<div className="flex flex-wrap items-center gap-2">
 						{result.mode === "fix" ? (
 							<>
-								<span className="autofix-chip autofix-chip-fixed">{result.summary.fixed} fixed</span>
+								<Badge variant="good">{result.summary.fixed} fixed</Badge>
 								{result.summary.duplicated > 0 && (
-									<span className="autofix-chip autofix-chip-duplicated">
+									<Badge variant="secondary">
 										{result.summary.duplicated} reused from elsewhere in your project
-									</span>
+									</Badge>
 								)}
 								{result.summary.skipped > 0 && (
-									<span className="autofix-chip autofix-chip-skipped">{result.summary.skipped} left unfixed</span>
+									<Badge variant="outline">{result.summary.skipped} left unfixed</Badge>
 								)}
 							</>
 						) : (
 							<>
-								<span className="autofix-chip autofix-chip-fixed">{result.summary.fixed} auto-fixable</span>
+								<Badge variant="good">{result.summary.fixed} auto-fixable</Badge>
 								{result.summary.aiNeeded > 0 && (
-									<span className="autofix-chip autofix-chip-ai-needed">
+									<Badge variant="warn">
 										{result.summary.aiNeeded} need AI / manual content
-									</span>
+									</Badge>
 								)}
 								{result.summary.skipped > 0 && (
-									<span className="autofix-chip autofix-chip-skipped">{result.summary.skipped} intentionally left alone</span>
+									<Badge variant="outline">{result.summary.skipped} intentionally left alone</Badge>
 								)}
 							</>
 						)}
-						<span className="autofix-stack-note">Detected stack: {result.stack}</span>
+						<span className="text-xs text-ink-soft">Detected stack: {result.stack}</span>
 						{result.mode === "fix" && result.zipBase64 && (
-							<button type="button" className="apply-btn" onClick={() => downloadZip(result.zipBase64!, "optiqra-fixed-project.zip")}>
+							<Button
+								type="button"
+								variant="brand"
+								size="sm"
+								onClick={() => downloadZip(result.zipBase64!, "optiqra-fixed-project.zip")}
+							>
 								Download fixed project
-							</button>
+							</Button>
 						)}
 						{result.mode === "audit" && (
-							<button type="button" className="apply-btn" onClick={() => setMode("fix")}>
+							<Button type="button" variant="brand" size="sm" onClick={() => setMode("fix")}>
 								Switch to Auto-fix
-							</button>
+							</Button>
 						)}
 					</div>
 					{result.summary.filesSkippedTooMany > 0 && (
-						<p className="autofix-note">
+						<p className="text-xs text-ink-soft">
 							Scanned the first {result.summary.filesFixed} files; {result.summary.filesSkippedTooMany} more were
 							left as-is to keep this request from running too long — re-upload just that subfolder to cover the rest.
 						</p>
 					)}
 
 					{result.projectResults.length > 0 && (
-						<>
-							<p className="autofix-file-group-title">Project-wide</p>
-							<ul className="autofix-results-list">
+						<div className="flex flex-col gap-2">
+							<p className="text-sm font-semibold text-ink">Project-wide</p>
+							<ul className="flex flex-col gap-1.5">
 								{result.projectResults.map((r) => (
-									<li key={r.id} className={`autofix-result autofix-result-${r.status}`}>
-										<strong>{r.title}</strong>
-										{result.mode === "audit" && <span className="autofix-result-badge">{STATUS_LABEL[r.status]}</span>}
-										<span>{r.note}</span>
+									<li
+										key={r.id}
+										className={cn(
+											"flex flex-wrap items-baseline gap-2 rounded-(--radius) border-l-2 bg-card px-3 py-2 text-sm",
+											r.status === "fixed" || r.status === "duplicated" ?
+												"border-l-good"
+											: r.status === "ai-needed" ?
+												"border-l-warn"
+											:	"border-l-line",
+										)}
+									>
+										<strong className="text-ink">{r.title}</strong>
+										{result.mode === "audit" && (
+											<Badge variant="secondary" className="text-[10px]">
+												{STATUS_LABEL[r.status]}
+											</Badge>
+										)}
+										<span className="text-ink-soft">{r.note}</span>
 									</li>
 								))}
 							</ul>
-						</>
+						</div>
 					)}
 
 					{result.perFileResults.map((f) => (
-						<div key={f.path} className="autofix-file-group">
+						<div key={f.path} className="flex flex-col gap-2">
 							<button
 								type="button"
-								className="autofix-file-group-title autofix-file-toggle"
+								className="text-left text-sm font-semibold text-ink hover:text-brand"
 								onClick={() => setExpandedFile((cur) => (cur === f.path ? null : f.path))}
 							>
 								{expandedFile === f.path ? "▾" : "▸"} {f.path}{" "}
-								<span className="autofix-file-count">({f.results.length} issue{f.results.length === 1 ? "" : "s"})</span>
+								<span className="font-normal text-ink-soft">
+									({f.results.length} issue{f.results.length === 1 ? "" : "s"})
+								</span>
 							</button>
 							{expandedFile === f.path && (
-								<ul className="autofix-results-list">
+								<ul className="flex flex-col gap-1.5">
 									{f.results.map((r) => (
-										<li key={r.id} className={`autofix-result autofix-result-${r.status}`}>
-											<strong>{r.title}</strong>
-											{result.mode === "audit" && <span className="autofix-result-badge">{STATUS_LABEL[r.status]}</span>}
-											<span>{r.note}</span>
+										<li
+											key={r.id}
+											className={cn(
+												"flex flex-wrap items-baseline gap-2 rounded-(--radius) border-l-2 bg-card px-3 py-2 text-sm",
+												r.status === "fixed" || r.status === "duplicated" ?
+													"border-l-good"
+												: r.status === "ai-needed" ?
+													"border-l-warn"
+												:	"border-l-line",
+											)}
+										>
+											<strong className="text-ink">{r.title}</strong>
+											{result.mode === "audit" && (
+												<Badge variant="secondary" className="text-[10px]">
+													{STATUS_LABEL[r.status]}
+												</Badge>
+											)}
+											<span className="text-ink-soft">{r.note}</span>
 										</li>
 									))}
 								</ul>

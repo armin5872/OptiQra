@@ -6,6 +6,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import SiteCloneViewer from "./SiteCloneViewer";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 export type Issue = {
 	id: string;
@@ -282,43 +286,43 @@ export default function CrawlTree({
 	const canvasH = Math.max(height, 120);
 
 	return (
-		<div className="crawl-tree-section">
-			<div className="crawl-tree-head">
-				<div className="crawl-tree-head-row">
-					<h3>{title}</h3>
-					<div className="crawl-tree-stats">
+		<div className="mb-8 flex flex-col gap-3.5">
+			<div className="flex flex-col gap-1.5">
+				<div className="flex flex-wrap items-center gap-2.5">
+					<h3 className="m-0 text-base font-semibold">{title}</h3>
+					<div className="flex items-center gap-1.5 text-xs text-ink-soft">
 						<span>{pages.length} pages mapped</span>
 						{collapsedCount > 0 && (
-							<span className="crawl-tree-stats-dim">
+							<span className="text-ink-soft/70">
 								· {collapsedCount} collapsed for speed
 							</span>
 						)}
 					</div>
 				</div>
-				<p className="crawl-tree-hint">
+				<p className="m-0 max-w-[64ch] font-(family-name:--font-readable) text-[12.5px] text-ink-soft">
 					Hover a page for its overall score, hover a category for the details,
-					click a page to open its full report, or use <code>+/−</code> on a
+					click a page to open its full report, or use <code className="rounded bg-surface-2 px-1 py-0.5 font-(family-name:--font-mono)">+/−</code> on a
 					branch to expand or collapse it.
 				</p>
 			</div>
 
-			<div className="crawl-tree-toolbar">
-				<div className="crawl-tree-legend">
-					<span>
-						<i className="dot good" /> 80–100
+			<div className="flex flex-wrap items-center justify-between gap-3">
+				<div className="flex items-center gap-3.5 text-xs text-ink-soft">
+					<span className="flex items-center gap-1.5">
+						<i className="inline-block size-2 rounded-full bg-good not-italic" /> 80–100
 					</span>
-					<span>
-						<i className="dot warn" /> 60–79
+					<span className="flex items-center gap-1.5">
+						<i className="inline-block size-2 rounded-full bg-warn not-italic" /> 60–79
 					</span>
-					<span>
-						<i className="dot critical" /> below 60
+					<span className="flex items-center gap-1.5">
+						<i className="inline-block size-2 rounded-full bg-critical not-italic" /> below 60
 					</span>
 				</div>
 
-				<div className="crawl-tree-zoom">
+				<div className="flex items-center gap-1 rounded-(--radius) border border-line bg-card p-1">
 					<button
 						type="button"
-						className="crawl-tree-zoom-btn"
+						className="flex size-6 items-center justify-center rounded text-ink-soft hover:bg-secondary disabled:pointer-events-none disabled:opacity-40"
 						onClick={() =>
 							setZoom((z) => Math.max(ZOOM_MIN, +(z - ZOOM_STEP).toFixed(2)))
 						}
@@ -329,14 +333,14 @@ export default function CrawlTree({
 					</button>
 					<button
 						type="button"
-						className="crawl-tree-zoom-reset"
+						className="min-w-12 rounded px-1 text-xs text-ink-soft hover:bg-secondary"
 						onClick={() => setZoom(1)}
 					>
 						{Math.round(zoom * 100)}%
 					</button>
 					<button
 						type="button"
-						className="crawl-tree-zoom-btn"
+						className="flex size-6 items-center justify-center rounded text-ink-soft hover:bg-secondary disabled:pointer-events-none disabled:opacity-40"
 						onClick={() =>
 							setZoom((z) => Math.min(ZOOM_MAX, +(z + ZOOM_STEP).toFixed(2)))
 						}
@@ -348,9 +352,8 @@ export default function CrawlTree({
 				</div>
 			</div>
 
-			<div className="crawl-tree-scroll">
+			<div className="max-h-[520px] overflow-auto rounded-(--radius) border border-line bg-card">
 				<div
-					className="crawl-tree-canvas-spacer"
 					style={{ width: canvasW * zoom, height: canvasH * zoom }}
 				>
 					<div
@@ -443,22 +446,27 @@ export default function CrawlTree({
 
 			{hoveredNode && (
 				<div
-					className="crawl-tooltip"
+					className="crawl-tooltip absolute z-[1000] w-64 rounded-(--radius) border border-line bg-card p-3 text-xs shadow-md"
 					style={{ left: hover!.x, top: hover!.y }}
 					onMouseEnter={clearCloseTimer}
 					onMouseLeave={scheduleClose}
 				>
-					<div className={`crawl-tooltip-head ${scoreBand(hoveredNode.score)}`}>
-						<span className="crawl-tooltip-path">
+					<div className="mb-2 flex items-center justify-between gap-2 border-b border-line pb-2">
+						<span className="truncate font-(family-name:--font-mono) text-[11px] text-ink-soft">
 							{pathOf(hoveredNode.url)}
 						</span>
 						<span
-							className={`crawl-tooltip-score ${scoreBand(hoveredNode.score)}`}
+							className={cn(
+								"shrink-0 font-(family-name:--font-cond) text-base font-bold",
+								scoreBand(hoveredNode.score) === "good" && "text-good",
+								scoreBand(hoveredNode.score) === "warn" && "text-warn",
+								scoreBand(hoveredNode.score) === "critical" && "text-critical",
+							)}
 						>
 							{hoveredNode.score}
 						</span>
 					</div>
-					<div className="crawl-tooltip-cats">
+					<div className="flex flex-col gap-0.5">
 						{CATEGORY_ORDER.filter((k) => hoveredNode.categories[k]).map(
 							(k) => {
 								const cat = hoveredNode.categories[k];
@@ -466,38 +474,53 @@ export default function CrawlTree({
 								return (
 									<div key={k}>
 										<div
-											className={`crawl-tooltip-cat-row ${open ? "open" : ""}`}
+											className={cn(
+												"flex cursor-pointer items-center justify-between gap-2 rounded px-1.5 py-1 text-ink-soft",
+												open && "bg-secondary text-ink",
+											)}
 											onMouseEnter={() => setHoverCat(k)}
 										>
 											<span>{cat.label}</span>
 											<span
-												className={`crawl-tooltip-cat-score ${scoreBand(cat.score)}`}
+												className={cn(
+													"font-semibold",
+													scoreBand(cat.score) === "good" && "text-good",
+													scoreBand(cat.score) === "warn" && "text-warn",
+													scoreBand(cat.score) === "critical" && "text-critical",
+												)}
 											>
 												{cat.score}
 											</span>
 										</div>
 										{open && (
-											<div className="crawl-tooltip-detail">
+											<div className="mb-1 flex flex-col gap-1 rounded bg-surface-2 px-2 py-1.5">
 												{cat.issues.length === 0 ?
-													<p className="crawl-tooltip-clean">
+													<p className="m-0 text-ink-soft italic">
 														No issues found here.
 													</p>
 												:	<>
-														<ul>
+														<ul className="m-0 flex list-none flex-col gap-1 p-0">
 															{[...cat.issues]
 																.sort((a, b) => b.weight - a.weight)
 																.slice(0, 3)
 																.map((iss) => (
-																	<li key={iss.id}>
+																	<li key={iss.id} className="flex items-center gap-1.5">
 																		<span
-																			className={`sev-dot sev-${iss.severity}`}
+																			className={cn(
+																				"size-1.5 shrink-0 rounded-full",
+																				iss.severity === "critical" ? "bg-sev-critical"
+																				: iss.severity === "high" ? "bg-sev-high"
+																				: iss.severity === "medium" ? "bg-sev-medium"
+																				: iss.severity === "low" ? "bg-sev-low"
+																				:	"border border-sev-info-border bg-sev-info",
+																			)}
 																		/>
 																		{iss.title}
 																	</li>
 																))}
 														</ul>
 														{cat.issues.length > 3 && (
-															<p className="crawl-tooltip-more">
+															<p className="m-0 text-ink-soft">
 																+{cat.issues.length - 3} more in the full report
 															</p>
 														)}
@@ -512,7 +535,7 @@ export default function CrawlTree({
 					</div>
 					<button
 						type="button"
-						className="crawl-tooltip-full-btn"
+						className="mt-2 w-full rounded-md bg-brand py-1.5 text-center text-xs font-medium text-white hover:bg-brand-hover"
 						onClick={() => {
 							setSelectedUrl(hoveredNode.url);
 							setHover(null);
@@ -526,25 +549,32 @@ export default function CrawlTree({
 
 			{selectedNode && (
 				<div
-					className="crawl-modal-overlay"
+					className="crawl-modal-overlay fixed inset-0 z-[1100] bg-black/50"
 					onClick={() => setSelectedUrl(null)}
 					role="presentation"
 				>
 					<div
-						className="crawl-modal"
+						className="crawl-modal fixed top-1/2 left-1/2 z-[1101] flex max-h-[85vh] w-[min(720px,92vw)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-line bg-card shadow-lg"
 						role="dialog"
 						aria-modal="true"
 						aria-label={`Report for ${selectedNode.url}`}
 						onClick={(e) => e.stopPropagation()}
 					>
 						<div
-							className={`crawl-modal-band ${scoreBand(selectedNode.score)}`}
+							className={cn(
+								"crawl-modal-band h-1.5 w-full shrink-0",
+								scoreBand(selectedNode.score) === "good" && "bg-good",
+								scoreBand(selectedNode.score) === "warn" && "bg-warn",
+								scoreBand(selectedNode.score) === "critical" && "bg-critical",
+							)}
 						/>
-						<div className="crawl-modal-head">
-							<div>
-								<p className="crawl-modal-eyebrow">Page report</p>
+						<div className="flex flex-none items-start justify-between gap-4 border-b border-line px-6 py-5">
+							<div className="flex flex-col items-start gap-2">
+								<p className="m-0 text-xs tracking-[0.06em] text-ink-soft uppercase">
+									Page report
+								</p>
 								<a
-									className="crawl-modal-url"
+									className="truncate text-sm font-medium text-brand underline-offset-2 hover:underline"
 									href={selectedNode.url}
 									target="_blank"
 									rel="noopener noreferrer"
@@ -554,12 +584,12 @@ export default function CrawlTree({
 								<SiteCloneViewer
 									url={selectedNode.url}
 									label="🔍 View this page highlighted"
-									className="clone-view-btn clone-view-btn-inline"
+									className="mt-1 text-xs"
 								/>
 							</div>
 							<button
 								type="button"
-								className="crawl-modal-close"
+								className="flex size-7 shrink-0 items-center justify-center rounded-full text-lg text-ink-soft hover:bg-secondary hover:text-ink"
 								onClick={() => setSelectedUrl(null)}
 								aria-label="Close"
 							>
@@ -567,99 +597,129 @@ export default function CrawlTree({
 							</button>
 						</div>
 
-						<div className="crawl-modal-score">
+						<div className="flex flex-none items-baseline gap-2 border-b border-line px-6 py-4">
 							<span
-								className={`crawl-modal-score-num ${scoreBand(selectedNode.score)}`}
+								className={cn(
+									"font-(family-name:--font-cond) text-3xl font-bold",
+									scoreBand(selectedNode.score) === "good" && "text-good",
+									scoreBand(selectedNode.score) === "warn" && "text-warn",
+									scoreBand(selectedNode.score) === "critical" && "text-critical",
+								)}
 							>
 								{selectedNode.score}
 							</span>
-							<span className="crawl-modal-score-label">/100 on this page</span>
+							<span className="text-sm text-ink-soft">/100 on this page</span>
 						</div>
 
-						<div className="cards crawl-modal-cards">
-							{CATEGORY_ORDER.filter((k) => selectedNode.categories[k]).map(
-								(k) => {
-									const cat = selectedNode.categories[k];
-									const open = modalOpenCat === k;
-									return (
-										<div
-											key={k}
-											className={`card ${open ? "active" : ""}`}
-											onClick={() => setModalOpenCat(open ? null : k)}
-										>
-											<div className="card-head">
-												<div className="card-name">{cat.label}</div>
-												<div
-													className="card-score"
-													style={{
-														color:
-															cat.score >= 80 ? "var(--good)"
-															: cat.score >= 60 ? "var(--warn)"
-															: "var(--critical)",
-													}}
-												>
-													{cat.score}
+						<div className="flex-1 overflow-y-auto px-6 py-5">
+							<div className="mb-4 grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3">
+								{CATEGORY_ORDER.filter((k) => selectedNode.categories[k]).map(
+									(k) => {
+										const cat = selectedNode.categories[k];
+										const open = modalOpenCat === k;
+										const colorClass =
+											cat.score >= 80 ? "good"
+											: cat.score >= 60 ? "warn"
+											: "critical";
+										return (
+											<Card
+												key={k}
+												className={cn(
+													"cursor-pointer gap-1.5 p-3.5 shadow-none",
+													open && "border-brand",
+												)}
+												onClick={() => setModalOpenCat(open ? null : k)}
+											>
+												<div className="flex items-center justify-between gap-2">
+													<div className="text-xs font-semibold">{cat.label}</div>
+													<div
+														className={cn(
+															"text-sm font-bold",
+															colorClass === "good" && "text-good",
+															colorClass === "warn" && "text-warn",
+															colorClass === "critical" && "text-critical",
+														)}
+													>
+														{cat.score}
+													</div>
 												</div>
-											</div>
-											<div className="card-count">
-												{cat.issues.length} issue
-												{cat.issues.length === 1 ? "" : "s"}
-											</div>
-											<div className="card-bar">
+												<div className="text-[11px] text-ink-soft">
+													{cat.issues.length} issue
+													{cat.issues.length === 1 ? "" : "s"}
+												</div>
+												<div className="h-1 overflow-hidden rounded-full bg-secondary">
+													<div
+														className={cn(
+															"h-full rounded-full",
+															colorClass === "good" && "bg-good",
+															colorClass === "warn" && "bg-warn",
+															colorClass === "critical" && "bg-critical",
+														)}
+														style={{ width: `${cat.score}%` }}
+													/>
+												</div>
+											</Card>
+										);
+									},
+								)}
+							</div>
+
+							<div className="flex flex-col gap-3">
+								{CATEGORY_ORDER.filter(
+									(k) => selectedNode.categories[k] && modalOpenCat === k,
+								).map((k) => {
+									const cat = selectedNode.categories[k];
+									return (
+										<div key={k} className="flex flex-col gap-3">
+											{cat.issues.length === 0 && (
+												<p className="text-sm text-ink-soft italic">
+													No issues found in {cat.label.toLowerCase()} on this
+													page.
+												</p>
+											)}
+											{cat.issues.map((iss) => (
 												<div
-													style={{
-														width: `${cat.score}%`,
-														background:
-															cat.score >= 80 ? "var(--good)"
-															: cat.score >= 60 ? "var(--warn)"
-															: "var(--critical)",
-													}}
-												/>
-											</div>
+													key={iss.id}
+													className="flex items-start gap-3 rounded-(--radius) border border-line bg-surface-2 p-4"
+												>
+													<span
+														className={cn(
+															"mt-1 size-2 shrink-0 rounded-full",
+															iss.severity === "critical" ? "bg-sev-critical"
+															: iss.severity === "high" ? "bg-sev-high"
+															: iss.severity === "medium" ? "bg-sev-medium"
+															: iss.severity === "low" ? "bg-sev-low"
+															:	"border border-sev-info-border bg-sev-info",
+														)}
+													/>
+													<div className="flex flex-1 flex-col gap-1">
+														<Badge
+															variant={`sev-${iss.severity}` as never}
+															className="self-start capitalize"
+														>
+															{iss.severity}
+														</Badge>
+														<div className="text-sm font-semibold text-ink">
+															{iss.title}
+														</div>
+														<div className="text-sm text-ink-soft">{iss.detail}</div>
+														{iss.fix && (
+															<div className="text-sm text-ink-soft italic">
+																Fix: {iss.fix}
+															</div>
+														)}
+													</div>
+												</div>
+											))}
 										</div>
 									);
-								},
-							)}
-						</div>
-
-						<div className="crawl-modal-panels">
-							{CATEGORY_ORDER.filter(
-								(k) => selectedNode.categories[k] && modalOpenCat === k,
-							).map((k) => {
-								const cat = selectedNode.categories[k];
-								return (
-									<div key={k} className="panel open">
-										{cat.issues.length === 0 && (
-											<p className="crawl-tooltip-clean">
-												No issues found in {cat.label.toLowerCase()} on this
-												page.
-											</p>
-										)}
-										{cat.issues.map((iss) => (
-											<div key={iss.id} className="finding">
-												<span className={`sev-dot sev-${iss.severity}`} />
-												<div className="finding-body">
-													<span
-														className={`sev-badge sev-badge-${iss.severity}`}
-													>
-														{iss.severity}
-													</span>
-													<div className="finding-title">{iss.title}</div>
-													<div className="finding-detail">{iss.detail}</div>
-													{iss.fix && (
-														<div className="finding-fix">Fix: {iss.fix}</div>
-													)}
-												</div>
-											</div>
-										))}
-									</div>
-								);
-							})}
-							{!modalOpenCat && (
-								<p className="crawl-modal-hint">
-									Click a category above to see its findings for this page.
-								</p>
-							)}
+								})}
+								{!modalOpenCat && (
+									<p className="text-sm text-ink-soft italic">
+										Click a category above to see its findings for this page.
+									</p>
+								)}
+							</div>
 						</div>
 					</div>
 				</div>
