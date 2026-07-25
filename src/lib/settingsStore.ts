@@ -24,6 +24,7 @@ export type ExportFormat = "pdf" | "docx" | "json";
 export type InsightsTone = "concise" | "detailed";
 export type MotionSpeed = "slow" | "normal" | "fast";
 export type FontFamilyChoice = "default" | "system" | "serif" | "mono" | "custom";
+export type FontWeightChoice = "normal" | "medium" | "semibold";
 
 export interface OptiqraSettings {
 	/** App-wide, not tied to look-and-feel — currently just the UI language,
@@ -34,10 +35,11 @@ export interface OptiqraSettings {
 	};
 	appearance: {
 		theme: ThemeMode;
-		accentColor: string; // hex
+		accentColor: string; // hex — freely settable, not limited to ACCENT_PRESETS
 		density: Density;
 		reduceMotion: boolean;
 		fontScale: FontScale;
+		uiScale: number; // %, 80-150, zooms the whole interface like a browser/editor zoom level
 	};
 	scanning: {
 		defaultMode: "single" | "site";
@@ -90,6 +92,8 @@ export interface OptiqraSettings {
 		fontFamily: FontFamilyChoice;
 		customFontFamily: string; // used only when fontFamily === "custom"
 		letterSpacing: number; // px, -0.5 to 2
+		lineHeight: number; // unitless, 1.2-2.0
+		fontWeight: FontWeightChoice; // body text weight
 	};
 	/** Escape hatch for people who want to go further than the toggles above:
 	 *  raw CSS injected into the page, and an OPTIONAL raw JS snippet that
@@ -113,6 +117,7 @@ export const DEFAULT_SETTINGS: OptiqraSettings = {
 		density: "comfortable",
 		reduceMotion: false,
 		fontScale: "default",
+		uiScale: 100,
 	},
 	scanning: {
 		defaultMode: "single",
@@ -162,6 +167,8 @@ export const DEFAULT_SETTINGS: OptiqraSettings = {
 		fontFamily: "default",
 		customFontFamily: "",
 		letterSpacing: 0,
+		lineHeight: 1.5,
+		fontWeight: "normal",
 	},
 	advanced: {
 		customCSS: "",
@@ -171,9 +178,10 @@ export const DEFAULT_SETTINGS: OptiqraSettings = {
 	},
 };
 
-/** Preset accent swatches shown in the Appearance tab — kept small and
- *  curated rather than a raw color picker, so every option still looks
- *  intentional against the app's neutral surfaces. */
+/** Curated preset swatches shown in the Appearance tab, alongside a full
+ *  color-wheel + hex input that lets someone pick literally any color for
+ *  `accentColor`. Presets are just shortcuts onto the same field — there's
+ *  no separate "custom color" flag to track. */
 export const ACCENT_PRESETS = [
 	{ id: "violet", label: "Violet", value: "#6505ff" },
 	{ id: "teal", label: "Teal", value: "#0c8f7f" },
@@ -253,12 +261,15 @@ function setMirrorCookie(settings: OptiqraSettings) {
 		density: settings.appearance.density,
 		reduceMotion: settings.appearance.reduceMotion,
 		fontScale: settings.appearance.fontScale,
+		uiScale: settings.appearance.uiScale,
 		cornerRadius: settings.layout.cornerRadius,
 		contentWidth: settings.layout.contentWidth,
 		motionSpeed: settings.layout.motionSpeed,
 		fontFamily: settings.typography.fontFamily,
 		customFontFamily: settings.typography.customFontFamily,
 		letterSpacing: settings.typography.letterSpacing,
+		lineHeight: settings.typography.lineHeight,
+		fontWeight: settings.typography.fontWeight,
 	};
 	const secure = typeof location !== "undefined" && location.protocol === "https:" ? "; Secure" : "";
 	const maxAge = 365 * 24 * 60 * 60;
@@ -276,12 +287,15 @@ export type SettingsMirror = {
 	density: Density;
 	reduceMotion: boolean;
 	fontScale: FontScale;
+	uiScale: number;
 	cornerRadius: number;
 	contentWidth: number;
 	motionSpeed: MotionSpeed;
 	fontFamily: FontFamilyChoice;
 	customFontFamily: string;
 	letterSpacing: number;
+	lineHeight: number;
+	fontWeight: FontWeightChoice;
 };
 
 /** Reads the settings mirror from the cookie — synchronous, so it can run in
@@ -299,12 +313,15 @@ export function readAppearanceMirrorFromCookie(): SettingsMirror | null {
 			density: raw.density ?? DEFAULT_SETTINGS.appearance.density,
 			reduceMotion: raw.reduceMotion ?? DEFAULT_SETTINGS.appearance.reduceMotion,
 			fontScale: raw.fontScale ?? DEFAULT_SETTINGS.appearance.fontScale,
+			uiScale: raw.uiScale ?? DEFAULT_SETTINGS.appearance.uiScale,
 			cornerRadius: raw.cornerRadius ?? DEFAULT_SETTINGS.layout.cornerRadius,
 			contentWidth: raw.contentWidth ?? DEFAULT_SETTINGS.layout.contentWidth,
 			motionSpeed: raw.motionSpeed ?? DEFAULT_SETTINGS.layout.motionSpeed,
 			fontFamily: raw.fontFamily ?? DEFAULT_SETTINGS.typography.fontFamily,
 			customFontFamily: raw.customFontFamily ?? DEFAULT_SETTINGS.typography.customFontFamily,
 			letterSpacing: raw.letterSpacing ?? DEFAULT_SETTINGS.typography.letterSpacing,
+			lineHeight: raw.lineHeight ?? DEFAULT_SETTINGS.typography.lineHeight,
+			fontWeight: raw.fontWeight ?? DEFAULT_SETTINGS.typography.fontWeight,
 		};
 	} catch {
 		return null;

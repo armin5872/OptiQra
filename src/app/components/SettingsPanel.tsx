@@ -100,12 +100,37 @@ export default function SettingsPanel() {
 	const [storage, setStorage] = useState<{ usageBytes: number; quotaBytes: number } | null>(null);
 	const [toast, setToast] = useState("");
 	const [jsRunResult, setJsRunResult] = useState<{ ok: boolean; message: string } | null>(null);
+	// Draft text for the hex input — kept separate from the live accentColor
+	// so someone can type "#1a" mid-edit without it being rejected as invalid
+	// on every keystroke. Only commits (and re-syncs from settings) on blur
+	// or Enter, once it's a valid 3/6-digit hex color.
+	const [hexDraft, setHexDraft] = useState(settings.appearance.accentColor);
+	// Tracks the last accentColor we synced hexDraft from, so we can tell
+	// "changed elsewhere" (preset click / import / reset) apart from "user is
+	// typing in the hex field". Adjusted during render per React's guidance
+	// for syncing state from props — cheaper than an effect and avoids the
+	// extra render a useEffect-based sync would cause.
+	const [lastSyncedAccent, setLastSyncedAccent] = useState(settings.appearance.accentColor);
+	if (settings.appearance.accentColor !== lastSyncedAccent) {
+		setLastSyncedAccent(settings.appearance.accentColor);
+		setHexDraft(settings.appearance.accentColor);
+	}
 
 	// Show brief "Applied" feedback when appearance/layout/typography settings change
 	useEffect(() => {
 		if (!hydrated) return;
 		flashToast(t("settings.toasts.applied"));
 	}, [hydrated, settings.appearance, settings.layout, settings.typography, settings.advanced.customCSS, t]);
+
+	const HEX_COLOR_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+	const commitHexDraft = () => {
+		const v = hexDraft.trim();
+		if (HEX_COLOR_RE.test(v)) {
+			update("appearance", { accentColor: v.toLowerCase() });
+		} else {
+			setHexDraft(settings.appearance.accentColor); // revert invalid input
+		}
+	};
 
 	useEffect(() => {
 		if (!open) return;
@@ -306,7 +331,52 @@ export default function SettingsPanel() {
 																onClick={() => update("appearance", { accentColor: p.value })}
 															/>
 														))}
+														<div className="settings-custom-color">
+															<input
+																type="color"
+																className={`settings-color-wheel ${
+																	!ACCENT_PRESETS.some((p) => p.value === a.accentColor) ? "active" : ""
+																}`}
+																value={HEX_COLOR_RE.test(a.accentColor) ? a.accentColor : "#6505ff"}
+																title={t("settings.appearance.customColor")}
+																aria-label={t("settings.appearance.customColor")}
+																onChange={(e) => update("appearance", { accentColor: e.target.value })}
+															/>
+															<input
+																type="text"
+																className={`settings-hex-input ${
+																	hexDraft && !HEX_COLOR_RE.test(hexDraft) ? "invalid" : ""
+																}`}
+																value={hexDraft}
+																placeholder="#6505ff"
+																spellCheck={false}
+																maxLength={7}
+																aria-label={t("settings.appearance.customColorHex")}
+																onChange={(e) => setHexDraft(e.target.value)}
+																onBlur={commitHexDraft}
+																onKeyDown={(e) => {
+																	if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+																}}
+															/>
+														</div>
 													</div>
+												</div>
+											</div>
+											<div className="settings-row">
+												<div className="settings-row-label">
+													<strong>{t("settings.appearance.uiScale")}</strong>
+													<span>{t("settings.appearance.uiScaleHint")}</span>
+												</div>
+												<div className="settings-slider">
+													<input
+														type="range"
+														min={80}
+														max={150}
+														step={5}
+														value={a.uiScale}
+														onChange={(e) => update("appearance", { uiScale: Number(e.target.value) })}
+													/>
+													<output>{a.uiScale}%</output>
 												</div>
 											</div>
 											<div className="settings-row">
@@ -501,6 +571,45 @@ export default function SettingsPanel() {
 														}
 													/>
 													<output>{settings.typography.letterSpacing.toFixed(1)}px</output>
+												</div>
+											</div>
+											<div className="settings-row">
+												<div className="settings-row-label">
+													<strong>Line height</strong>
+													<span>Vertical breathing room within paragraphs and lists</span>
+												</div>
+												<div className="settings-slider">
+													<input
+														type="range"
+														min={1.2}
+														max={2}
+														step={0.05}
+														value={settings.typography.lineHeight}
+														onChange={(e) =>
+															update("typography", { lineHeight: Number(e.target.value) })
+														}
+													/>
+													<output>{settings.typography.lineHeight.toFixed(2)}</output>
+												</div>
+											</div>
+											<div className="settings-row">
+												<div className="settings-row-label">
+													<strong>Body font weight</strong>
+													<span>Overall thickness of body text app-wide</span>
+												</div>
+												<div className="settings-row-control">
+													<div className="settings-segmented">
+														{(["normal", "medium", "semibold"] as const).map((v) => (
+															<button
+																key={v}
+																type="button"
+																className={settings.typography.fontWeight === v ? "active" : ""}
+																onClick={() => update("typography", { fontWeight: v })}
+															>
+																{v[0].toUpperCase() + v.slice(1)}
+															</button>
+														))}
+													</div>
 												</div>
 											</div>
 										</div>
@@ -986,6 +1095,26 @@ export default function SettingsPanel() {
 														update("privacy", { saveScanHistory: !settings.privacy.saveScanHistory })
 													}
 												/>
+											</div>
+											<div className="settings-row">
+												<div className="settings-row-label">
+													<strong>Auto-clear history</strong>
+													<span>Scans older than this are deleted automatically on your next visit</span>
+												</div>
+												<div className="settings-row-control">
+													<select
+														value={settings.privacy.historyRetentionDays}
+														onChange={(e) =>
+															update("privacy", { historyRetentionDays: Number(e.target.value) })
+														}
+													>
+														<option value={0}>Keep forever</option>
+														<option value={7}>7 days</option>
+														<option value={30}>30 days</option>
+														<option value={90}>90 days</option>
+														<option value={365}>1 year</option>
+													</select>
+												</div>
 											</div>
 											<div className="settings-danger-row">
 												<div className="settings-row-label">

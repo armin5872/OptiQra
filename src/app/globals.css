@@ -42,6 +42,14 @@ body {
 	color: var(--ink);
 	-webkit-font-smoothing: antialiased;
 }
+
+/* --- Appearance: UI scale / zoom (Settings > Appearance) ---
+   Scales the entire interface, the same technique browsers use for their
+   own page-zoom. 1 = 100% (default), set from --ui-scale as a decimal
+   fraction (e.g. 1.1 for 110%). Falls back to no-op at 1. */
+html {
+	zoom: var(--ui-scale, 1);
+}
 .wrap {
 	max-width: var(--max-width, 960px);
 	margin: 0 auto;
@@ -73,6 +81,19 @@ html[data-custom-font="1"] body * {
 }
 html[data-letter-spacing] body {
 	letter-spacing: var(--letter-spacing, normal);
+}
+/* --- Typography: line height + body font weight (Settings > Typography) ---
+   Set on body so headings/labels that already pin their own line-height or
+   font-weight elsewhere in this file aren't overridden — only prose that
+   inherits the default is affected, same precedent as letter-spacing above. */
+body {
+	line-height: var(--line-height, 1.5);
+}
+html[data-font-weight="medium"] body {
+	font-weight: 500;
+}
+html[data-font-weight="semibold"] body {
+	font-weight: 600;
 }
 ::selection {
 	background: var(--accent-soft);
@@ -3998,6 +4019,63 @@ body {
 	color: #fff;
 	font-size: 12px;
 	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* Custom accent color: color wheel + hex input, sits next to the presets */
+.settings-custom-color {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-left: 4px;
+	padding-left: 12px;
+	border-left: 1px solid var(--line);
+}
+
+.settings-color-wheel {
+	width: 30px;
+	height: 30px;
+	padding: 0;
+	border: 2px solid var(--line);
+	border-radius: 50%;
+	cursor: pointer;
+	background: none;
+	overflow: hidden;
+}
+.settings-color-wheel.active {
+	border-color: var(--ink);
+}
+/* Native color input has default browser chrome around the swatch —
+   strip it so it reads as a plain circular swatch like the presets. */
+.settings-color-wheel::-webkit-color-swatch-wrapper {
+	padding: 0;
+}
+.settings-color-wheel::-webkit-color-swatch {
+	border: none;
+	border-radius: 50%;
+}
+.settings-color-wheel::-moz-color-swatch {
+	border: none;
+	border-radius: 50%;
+}
+
+.settings-hex-input {
+	width: 92px;
+	font:
+		12.5px "IBM Plex Mono",
+		monospace;
+	padding: 6px 9px;
+	border: 1px solid var(--line);
+	border-radius: 7px;
+	background: var(--surface);
+	color: var(--ink);
+	text-transform: lowercase;
+}
+.settings-hex-input:focus {
+	outline: 2px solid var(--accent-soft);
+	border-color: var(--accent);
+}
+.settings-hex-input.invalid {
+	border-color: var(--critical);
 }
 
 /* Category checkbox grid, used in the Analyzer tab */

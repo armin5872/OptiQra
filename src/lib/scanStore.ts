@@ -98,3 +98,17 @@ export async function clearScans(): Promise<void> {
 	const db = await getDB();
 	await db.clear(STORE_NAME);
 }
+
+/** Deletes stored scans older than `retentionDays`. Called on app load with
+ *  the current `privacy.historyRetentionDays` setting — a no-op when it's 0
+ *  ("keep forever"). Returns how many records were removed, mostly for
+ *  optional debugging/telemetry. */
+export async function pruneScansOlderThan(retentionDays: number): Promise<number> {
+	if (!retentionDays || retentionDays <= 0) return 0;
+	const db = await getDB();
+	const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+	const all = await db.getAllFromIndex(STORE_NAME, "by-createdAt");
+	const stale = all.filter((scan) => scan.createdAt < cutoff);
+	await Promise.all(stale.map((scan) => db.delete(STORE_NAME, scan.id)));
+	return stale.length;
+}

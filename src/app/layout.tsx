@@ -158,6 +158,7 @@ export default async function RootLayout({
 								root.setAttribute("data-density", a.density || "comfortable");
 								root.setAttribute("data-font-scale", a.fontScale || "default");
 								if (a.reduceMotion) root.classList.add("reduce-motion");
+								root.style.setProperty("--ui-scale", ((a.uiScale != null ? a.uiScale : 100) / 100).toString());
 								var accent = a.accentColor || "#6505ff";
 								root.style.setProperty("--accent", accent);
 								root.style.setProperty("--accent-hover", "color-mix(in srgb, " + accent + " 85%, black)");
@@ -179,6 +180,8 @@ export default async function RootLayout({
 									root.setAttribute("data-letter-spacing", "1");
 									root.style.setProperty("--letter-spacing", a.letterSpacing + "px");
 								}
+								root.style.setProperty("--line-height", (a.lineHeight != null ? a.lineHeight : 1.5).toString());
+								root.setAttribute("data-font-weight", a.fontWeight || "normal");
 							} catch (e) {
 								// Cookie missing/corrupt — defaults from globals.css already apply.
 							}

@@ -5,6 +5,7 @@ import { useSettings } from "@/lib/hooks/useSettings";
 import { applyCustomCSS, runCustomJS } from "@/lib/customCode";
 import type { OptiqraSettings } from "@/lib/settingsStore";
 import { getLanguageInfo } from "@/lib/i18n";
+import { pruneScansOlderThan } from "@/lib/scanStore";
 
 /** Mirrors the current appearance/layout/typography settings onto <html> as
  *  data-attributes and CSS variable overrides. Pairs with the inline
@@ -56,6 +57,16 @@ export default function AppearanceEffects() {
 		applyCustomCSS(settings.advanced.customCSS);
 	}, [hydrated, settings.advanced.customCSS]);
 
+	// Auto-clear: prune scan history past the retention window once per
+	// load. Purely additive — a 0 (default) means "keep forever" and this
+	// is a no-op.
+	const prunedOnceRef = useRef(false);
+	useEffect(() => {
+		if (!hydrated || prunedOnceRef.current) return;
+		prunedOnceRef.current = true;
+		pruneScansOlderThan(settings.privacy.historyRetentionDays).catch(() => {});
+	}, [hydrated, settings.privacy.historyRetentionDays]);
+
 	useEffect(() => {
 		if (!hydrated || ranSavedJSOnce.current) return;
 		ranSavedJSOnce.current = true;
@@ -82,6 +93,7 @@ function applyAppearance(
 	root.setAttribute("data-density", appearance.density);
 	root.setAttribute("data-font-scale", appearance.fontScale);
 	root.classList.toggle("reduce-motion", appearance.reduceMotion);
+	root.style.setProperty("--ui-scale", `${(appearance.uiScale ?? 100) / 100}`);
 	root.style.setProperty("--accent", appearance.accentColor);
 	root.style.setProperty(
 		"--accent-hover",
@@ -116,4 +128,10 @@ function applyAppearance(
 		root.removeAttribute("data-letter-spacing");
 		root.style.removeProperty("--letter-spacing");
 	}
+
+	// Line height + body font weight — same pattern as letter spacing above:
+	// only set an override attribute when it differs from the CSS default,
+	// so globals.css's own defaults keep working untouched otherwise.
+	root.style.setProperty("--line-height", `${typography.lineHeight}`);
+	root.setAttribute("data-font-weight", typography.fontWeight);
 }
