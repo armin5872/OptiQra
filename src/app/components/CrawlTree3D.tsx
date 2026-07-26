@@ -164,6 +164,18 @@ export default function CrawlTree3D({
 
 		const nodeMeshes = new Map<string, THREE.Mesh>();
 		const growStart = new Map<string, number>();
+		// Cached per-node "stem" cylinders and per-edge lines, keyed the same
+		// way nodeMeshes is. Previously these (plus the depth rings) were
+		// rebuilt from scratch — new geometries/materials — on every single
+		// animation frame, and edgeGroup.clear()/ringGroup.clear() only
+		// detach children, they don't dispose GPU buffers. That leaked a
+		// geometry+material pair per node, per edge, and per ring on every
+		// frame, so VRAM usage grew without bound over time — the more pages
+		// in the tree, the faster it grew, eventually crashing the tab. Now
+		// we create each mesh once and just update its transform/color.
+		const stemMeshes = new Map<string, THREE.Mesh>();
+		const edgeLines = new Map<string, THREE.Line>();
+		let ringsBuiltForDepth = -1;
 
 		const raycaster = new THREE.Raycaster();
 		const pointer = new THREE.Vector2();
@@ -214,23 +226,52 @@ export default function CrawlTree3D({
 				}
 			}
 
-			edgeGroup.clear();
 			const byUrl = new Map(data.map((d) => [d.url, d]));
 			const maxDepth = data.reduce((m, d) => Math.max(m, d.depth), 0);
 
-			ringGroup.clear();
-			for (let d = 1; d <= maxDepth; d++) {
-				const geo = new THREE.RingGeometry(d * RING_GAP - 0.02, d * RING_GAP + 0.02, 64);
-				const mat = new THREE.MeshBasicMaterial({
-					color: 0x9fb3ab,
-					transparent: true,
-					opacity: 0.16,
-					side: THREE.DoubleSide,
-				});
-				const ring = new THREE.Mesh(geo, mat);
-				ring.rotation.x = -Math.PI / 2;
-				ring.position.y = BASE_HEIGHT;
-				ringGroup.add(ring);
+			// Rings only need rebuilding when the deepest ring seen changes
+			// (i.e. the crawl has gone one hop deeper), not every frame.
+			if (maxDepth !== ringsBuiltForDepth) {
+				for (const child of ringGroup.children) {
+					const mesh = child as THREE.Mesh;
+					mesh.geometry.dispose();
+					(mesh.material as THREE.Material).dispose();
+				}
+				ringGroup.clear();
+				for (let d = 1; d <= maxDepth; d++) {
+					const geo = new THREE.RingGeometry(d * RING_GAP - 0.02, d * RING_GAP + 0.02, 64);
+					const mat = new THREE.MeshBasicMaterial({
+						color: 0x9fb3ab,
+						transparent: true,
+						opacity: 0.16,
+						side: THREE.DoubleSide,
+					});
+					const ring = new THREE.Mesh(geo, mat);
+					ring.rotation.x = -Math.PI / 2;
+					ring.position.y = BASE_HEIGHT;
+					ringGroup.add(ring);
+				}
+				ringsBuiltForDepth = maxDepth;
+			}
+
+			// Drop stem/edge meshes for nodes that no longer exist, disposing
+			// their GPU resources properly (mirrors the nodeMeshes cleanup
+			// above).
+			for (const [url, stem] of stemMeshes) {
+				if (!seenUrls.has(url)) {
+					edgeGroup.remove(stem);
+					stem.geometry.dispose();
+					(stem.material as THREE.Material).dispose();
+					stemMeshes.delete(url);
+				}
+			}
+			for (const [url, line] of edgeLines) {
+				if (!seenUrls.has(url)) {
+					edgeGroup.remove(line);
+					line.geometry.dispose();
+					(line.material as THREE.Material).dispose();
+					edgeLines.delete(url);
+				}
 			}
 
 			for (const node of data) {
@@ -266,27 +307,62 @@ export default function CrawlTree3D({
 
 				// A thin vertical "stem" from the ground ring up to each node
 				// makes the score-as-height encoding readable at a glance.
-				if (node.py > BASE_HEIGHT + 0.02) {
-					const stemGeo = new THREE.CylinderGeometry(0.01, 0.01, node.py - BASE_HEIGHT, 6);
-					const stemMat = new THREE.MeshBasicMaterial({
-						color: scoreColor(node.score),
-						transparent: true,
-						opacity: 0.35,
-					});
-					const stem = new THREE.Mesh(stemGeo, stemMat);
-					stem.position.set(node.px, BASE_HEIGHT + (node.py - BASE_HEIGHT) / 2, node.pz);
-					edgeGroup.add(stem);
+				// Height/position can change frame-to-frame (score updates,
+				// pop-in), so instead of recreating the mesh we scale/move a
+				// cached one — only the geometry's base height is fixed at
+				// creation time, stretched via mesh.scale.y.
+				const stemHeight = node.py - BASE_HEIGHT;
+				if (stemHeight > 0.02) {
+					let stem = stemMeshes.get(node.url);
+					if (!stem) {
+						const stemGeo = new THREE.CylinderGeometry(0.01, 0.01, 1, 6);
+						const stemMat = new THREE.MeshBasicMaterial({
+							color: scoreColor(node.score),
+							transparent: true,
+							opacity: 0.35,
+						});
+						stem = new THREE.Mesh(stemGeo, stemMat);
+						edgeGroup.add(stem);
+						stemMeshes.set(node.url, stem);
+					} else {
+						(stem.material as THREE.MeshBasicMaterial).color.setHex(scoreColor(node.score));
+					}
+					stem.scale.y = stemHeight;
+					stem.position.set(node.px, BASE_HEIGHT + stemHeight / 2, node.pz);
+				} else {
+					const stem = stemMeshes.get(node.url);
+					if (stem) {
+						edgeGroup.remove(stem);
+						stem.geometry.dispose();
+						(stem.material as THREE.Material).dispose();
+						stemMeshes.delete(node.url);
+					}
 				}
 
 				if (node.parentUrl && byUrl.has(node.parentUrl)) {
 					const parent = byUrl.get(node.parentUrl)!;
-					const points = [
-						new THREE.Vector3(parent.px, parent.py, parent.pz),
-						new THREE.Vector3(node.px, node.py, node.pz),
-					];
-					const geo = new THREE.BufferGeometry().setFromPoints(points);
-					const mat = new THREE.LineBasicMaterial({ color: 0x8fa79d, transparent: true, opacity: 0.55 });
-					edgeGroup.add(new THREE.Line(geo, mat));
+					let line = edgeLines.get(node.url);
+					const positions = new Float32Array([parent.px, parent.py, parent.pz, node.px, node.py, node.pz]);
+					if (!line) {
+						const geo = new THREE.BufferGeometry();
+						geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+						const mat = new THREE.LineBasicMaterial({ color: 0x8fa79d, transparent: true, opacity: 0.55 });
+						line = new THREE.Line(geo, mat);
+						edgeGroup.add(line);
+						edgeLines.set(node.url, line);
+					} else {
+						const attr = line.geometry.getAttribute("position") as THREE.BufferAttribute;
+						attr.set(positions);
+						attr.needsUpdate = true;
+					}
+				} else {
+					const line = edgeLines.get(node.url);
+					if (line) {
+						edgeGroup.remove(line);
+						line.geometry.dispose();
+						(line.material as THREE.Material).dispose();
+						edgeLines.delete(node.url);
+					}
 				}
 			}
 		}
@@ -313,6 +389,19 @@ export default function CrawlTree3D({
 			renderer.domElement.removeEventListener("click", onClick);
 			controls.dispose();
 			for (const mesh of nodeMeshes.values()) {
+				mesh.geometry.dispose();
+				(mesh.material as THREE.Material).dispose();
+			}
+			for (const stem of stemMeshes.values()) {
+				stem.geometry.dispose();
+				(stem.material as THREE.Material).dispose();
+			}
+			for (const line of edgeLines.values()) {
+				line.geometry.dispose();
+				(line.material as THREE.Material).dispose();
+			}
+			for (const child of ringGroup.children) {
+				const mesh = child as THREE.Mesh;
 				mesh.geometry.dispose();
 				(mesh.material as THREE.Material).dispose();
 			}

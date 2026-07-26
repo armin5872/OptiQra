@@ -46,6 +46,7 @@ const hi: Translations = {
 			notifications: "सूचनाएँ",
 			reports: "रिपोर्ट्स",
 			privacy: "गोपनीयता और डेटा",
+			experimental: "प्रायोगिक",
 		},
 		appearance: {
 			sectionDesc: "OptiQra को अपनी पसंद जैसा बनाएँ। बदलाव तुरंत, हर जगह लागू होते हैं।",

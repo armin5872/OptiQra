@@ -46,6 +46,7 @@ const fr: Translations = {
 			notifications: "Notifications",
 			reports: "Rapports",
 			privacy: "Confidentialité et données",
+			experimental: "Expérimental",
 		},
 		appearance: {
 			sectionDesc: "Faites d'OptiQra un outil à votre image. Les changements s'appliquent instantanément, partout.",

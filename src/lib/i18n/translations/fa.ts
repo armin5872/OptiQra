@@ -46,6 +46,7 @@ const fa: Translations = {
 			notifications: "اعلان‌ها",
 			reports: "گزارش‌ها",
 			privacy: "حریم خصوصی و داده‌ها",
+			experimental: "آزمایشی",
 		},
 		appearance: {
 			sectionDesc: "ظاهر و حس OptiQra را مطابق سلیقه‌ی خودتان بسازید. تغییرات فوراً و همه‌جا اعمال می‌شود.",

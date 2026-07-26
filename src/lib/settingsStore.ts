@@ -95,6 +95,12 @@ export interface OptiqraSettings {
 		lineHeight: number; // unitless, 1.2-2.0
 		fontWeight: FontWeightChoice; // body text weight
 	};
+	/** Toggles for features still under active development. Off by default
+	 *  so nobody hits an experimental feature's rough edges (or bugs) unless
+	 *  they've opted in on purpose. */
+	experimental: {
+		crawlTree3D: boolean;
+	};
 	/** Escape hatch for people who want to go further than the toggles above:
 	 *  raw CSS injected into the page, and an OPTIONAL raw JS snippet that
 	 *  runs in this browser tab. Both are entirely local — see SECURITY notes
@@ -169,6 +175,9 @@ export const DEFAULT_SETTINGS: OptiqraSettings = {
 		letterSpacing: 0,
 		lineHeight: 1.5,
 		fontWeight: "normal",
+	},
+	experimental: {
+		crawlTree3D: false,
 	},
 	advanced: {
 		customCSS: "",
@@ -248,6 +257,7 @@ function mergeWithDefaults(stored: unknown): OptiqraSettings {
 		privacy: { ...DEFAULT_SETTINGS.privacy, ...s.privacy },
 		layout: { ...DEFAULT_SETTINGS.layout, ...s.layout },
 		typography: { ...DEFAULT_SETTINGS.typography, ...s.typography },
+		experimental: { ...DEFAULT_SETTINGS.experimental, ...s.experimental },
 		advanced: { ...DEFAULT_SETTINGS.advanced, ...s.advanced },
 	};
 }

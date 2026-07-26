@@ -44,7 +44,8 @@ type TabId =
 	| "advanced"
 	| "notifications"
 	| "reports"
-	| "privacy";
+	| "privacy"
+	| "experimental";
 
 const TABS: { id: TabId; labelKey: TranslationKey; icon: string }[] = [
 	{ id: "appearance", labelKey: "settings.tabs.appearance", icon: "🎨" },
@@ -59,6 +60,7 @@ const TABS: { id: TabId; labelKey: TranslationKey; icon: string }[] = [
 	{ id: "notifications", labelKey: "settings.tabs.notifications", icon: "🔔" },
 	{ id: "reports", labelKey: "settings.tabs.reports", icon: "📄" },
 	{ id: "privacy", labelKey: "settings.tabs.privacy", icon: "🛡️" },
+	{ id: "experimental", labelKey: "settings.tabs.experimental", icon: "🧪" },
 ];
 
 const CATEGORY_LABEL_KEYS: Record<keyof OptiqraSettings["analyzer"]["visibleCategories"], TranslationKey> = {
@@ -1199,6 +1201,39 @@ export default function SettingsPanel() {
 												</button>
 											</div>
 										</div>
+									</>
+								)}
+
+								{tab === "experimental" && (
+									<>
+										<p className="settings-section-desc">
+											Features still under active development. They&apos;re off by default and may
+											be rougher around the edges (or change) — turn one on if you want to try it
+											early.
+										</p>
+										<div className="settings-group">
+											<div className="settings-row">
+												<div className="settings-row-label">
+													<strong>3D crawl tree</strong>
+													<span>
+														Adds a &quot;3D&quot; view option next to the live crawl and
+														finished-report crawl trees — pages fan out radially in three.js, with
+														height driven by score. Off by default; enable to show the toggle.
+													</span>
+												</div>
+												<Switch
+													on={settings.experimental.crawlTree3D}
+													label="3D crawl tree"
+													onToggle={() =>
+														update("experimental", { crawlTree3D: !settings.experimental.crawlTree3D })
+													}
+												/>
+											</div>
+										</div>
+										<p className="settings-footer-note">
+											Experimental features are saved locally like any other setting — turning one
+											off just hides it again, it doesn&apos;t lose any data.
+										</p>
 									</>
 								)}
 							</div>

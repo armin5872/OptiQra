@@ -46,6 +46,7 @@ const nl: Translations = {
 			notifications: "Meldingen",
 			reports: "Rapporten",
 			privacy: "Privacy & gegevens",
+			experimental: "Experimenteel",
 		},
 		appearance: {
 			sectionDesc: "Maak OptiQra helemaal naar jouw smaak. Wijzigingen gelden direct, overal.",

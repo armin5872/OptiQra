@@ -46,6 +46,7 @@ const ja: Translations = {
 			notifications: "通知",
 			reports: "レポート",
 			privacy: "プライバシーとデータ",
+			experimental: "実験的機能",
 		},
 		appearance: {
 			sectionDesc: "OptiQraを自分好みの見た目・使い心地にしましょう。変更はすぐに、どこでも反映されます。",

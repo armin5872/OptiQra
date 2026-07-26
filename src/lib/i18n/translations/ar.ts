@@ -46,6 +46,7 @@ const ar: Translations = {
 			notifications: "الإشعارات",
 			reports: "التقارير",
 			privacy: "الخصوصية والبيانات",
+			experimental: "تجريبي",
 		},
 		appearance: {
 			sectionDesc: "اجعل OptiQra يبدو ويعمل بالطريقة التي تناسبك. تُطبَّق التغييرات فورًا وفي كل مكان.",

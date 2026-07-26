@@ -45,6 +45,7 @@ const zh: Translations = {
 			notifications: "通知",
 			reports: "报告",
 			privacy: "隐私与数据",
+			experimental: "实验性功能",
 		},
 		appearance: {
 			sectionDesc: "让 OptiQra 呈现出属于你的样子。更改会立即应用于全部页面。",

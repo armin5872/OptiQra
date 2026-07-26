@@ -46,6 +46,7 @@ const ru: Translations = {
 			notifications: "Уведомления",
 			reports: "Отчёты",
 			privacy: "Конфиденциальность и данные",
+			experimental: "Экспериментально",
 		},
 		appearance: {
 			sectionDesc: "Настройте OptiQra под себя. Изменения применяются мгновенно и повсюду.",

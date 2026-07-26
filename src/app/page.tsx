@@ -119,6 +119,10 @@ export default function Home() {
 	const [liveCrawlView, setLiveCrawlView] = useState<"off" | "2d" | "3d">("off");
 	const [scanAnimStyle, setScanAnimStyle] = useState<ScanAnimationStyle>("classic");
 	const [reportTreeView, setReportTreeView] = useState<"2d" | "3d">("2d");
+	// If the experimental toggle is off, every render site below that picks
+	// between 2D/3D also checks `!settings.experimental.crawlTree3D` and
+	// falls back to 2D — so turning the setting off always shows 2D on the
+	// very next render, with no separate sync effect needed.
 	/** Set right before we deliberately abort the live connection (pause /
 	 *  create-report-now / cancel), so the stream-reading code below knows
 	 *  whether an AbortError means "the user cancelled, go back to the start
@@ -943,18 +947,20 @@ export default function Home() {
 									>
 										2D
 									</button>
-									<button
-										type="button"
-										className={liveCrawlView === "3d" ? "active" : ""}
-										onClick={() => setLiveCrawlView("3d")}
-									>
-										3D
-									</button>
+									{settings.experimental.crawlTree3D && (
+										<button
+											type="button"
+											className={liveCrawlView === "3d" ? "active" : ""}
+											onClick={() => setLiveCrawlView("3d")}
+										>
+											3D
+										</button>
+									)}
 								</div>
 							</div>
 							{liveCrawlView !== "off" && livePageNodes.length > 0 && (
 								<div className="live-crawl-tree-wrap">
-									{liveCrawlView === "2d" ?
+									{liveCrawlView === "2d" || !settings.experimental.crawlTree3D ?
 										<CrawlTree pages={livePageNodes} title="Live crawl tree" />
 									:	<CrawlTree3D pages={livePageNodes} title="Live crawl tree (3D)" />}
 								</div>
@@ -1044,16 +1050,18 @@ export default function Home() {
 										>
 											2D
 										</button>
-										<button
-											type="button"
-											className={reportTreeView === "3d" ? "active" : ""}
-											onClick={() => setReportTreeView("3d")}
-										>
-											3D
-										</button>
+										{settings.experimental.crawlTree3D && (
+											<button
+												type="button"
+												className={reportTreeView === "3d" ? "active" : ""}
+												onClick={() => setReportTreeView("3d")}
+											>
+												3D
+											</button>
+										)}
 									</div>
 								</div>
-								{reportTreeView === "2d" ? (
+								{reportTreeView === "2d" || !settings.experimental.crawlTree3D ? (
 									<CrawlTree
 										pages={reportData.pages}
 										title="Site structure & performance"

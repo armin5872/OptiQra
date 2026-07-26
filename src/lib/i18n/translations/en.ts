@@ -55,6 +55,7 @@ const en = {
 			notifications: "Notifications",
 			reports: "Reports",
 			privacy: "Privacy & data",
+			experimental: "Experimental",
 		},
 		appearance: {
 			sectionDesc: "Make OptiQra look and feel like yours. These apply instantly, everywhere.",

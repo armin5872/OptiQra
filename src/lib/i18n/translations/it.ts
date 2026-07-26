@@ -46,6 +46,7 @@ const it: Translations = {
 			notifications: "Notifiche",
 			reports: "Report",
 			privacy: "Privacy e dati",
+			experimental: "Sperimentale",
 		},
 		appearance: {
 			sectionDesc: "Rendi OptiQra come piace a te. Le modifiche si applicano subito, ovunque.",

@@ -46,6 +46,7 @@ const ko: Translations = {
 			notifications: "알림",
 			reports: "보고서",
 			privacy: "개인정보 및 데이터",
+			experimental: "실험적 기능",
 		},
 		appearance: {
 			sectionDesc: "OptiQra를 원하는 모습과 느낌으로 만들어 보세요. 변경 사항은 즉시, 어디서나 적용됩니다.",
