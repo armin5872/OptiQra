@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useAIProvider } from "@/lib/hooks/useAIProvider";
 import AIProviderSetup from "./AIProviderSetup";
 import { getErrorMessage } from "@/lib/errorUtils";
+import { readNDJSONStream } from "@/lib/ndjsonStream";
 import type { AutoFixResult } from "@/lib/autoFixEngine";
 
 type ProjectMode = "audit" | "fix";
@@ -162,42 +163,21 @@ export default function ProjectUploadPanel() {
 				throw new Error(message);
 			}
 
-			const reader = res.body.getReader();
-			const decoder = new TextDecoder();
-			let buffer = "";
 			let finished = false;
 
-			while (true) {
-				const { value, done } = await reader.read();
-				if (done) break;
-				buffer += decoder.decode(value, { stream: true });
-
-				let newlineIdx;
-				while ((newlineIdx = buffer.indexOf("\n")) >= 0) {
-					const line = buffer.slice(0, newlineIdx).trim();
-					buffer = buffer.slice(newlineIdx + 1);
-					if (!line) continue;
-
-					let evt: StreamEvent;
-					try {
-						evt = JSON.parse(line) as StreamEvent;
-					} catch {
-						continue;
-					}
-
-					if (evt.type === "status") {
-						setStatusMessage(evt.message);
-					} else if (evt.type === "progress") {
-						setProgress({ processed: evt.processed, total: evt.total });
-						if (evt.currentFile) setStatusMessage(evt.currentFile);
-					} else if (evt.type === "done") {
-						setResult(evt.data);
-						writeDuplicateBankUpdates(evt.data.duplicateBankUpdates || {});
-						setStatus("idle");
-						finished = true;
-					} else if (evt.type === "error") {
-						throw new Error(evt.message);
-					}
+			for await (const evt of readNDJSONStream<StreamEvent>(res.body)) {
+				if (evt.type === "status") {
+					setStatusMessage(evt.message);
+				} else if (evt.type === "progress") {
+					setProgress({ processed: evt.processed, total: evt.total });
+					if (evt.currentFile) setStatusMessage(evt.currentFile);
+				} else if (evt.type === "done") {
+					setResult(evt.data);
+					writeDuplicateBankUpdates(evt.data.duplicateBankUpdates || {});
+					setStatus("idle");
+					finished = true;
+				} else if (evt.type === "error") {
+					throw new Error(evt.message);
 				}
 			}
 

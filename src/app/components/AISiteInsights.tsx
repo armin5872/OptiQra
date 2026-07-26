@@ -5,6 +5,7 @@ import type { Issue } from "./CrawlTree";
 import { useAIProvider } from "@/lib/hooks/useAIProvider";
 import type { InsightsCategorySummary } from "@/lib/aiInsights";
 import { getErrorMessage } from "@/lib/errorUtils";
+import { readNDJSONStream, type DeltaStreamEvent } from "@/lib/ndjsonStream";
 import MarkdownLite from "./MarkdownLite";
 
 type Category = {
@@ -99,24 +100,9 @@ export default function AISiteInsights({
 
 			if (!res.body) throw new Error("No response stream");
 
-			const reader = res.body.getReader();
-			const decoder = new TextDecoder();
-			let buffer = "";
-
-			while (true) {
-				const { done, value } = await reader.read();
-				if (done) break;
-				buffer += decoder.decode(value, { stream: true });
-
-				const lines = buffer.split("\n");
-				buffer = lines.pop() ?? "";
-
-				for (const line of lines) {
-					if (!line.trim()) continue;
-					const event = JSON.parse(line);
-					if (event.type === "delta") setOutput((prev) => prev + event.text);
-					if (event.type === "error") throw new Error(event.message);
-				}
+			for await (const event of readNDJSONStream<DeltaStreamEvent>(res.body)) {
+				if (event.type === "delta") setOutput((prev) => prev + event.text);
+				if (event.type === "error") throw new Error(event.message);
 			}
 
 			setStatus("done");

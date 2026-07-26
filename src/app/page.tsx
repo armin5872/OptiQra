@@ -36,6 +36,7 @@ import {
 } from "@/lib/scanCookies";
 import { aggregateCategoriesFromPageNodes, pickSiteStack } from "@/lib/reportAggregate";
 import { getErrorMessage, isAbortError } from "@/lib/errorUtils";
+import { readNDJSONStream } from "@/lib/ndjsonStream";
 
 type ScanState = "hero" | "scanning" | "report";
 type ScanMode = "single" | "site";
@@ -369,81 +370,59 @@ export default function Home() {
 			throw new Error(message);
 		}
 
-		const reader = res.body.getReader();
-		const decoder = new TextDecoder();
-		let buffer = "";
-
-		while (true) {
-			const { value, done } = await reader.read();
-			if (done) break;
-			buffer += decoder.decode(value, { stream: true });
-
-			let newlineIdx;
-			while ((newlineIdx = buffer.indexOf("\n")) >= 0) {
-				const line = buffer.slice(0, newlineIdx).trim();
-				buffer = buffer.slice(newlineIdx + 1);
-				if (!line) continue;
-
-				let evt: SiteScanStreamEvent;
-				try {
-					evt = JSON.parse(line) as SiteScanStreamEvent;
-				} catch {
-					continue;
+		for await (const evt of readNDJSONStream<SiteScanStreamEvent>(res.body)) {
+			if (evt.type === "status") {
+				setStatusMessage(evt.message ?? "");
+				// Once the crawl itself is done, the pipeline moves into
+				// per-site post-processing (broken links, duplicate content,
+				// security headers) that can take
+				// anywhere from a few seconds to 30+ seconds. That phase has
+				// no per-page `currentUrl` of its own, so without this the
+				// last crawled page's URL stays pinned on screen and the
+				// status messages below never get a chance to show,
+				// making the scan look frozen right after "N of N pages".
+				setCrawlProgress((p) =>
+					p ? { ...p, currentUrl: undefined } : p,
+				);
+				// A new phase started — any link-check progress bar from a
+				// previous phase no longer applies.
+				setLinkCheckProgress(null);
+			} else if (evt.type === "progress") {
+				if (evt.pageNode) {
+					pageNodesRef.current.push(evt.pageNode);
+					const node = evt.pageNode;
+					setLivePageNodes((prev) => [...prev, node]);
 				}
-
-				if (evt.type === "status") {
-					setStatusMessage(evt.message ?? "");
-					// Once the crawl itself is done, the pipeline moves into
-					// per-site post-processing (broken links, duplicate content,
-					// security headers) that can take
-					// anywhere from a few seconds to 30+ seconds. That phase has
-					// no per-page `currentUrl` of its own, so without this the
-					// last crawled page's URL stays pinned on screen and the
-					// status messages below never get a chance to show,
-					// making the scan look frozen right after "N of N pages".
-					setCrawlProgress((p) =>
-						p ? { ...p, currentUrl: undefined } : p,
+				setCrawlProgress({
+					scanned: evt.scanned,
+					total: evt.total,
+					currentUrl: evt.currentUrl,
+				});
+			} else if (evt.type === "linkProgress") {
+				setLinkCheckProgress({ checked: evt.checked, total: evt.total });
+			} else if (evt.type === "done") {
+				setCrawlProgress((p) => (p ? { ...p, scanned: p.total } : p));
+				setReportData(evt.data);
+				setTimeout(() => setViewState("report"), 350);
+				persistScan(evt.data, "site");
+				return;
+			} else if (evt.type === "aborted") {
+				// Only a plain Cancel should redirect home from here — pause
+				// and create-report-now already set the UI they want before
+				// triggering this same abort.
+				if (stopIntentRef.current !== "pause" && stopIntentRef.current !== "report") {
+					setStoppedNote(
+						evt.pagesScanned ?
+							`Scan stopped — ${evt.pagesScanned} page${evt.pagesScanned === 1 ? "" : "s"} were analyzed before you stopped it.`
+						:	"Scan stopped.",
 					);
-					// A new phase started — any link-check progress bar from a
-					// previous phase no longer applies.
-					setLinkCheckProgress(null);
-				} else if (evt.type === "progress") {
-					if (evt.pageNode) {
-						pageNodesRef.current.push(evt.pageNode);
-						const node = evt.pageNode;
-						setLivePageNodes((prev) => [...prev, node]);
-					}
-					setCrawlProgress({
-						scanned: evt.scanned,
-						total: evt.total,
-						currentUrl: evt.currentUrl,
-					});
-				} else if (evt.type === "linkProgress") {
-					setLinkCheckProgress({ checked: evt.checked, total: evt.total });
-				} else if (evt.type === "done") {
-					setCrawlProgress((p) => (p ? { ...p, scanned: p.total } : p));
-					setReportData(evt.data);
-					setTimeout(() => setViewState("report"), 350);
-					persistScan(evt.data, "site");
-					return;
-				} else if (evt.type === "aborted") {
-					// Only a plain Cancel should redirect home from here — pause
-					// and create-report-now already set the UI they want before
-					// triggering this same abort.
-					if (stopIntentRef.current !== "pause" && stopIntentRef.current !== "report") {
-						setStoppedNote(
-							evt.pagesScanned ?
-								`Scan stopped — ${evt.pagesScanned} page${evt.pagesScanned === 1 ? "" : "s"} were analyzed before you stopped it.`
-							:	"Scan stopped.",
-						);
-						setViewState("hero");
-					}
-					return;
-				} else if (evt.type === "error") {
-					throw new Error(
-						evt.message || "Something went wrong running that scan.",
-					);
+					setViewState("hero");
 				}
+				return;
+			} else if (evt.type === "error") {
+				throw new Error(
+					evt.message || "Something went wrong running that scan.",
+				);
 			}
 		}
 	};

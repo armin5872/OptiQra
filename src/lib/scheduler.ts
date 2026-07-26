@@ -29,6 +29,7 @@ import { compareScans, summarizeComparison } from "@/lib/scanCompare";
 import { showScanNotification } from "@/lib/notifications";
 import type { Category } from "@/lib/reportAggregate";
 import { getErrorMessage } from "@/lib/errorUtils";
+import { readNDJSONStream } from "@/lib/ndjsonStream";
 
 export const FREQUENCY_OPTIONS: { id: ScanFrequency; label: string }[] = [
 	{ id: "hourly", label: "Every hour" },
@@ -120,32 +121,10 @@ async function performScan(
 		throw new Error(message);
 	}
 
-	const reader = res.body.getReader();
-	const decoder = new TextDecoder();
-	let buffer = "";
-
-	while (true) {
-		const { value, done } = await reader.read();
-		if (done) break;
-		buffer += decoder.decode(value, { stream: true });
-
-		let newlineIdx;
-		while ((newlineIdx = buffer.indexOf("\n")) >= 0) {
-			const line = buffer.slice(0, newlineIdx).trim();
-			buffer = buffer.slice(newlineIdx + 1);
-			if (!line) continue;
-
-			let evt: ScanStreamEvent;
-			try {
-				evt = JSON.parse(line) as ScanStreamEvent;
-			} catch {
-				continue;
-			}
-
-			if (evt.type === "done") return evt.data;
-			if (evt.type === "aborted") throw new Error("Scan was interrupted.");
-			if (evt.type === "error") throw new Error(evt.message || "Scheduled scan failed.");
-		}
+	for await (const evt of readNDJSONStream<ScanStreamEvent>(res.body)) {
+		if (evt.type === "done") return evt.data;
+		if (evt.type === "aborted") throw new Error("Scan was interrupted.");
+		if (evt.type === "error") throw new Error(evt.message || "Scheduled scan failed.");
 	}
 
 	throw new Error("Scan stream ended without a result.");
