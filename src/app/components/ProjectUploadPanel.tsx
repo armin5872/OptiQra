@@ -24,6 +24,7 @@ interface ProjectResponseData {
 		fixed: number;
 		duplicated: number;
 		aiNeeded: number;
+		needsReview: number;
 		skipped: number;
 	};
 	perFileResults: PerFileSummary[];
@@ -114,6 +115,7 @@ const STATUS_LABEL: Record<AutoFixResult["status"], string> = {
 	fixed: "Auto-fixable",
 	duplicated: "Auto-fixable",
 	"ai-needed": "Needs AI / manual",
+	"needs-review": "AI applied — review",
 	skipped: "Left as-is",
 };
 
@@ -356,6 +358,11 @@ export default function ProjectUploadPanel() {
 								{result.summary.duplicated > 0 && (
 									<span className="autofix-chip autofix-chip-duplicated">
 										{result.summary.duplicated} reused from elsewhere in your project
+									</span>
+								)}
+								{result.summary.needsReview > 0 && (
+									<span className="autofix-chip autofix-chip-needs-review">
+										{result.summary.needsReview} applied by AI — worth a review
 									</span>
 								)}
 								{result.summary.skipped > 0 && (

@@ -37,7 +37,7 @@ interface AutoFixResponse {
 	url: string;
 	html: string;
 	results: AutoFixIssueResult[];
-	summary: { fixed: number; duplicated: number; skipped: number };
+	summary: { fixed: number; duplicated: number; needsReview: number; skipped: number };
 	stack: { primary: string; summary: string; guidance: string };
 	duplicateBankUpdates: Record<string, string>;
 }
@@ -413,6 +413,11 @@ export default function SiteCloneViewer({
 											{autoFixResult.summary.duplicated > 0 && (
 												<span className="autofix-chip autofix-chip-duplicated">
 													{autoFixResult.summary.duplicated} reused from another page
+												</span>
+											)}
+											{autoFixResult.summary.needsReview > 0 && (
+												<span className="autofix-chip autofix-chip-needs-review">
+													{autoFixResult.summary.needsReview} applied by AI — worth a review
 												</span>
 											)}
 											{autoFixResult.summary.skipped > 0 && (

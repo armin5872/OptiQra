@@ -85,13 +85,13 @@ export async function POST(req: NextRequest) {
 				const { system, user } = buildAutoFixBatchPrompt(aiTargets, targetUrl, stackContext);
 				try {
 					const raw = await completeFix(provider!, { apiKey, model: resolvedModel, system, user });
-					const { values } = parseAutoFixResponse(raw);
+					const { values, confidence } = parseAutoFixResponse(raw);
 
 					// Anything the model returned goes toward the applied fixes;
 					// anything it silently dropped falls back to the duplicate
 					// bank, then to "skipped" — never left half-applied.
 					const missing = aiTargets.filter((t) => !values[t.id]);
-					aiResults = applyAITargetValues($, aiTargets, values, "ai");
+					aiResults = applyAITargetValues($, aiTargets, values, "ai", confidence);
 
 					if (missing.length > 0) {
 						const fallbackValues: Record<string, string> = {};
@@ -134,6 +134,7 @@ export async function POST(req: NextRequest) {
 		const summary = {
 			fixed: allResults.filter((r) => r.status === "fixed").length,
 			duplicated: allResults.filter((r) => r.status === "duplicated").length,
+			needsReview: allResults.filter((r) => r.status === "needs-review").length,
 			skipped: allResults.filter((r) => r.status === "skipped").length,
 		};
 

@@ -8,6 +8,7 @@ import { buildAutoFixBatchPrompt, parseAutoFixResponse } from "@/lib/autoFixProm
 import { AI_PROVIDERS, type AIProviderId } from "@/lib/aiFix";
 import { completeFix } from "@/lib/aiProviders";
 import { getErrorMessage } from "@/lib/errorUtils";
+import { checkTextIntegrity } from "@/lib/fixIntegrityGuard";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -58,8 +59,9 @@ async function resolveAITargetValues(
 	apiKey: string,
 	model: string,
 	duplicateBank: Record<string, string>,
-): Promise<{ values: Record<string, string>; usedAI: boolean; aiError?: string }> {
-	if (targets.length === 0) return { values: {}, usedAI: false };
+	stackGuidance?: string,
+): Promise<{ values: Record<string, string>; confidence: Record<string, "low">; usedAI: boolean; aiError?: string }> {
+	if (targets.length === 0) return { values: {}, confidence: {}, usedAI: false };
 
 	if (!hasAI) {
 		const values: Record<string, string> = {};
@@ -67,21 +69,23 @@ async function resolveAITargetValues(
 			const bankValue = duplicateBank[duplicateBankKey(t.kind, t.category)];
 			if (bankValue) values[t.id] = bankValue;
 		}
-		return { values, usedAI: false };
+		return { values, confidence: {}, usedAI: false };
 	}
 
 	const resolvedModel = model || AI_PROVIDERS[provider as AIProviderId].defaultModel;
 	const { system, user } = buildAutoFixBatchPrompt(targets, pageUrl, {
 		primary: stackSummary,
 		summary: stackSummary,
-		guidance: "This is a static project file, not a live crawl — keep suggested content generic to the page's own markup.",
+		guidance:
+			stackGuidance ||
+			"This is a static project file, not a live crawl — keep suggested content generic to the page's own markup.",
 	});
 	try {
 		const raw = await completeFix(provider as AIProviderId, { apiKey, model: resolvedModel, system, user });
-		const { values } = parseAutoFixResponse(raw);
-		return { values, usedAI: true };
+		const { values, confidence } = parseAutoFixResponse(raw);
+		return { values, confidence, usedAI: true };
 	} catch (err) {
-		return { values: {}, usedAI: false, aiError: getErrorMessage(err, "unknown error") };
+		return { values: {}, confidence: {}, usedAI: false, aiError: getErrorMessage(err, "unknown error") };
 	}
 }
 
@@ -344,7 +348,7 @@ export async function POST(req: NextRequest) {
 						if (mode === "audit") {
 							aiResults = aiTargetsToAuditResults(aiTargets);
 						} else {
-							const { values, usedAI, aiError } = await resolveAITargetValues(
+							const { values, confidence, usedAI, aiError } = await resolveAITargetValues(
 								aiTargets,
 								pageUrl,
 								stack.summary,
@@ -353,8 +357,9 @@ export async function POST(req: NextRequest) {
 								apiKey,
 								model,
 								duplicateBank,
+								stack.guidance,
 							);
-							aiResults = applyAITargetValues($, aiTargets, values, usedAI ? "ai" : "duplicate");
+							aiResults = applyAITargetValues($, aiTargets, values, usedAI ? "ai" : "duplicate", confidence);
 							if (usedAI) {
 								aiResults = fillFromDuplicateBank(aiResults, aiTargets, values, duplicateBank, (missing, fallbackValues) =>
 									applyAITargetValues($, missing, fallbackValues, "duplicate"),
@@ -391,7 +396,7 @@ export async function POST(req: NextRequest) {
 						if (mode === "audit") {
 							aiResults = aiTargetsToAuditResults(aiTargets);
 						} else {
-							const { values, usedAI, aiError } = await resolveAITargetValues(
+							const { values, confidence, usedAI, aiError } = await resolveAITargetValues(
 								aiTargets,
 								pageUrl,
 								stack.summary,
@@ -400,8 +405,9 @@ export async function POST(req: NextRequest) {
 								apiKey,
 								model,
 								duplicateBank,
+								stack.guidance,
 							);
-							const applied = applyJsxAITargetValues(updatedContent, aiTargets, values, usedAI ? "ai" : "duplicate");
+							const applied = applyJsxAITargetValues(updatedContent, aiTargets, values, usedAI ? "ai" : "duplicate", confidence);
 							updatedContent = applied.content;
 							aiResults = applied.results;
 							if (usedAI) {
@@ -422,8 +428,28 @@ export async function POST(req: NextRequest) {
 						}
 					}
 
+					let results2 = results;
+					if (mode === "fix" && updatedContent !== content) {
+						const integrity = checkTextIntegrity(content, updatedContent, file.path);
+						if (!integrity.ok) {
+							// Something about the combined set of text edits on this
+							// file doesn't check out structurally — throw away every
+							// edit for this file rather than ship a maybe-broken one.
+							// Individual "ai-needed"/"skipped" results (nothing was
+							// written for those) are kept as-is; only results that
+							// actually correspond to a written change get downgraded.
+							updatedContent = content;
+							const revert = (r: AutoFixResult): AutoFixResult =>
+								r.status === "fixed" || r.status === "duplicated" || r.status === "needs-review"
+									? { ...r, status: "skipped", note: integrity.reason || "Reverted after a failed integrity check." }
+									: r;
+							results2 = results.map(revert);
+							aiResults = aiResults.map(revert);
+						}
+					}
+
 					if (mode === "fix") file.content = updatedContent;
-					perFileSummaries.push({ path: file.path, results: [...results, ...aiResults] });
+					perFileSummaries.push({ path: file.path, results: [...results2, ...aiResults] });
 					step += 1;
 					enqueue({ type: "progress", processed: step, total: totalSteps, currentFile: file.path });
 				}
@@ -448,6 +474,7 @@ export async function POST(req: NextRequest) {
 						projectResults.filter((r) => r.status === "fixed").length,
 					duplicated: perFileSummaries.reduce((n, f) => n + f.results.filter((r) => r.status === "duplicated").length, 0),
 					aiNeeded: perFileSummaries.reduce((n, f) => n + f.results.filter((r) => r.status === "ai-needed").length, 0),
+					needsReview: perFileSummaries.reduce((n, f) => n + f.results.filter((r) => r.status === "needs-review").length, 0),
 					skipped:
 						perFileSummaries.reduce((n, f) => n + f.results.filter((r) => r.status === "skipped").length, 0) +
 						projectResults.filter((r) => r.status === "skipped").length,

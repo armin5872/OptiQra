@@ -56,6 +56,29 @@ export function slugToWords(slug: string): string {
 		.trim();
 }
 
+/** Grabs a small window of text immediately around a match and collapses it
+ *  to one line, for folding into an AI target's `context` string. The model
+ *  only ever sees the isolated tag + a couple of attributes today, which is
+ *  often not enough to ground a good guess (a bare `<img src="/a1b2.jpg">`
+ *  tells you nothing; the sentence right before it in the markup often
+ *  does). This doesn't change what gets matched or edited — purely additive
+ *  grounding for the AI prompt, so a low-signal tag gets a real shot at a
+ *  correct answer instead of the model inventing something plausible-but-
+ *  wrong from the filename alone. */
+function surroundingSnippet(source: string, matchIndex: number, matchLength: number, radius = 100): string {
+	const before = source.slice(Math.max(0, matchIndex - radius), matchIndex);
+	const after = source.slice(matchIndex + matchLength, matchIndex + matchLength + radius);
+	const collapse = (s: string) =>
+		s
+			.replace(/\s+/g, " ")
+			.replace(/<[^>]*>/g, " ")
+			.trim();
+	const beforeText = collapse(before);
+	const afterText = collapse(after);
+	if (!beforeText && !afterText) return "";
+	return ` Nearby text: "...${beforeText}" / "${afterText}..."`;
+}
+
 /** A tag-matching regex like `<img\b[^>]*>` stops at the FIRST literal `>` it
  *  sees — which, if the tag has an arrow-function attribute/binding
  *  (`onLoad={() => ...}`, `onClick={() => ...}`), is the `>` inside `=>`, not
@@ -154,7 +177,7 @@ export function fixNoopener(source: string, ctx: MarkupFixContext): string {
 export function fixMissingAlt(source: string, ctx: MarkupFixContext): string {
 	let deterministic = 0;
 	const tagRe = new RegExp(`<(?:${IMAGE_TAGS})\\b[^>]*\\/?>`, "g");
-	const next = source.replace(tagRe, (tag) => {
+	const next = source.replace(tagRe, (tag, offset: number) => {
 		if (looksTruncatedByArrow(tag)) return tag;
 		if (hasAttr(tag, "alt")) return tag;
 		const srcMatch = tag.match(/\bsrc\s*=\s*(["'])([^"']*)\1/);
@@ -172,7 +195,7 @@ export function fixMissingAlt(source: string, ctx: MarkupFixContext): string {
 			"Image missing alt text",
 			"Accessibility",
 			"high",
-			`Tag in ${ctx.filePath}. src="${staticSrc || "(dynamic)"}"`,
+			`Tag in ${ctx.filePath}. src="${staticSrc || "(dynamic)"}".${surroundingSnippet(source, offset, tag.length)}`,
 			(s) => s.replace(tag, insertAttrBeforeClose(tag, `alt="__ATTR_PLACEHOLDER__"`)),
 		);
 		return tag;
@@ -193,7 +216,7 @@ export function fixMissingAlt(source: string, ctx: MarkupFixContext): string {
 export function fixGenericCtaText(source: string, ctx: MarkupFixContext): string {
 	let deterministic = 0;
 	const tagRe = new RegExp(`<(${CTA_TAGS})\\b([^>]*)>\\s*([A-Za-z][A-Za-z ]{1,20})\\s*<\\/\\1>`, "g");
-	const next = source.replace(tagRe, (whole, el, attrs, text) => {
+	const next = source.replace(tagRe, (whole, el, attrs, text, offset: number) => {
 		const norm = text.trim().toLowerCase();
 		if (!GENERIC_CTA_WORDS.has(norm)) return whole;
 		const hrefMatch = attrs.match(/\b(?:href|to)\s*=\s*(["'])([^"']*)\1/);
@@ -209,7 +232,7 @@ export function fixGenericCtaText(source: string, ctx: MarkupFixContext): string
 			"Generic call-to-action text",
 			"Conversions",
 			"low",
-			`Current text: "${text.trim()}". Href/to (if any): "${href}". File: ${ctx.filePath}`,
+			`Current text: "${text.trim()}". Href/to (if any): "${href}". File: ${ctx.filePath}.${surroundingSnippet(source, offset, whole.length)}`,
 			(s) => s.replace(whole, `<${el}${attrs}>__TEXT_PLACEHOLDER__</${el}>`),
 		);
 		return whole;
@@ -281,7 +304,7 @@ export function fixMissingFieldLabel(source: string, ctx: MarkupFixContext): str
 			"Form field has no accessible label",
 			"Accessibility",
 			"high",
-			`Field in ${ctx.filePath}: name="${name}", placeholder="${placeholder}", type="${type || m[1]}"`,
+			`Field in ${ctx.filePath}: name="${name}", placeholder="${placeholder}", type="${type || m[1]}".${surroundingSnippet(source, m.index!, tag.length)}`,
 			(s) => s.replace(tag, insertAttrBeforeClose(tag, `aria-label="__ATTR_PLACEHOLDER__"`)),
 		);
 	}

@@ -17,10 +17,12 @@ export function buildAutoFixBatchPrompt(
 
 Rules:
 - Respond with ONLY a single JSON object, no prose, no markdown fences, no explanation.
-- The JSON shape is exactly: {"fixes": [{"id": "<id>", "value": "<the fix content>"}, ...]} — one entry per target below.
+- The JSON shape is exactly: {"fixes": [{"id": "<id>", "value": "<the fix content>", "confidence": "high"|"low"}, ...]} — one entry per target below.
 - "value" is the raw content to insert (e.g. the title text itself, the alt text itself, the label text itself) — never HTML tags, never a code block, never a description of the fix.
+- "confidence": say "low" whenever the context given doesn't clearly point to one specific answer — a dynamic/hashed image src with no filename clue, an icon button with no distinguishing class or nearby text, generic boilerplate you're inventing from scratch rather than grounding in something in the context. Say "high" when the context (filename, href, surrounding copy, page topic) clearly supports the value you produced. Still give your best real guess either way — never leave "value" empty or refuse — "low" just tells the caller to have a human double-check that one value rather than skipping it.
 - Titles: 50-60 characters, specific to the page. Meta descriptions: 140-160 characters, written as compelling ad copy, not a restatement of the title. Alt text: describe what's actually likely in the image based on the context given, concise (under 125 characters). Labels/aria-labels: short (2-6 words) and describe the control's purpose. CTA text: 2-4 words describing the action/outcome, not generic ("Submit", "Click here").
 - Every value must be plain text only — no quotation marks wrapping it, no trailing punctuation unless natural.
+- Ground every value in the specific context given for that id — the filename, href, surrounding markup, or page topic. Don't invent unrelated content, and don't let one target's context bleed into another's answer.
 ${stack ? `- Detected stack: ${stack.summary}. ${stack.guidance} (This only affects tone/terminology if relevant — the output is still plain content, not code.)` : ""}`;
 
 	const lines = [`Page URL: ${pageUrl}`, "", "Targets:"];
@@ -34,6 +36,11 @@ ${stack ? `- Detected stack: ${stack.summary}. ${stack.guidance} (This only affe
 
 export interface ParsedAutoFixResponse {
 	values: Record<string, string>;
+	/** The model's own per-value confidence self-assessment — see the system
+	 *  prompt above. Only ever contains "low" entries the caller needs to act
+	 *  on; "high" and anything the model omitted are treated identically
+	 *  (normal "fixed" status), so there's no need to carry "high" through. */
+	confidence: Record<string, "low">;
 }
 
 /** Parses the model's JSON response, tolerating stray markdown fences some
@@ -46,17 +53,21 @@ export function parseAutoFixResponse(raw: string): ParsedAutoFixResponse {
 		.trim();
 
 	const values: Record<string, string> = {};
+	const confidence: Record<string, "low"> = {};
 	try {
 		const parsed = JSON.parse(cleaned);
 		const fixes = Array.isArray(parsed?.fixes) ? parsed.fixes : [];
 		for (const f of fixes) {
 			if (f && typeof f.id === "string" && typeof f.value === "string" && f.value.trim()) {
 				values[f.id] = f.value.trim();
+				if (typeof f.confidence === "string" && f.confidence.toLowerCase() === "low") {
+					confidence[f.id] = "low";
+				}
 			}
 		}
 	} catch {
 		// Malformed JSON from the model — caller treats missing ids as
 		// "couldn't fix", falling back to the duplicate bank or skipping.
 	}
-	return { values };
+	return { values, confidence };
 }

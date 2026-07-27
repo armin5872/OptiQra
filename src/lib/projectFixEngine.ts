@@ -28,10 +28,34 @@ export type ProjectStackKind =
 	| "svelte"
 	| "remix"
 	| "astro"
+	| "solid"
+	| "preact"
 	| "vite-react"
 	| "cra"
 	| "static"
 	| "unknown";
+
+/** Short, stack-specific instructions folded into the AI batch-fix prompt
+ *  (see autoFixPrompt.ts) so authored content (titles, alt text, aria-labels…)
+ *  comes back in terminology/tone that actually fits the framework, instead
+ *  of one generic instruction for every stack. Kept deliberately short —
+ *  this rides alongside the per-target context, not instead of it. */
+const STACK_GUIDANCE: Record<ProjectStackKind, string> = {
+	next: "This is Next.js source (App or Pages Router) — content should read naturally whether it lands in JSX markup or a metadata object.",
+	nuxt: "This is Nuxt/Vue source — content should read naturally as plain text inside a Vue template or useHead()/definePageMeta() call.",
+	vue: "This is a Vue single-file component — content lands as plain text inside a <template> block.",
+	angular: "This is an Angular component/template — content lands as plain text inside an inline or external template, so keep it free of Angular binding syntax.",
+	sveltekit: "This is SvelteKit source — content lands as plain text inside a Svelte component or a <svelte:head> block.",
+	svelte: "This is a Svelte component — content lands as plain text inside its markup.",
+	remix: "This is Remix (React Router) source — content lands as plain text inside JSX markup or a meta() export.",
+	astro: "This is Astro source — content lands as plain text inside the HTML-like template section of a .astro file (below its --- frontmatter fence), so keep it free of JSX/Vue-style binding syntax.",
+	solid: "This is Solid.js source — content lands as plain text inside JSX markup; remember Solid's reactive values are read as function calls (signal()), not props, so don't reference that syntax in the content itself.",
+	preact: "This is Preact source — content lands as plain text inside JSX markup, same conventions as React.",
+	"vite-react": "This is a Vite/CRA React project — content lands as plain text inside JSX markup.",
+	cra: "This is a Create React App project — content lands as plain text inside JSX markup.",
+	static: "This is a static HTML project — content lands as plain text directly in the markup.",
+	unknown: "The project's framework couldn't be identified with confidence — keep content plain and framework-agnostic.",
+};
 
 /**
  * Detects the project's framework so the AI prompt can carry the right
@@ -44,7 +68,7 @@ export type ProjectStackKind =
  * package.json (partial export, monorepo root left out, etc.) while its file
  * layout still unambiguously identifies the stack.
  */
-export function detectProjectStack(files: ProjectFile[]): { kind: ProjectStackKind; summary: string } {
+export function detectProjectStack(files: ProjectFile[]): { kind: ProjectStackKind; summary: string; guidance: string } {
 	const pkgFile = files.find((f) => /(^|\/)package\.json$/.test(f.path));
 	const hasFile = (re: RegExp) => files.some((f) => re.test(f.path));
 	let deps: Record<string, string> = {};
@@ -57,29 +81,41 @@ export function detectProjectStack(files: ProjectFile[]): { kind: ProjectStackKi
 		}
 	}
 
-	if (deps.next) return { kind: "next", summary: `Next.js ${deps.next}` };
+	const result = (kind: ProjectStackKind, summary: string) => ({ kind, summary, guidance: STACK_GUIDANCE[kind] });
+
+	if (deps.next) return result("next", `Next.js ${deps.next}`);
 	if (deps.nuxt || deps.nuxt3 || hasFile(/(^|\/)nuxt\.config\.(js|ts|mjs)$/)) {
-		return { kind: "nuxt", summary: `Nuxt${deps.nuxt ? " " + deps.nuxt : ""}` };
+		return result("nuxt", `Nuxt${deps.nuxt ? " " + deps.nuxt : ""}`);
 	}
 	if (deps["@angular/core"] || hasFile(/(^|\/)angular\.json$/)) {
-		return { kind: "angular", summary: `Angular${deps["@angular/core"] ? " " + deps["@angular/core"] : ""}` };
+		return result("angular", `Angular${deps["@angular/core"] ? " " + deps["@angular/core"] : ""}`);
 	}
 	if (deps["@sveltejs/kit"] || hasFile(/(^|\/)svelte\.config\.(js|ts|mjs)$/)) {
-		return { kind: "sveltekit", summary: "SvelteKit" };
+		return result("sveltekit", "SvelteKit");
 	}
 	if (deps.svelte || hasFile(/\.svelte$/)) {
-		return { kind: "svelte", summary: `Svelte${deps.svelte ? " " + deps.svelte : ""}` };
+		return result("svelte", `Svelte${deps.svelte ? " " + deps.svelte : ""}`);
 	}
-	if (deps["@remix-run/react"]) return { kind: "remix", summary: "Remix" };
-	if (deps.astro || hasFile(/(^|\/)astro\.config\.(js|ts|mjs)$/)) return { kind: "astro", summary: "Astro" };
+	if (deps["@remix-run/react"]) return result("remix", "Remix");
+	if (deps.astro || hasFile(/(^|\/)astro\.config\.(js|ts|mjs)$/)) return result("astro", "Astro");
+	// Solid and Preact both ship JSX-shaped source that would otherwise fall
+	// into the generic "React" bucket below — checked ahead of it so the AI
+	// prompt and any framework-specific guidance actually reflects which one
+	// it is, rather than mislabeling Solid/Preact content as "React".
+	if (deps["solid-js"] || deps["vite-plugin-solid"] || hasFile(/(^|\/)solid\.config\.(js|ts|mjs)$/)) {
+		return result("solid", `Solid.js${deps["solid-js"] ? " " + deps["solid-js"] : ""}`);
+	}
+	if (deps.preact || deps["preact-render-to-string"]) {
+		return result("preact", `Preact${deps.preact ? " " + deps.preact : ""}`);
+	}
 	if (deps.vue || hasFile(/\.vue$/)) {
-		return { kind: "vue", summary: `Vue${deps.vue ? " " + deps.vue : ""}${deps.vite ? " + Vite" : ""}` };
+		return result("vue", `Vue${deps.vue ? " " + deps.vue : ""}${deps.vite ? " + Vite" : ""}`);
 	}
-	if (deps["react-scripts"]) return { kind: "cra", summary: "Create React App" };
-	if (deps.vite && deps.react) return { kind: "vite-react", summary: "Vite + React" };
-	if (deps.react) return { kind: "vite-react", summary: "React" };
-	if (files.some((f) => /\.html?$/i.test(f.path))) return { kind: "static", summary: "Static HTML" };
-	return { kind: "unknown", summary: "Unrecognized project layout" };
+	if (deps["react-scripts"]) return result("cra", "Create React App");
+	if (deps.vite && deps.react) return result("vite-react", "Vite + React");
+	if (deps.react) return result("vite-react", "React");
+	if (files.some((f) => /\.html?$/i.test(f.path))) return result("static", "Static HTML");
+	return result("unknown", "Unrecognized project layout");
 }
 
 /**

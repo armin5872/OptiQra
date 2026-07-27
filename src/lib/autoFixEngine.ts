@@ -34,7 +34,7 @@ import type { CheerioAPI } from "cheerio";
 import type { Element } from "domhandler";
 import type { Severity } from "@/lib/auditUtils";
 
-export type AutoFixStatus = "fixed" | "ai-needed" | "duplicated" | "skipped";
+export type AutoFixStatus = "fixed" | "ai-needed" | "duplicated" | "skipped" | "needs-review";
 
 export interface AutoFixResult {
 	id: string;
@@ -473,12 +473,26 @@ export function runAutoFix($: CheerioAPI, pageUrl: string): { results: AutoFixRe
 		const src = $(el).attr("src") || "";
 		const filename = src.split("/").pop() || "";
 		const guess = slugToWords(filename);
+		// A caption, figure, or nearby heading is often the single best clue
+		// to what an image actually shows — much stronger grounding than a
+		// hashed/dynamic filename alone, and cheap to reach for since we
+		// already have the real DOM element here (unlike the text-only JSX
+		// engine, which has to approximate this with a text-window instead).
+		const nearbyText = $(el)
+			.closest("figure")
+			.find("figcaption")
+			.text()
+			.trim()
+			.slice(0, 150);
+		const parentText = !nearbyText ? $(el).parent().text().trim().replace(/\s+/g, " ").slice(0, 150) : "";
 		needsAI(el, {
 			kind: "alt-text",
 			title: "Missing alt text",
 			category: "Accessibility",
 			severity: "high",
-			context: guess && guess.length > 2 ? `Image filename suggests: "${guess}". Src: ${src}` : `Image src: ${src || "(no src)"}`,
+			context: `${guess && guess.length > 2 ? `Image filename suggests: "${guess}". ` : ""}Src: ${src || "(no src)"}.${
+				nearbyText ? ` Figure caption: "${nearbyText}".` : parentText ? ` Nearby text: "${parentText}".` : ""
+			}`,
 		});
 	});
 
@@ -663,12 +677,23 @@ export function runAutoFix($: CheerioAPI, pageUrl: string): { results: AutoFixRe
 				`Renamed "${text}" to "${capitalized}" based on its link target.`,
 			);
 		} else {
+			// The nearest preceding heading in the same section is usually the
+			// best signal for what a bare "Learn more"/"Read more" actually
+			// leads to — cheap to grab via Cheerio, and far more grounded than
+			// the href alone when the href is a short/opaque slug.
+			const nearestHeading = $(el)
+				.closest("section, article, div")
+				.find("h1, h2, h3")
+				.first()
+				.text()
+				.trim()
+				.slice(0, 100);
 			needsAI(el, {
 				kind: "cta-text",
 				title: "Generic call-to-action text",
 				category: "Conversions",
 				severity: "low",
-				context: `Current text: "${text}". Href: "${href}".`,
+				context: `Current text: "${text}". Href: "${href}".${nearestHeading ? ` Section heading: "${nearestHeading}".` : ""}`,
 			});
 		}
 	});
@@ -730,12 +755,25 @@ export function runAutoFix($: CheerioAPI, pageUrl: string): { results: AutoFixRe
 
 /** Applies AI (or duplicate-bank) generated values back into `$` using the
  *  temporary `data-optiqra-fix-target` ids `runAutoFix` left behind, then
- *  strips those temp attributes so they don't leak into the output HTML. */
+ *  strips those temp attributes so they don't leak into the output HTML.
+ *
+ *  `confidence` carries the AI's own self-assessment of each value it
+ *  returned (see autoFixPrompt.ts) — the model is asked to flag "low" rather
+ *  than silently guessing when the context it was given doesn't clearly
+ *  support one specific answer (a dynamic image src, an ambiguous icon
+ *  button, etc). A "low" flag doesn't block the fix — leaving the page
+ *  entirely unfixed isn't obviously safer than a labeled best guess — but it
+ *  downgrades the result to "needs-review" instead of "fixed" so a human
+ *  knows to sanity-check that specific value before trusting it, rather than
+ *  it blending in with every other silently-applied change. Duplicate-bank
+ *  reuse never carries a confidence score (the bank only stores raw
+ *  strings), so it keeps its own "duplicated" status untouched. */
 export function applyAITargetValues(
 	$: CheerioAPI,
 	targets: AITarget[],
 	values: Record<string, string>,
 	source: "ai" | "duplicate",
+	confidence: Record<string, "high" | "low"> = {},
 ): AutoFixResult[] {
 	const results: AutoFixResult[] = [];
 
@@ -787,15 +825,18 @@ export function applyAITargetValues(
 		}
 
 		el.removeAttr(FIX_TARGET_ATTR);
+		const lowConfidence = source === "ai" && confidence[target.id] === "low";
 		results.push({
 			id: target.id,
 			title: target.title,
 			category: target.category,
 			severity: target.severity,
-			status: source === "ai" ? "fixed" : "duplicated",
+			status: source === "ai" ? (lowConfidence ? "needs-review" : "fixed") : "duplicated",
 			note:
 				source === "ai"
-					? `AI-generated: "${truncate(value, 80)}"`
+					? lowConfidence
+						? `AI flagged this as a low-confidence guess: "${truncate(value, 80)}" — the context wasn't specific enough to be sure; double-check before trusting it.`
+						: `AI-generated: "${truncate(value, 80)}"`
 					: `Reused a similar fix generated earlier this session: "${truncate(value, 80)}"`,
 		});
 	}

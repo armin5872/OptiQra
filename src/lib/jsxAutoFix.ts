@@ -70,7 +70,7 @@ export function isFixableSourceFile(path: string, content = ""): boolean {
 	if (/\.d\.ts$/.test(path)) return false;
 	if (TEST_FILE_RE.test(path)) return false;
 	if (/\.(tsx|jsx)$/.test(path)) return true;
-	if (/\.(vue|svelte)$/.test(path)) return true;
+	if (/\.(vue|svelte|astro)$/.test(path)) return true;
 	if (/\.(js|mjs|cjs)$/.test(path)) {
 		return /<[A-Za-z][\w.-]*[\s/>]/.test(content) || /target\s*=\s*["']_blank["']/.test(content);
 	}
@@ -80,6 +80,27 @@ export function isFixableSourceFile(path: string, content = ""): boolean {
 		return /@Component\s*\(/.test(content) && /template\s*:\s*`/.test(content);
 	}
 	return false;
+}
+
+/** Astro files fence optional frontmatter (component script) at the very top
+ *  between a pair of `---` lines. Everything from the second fence onward is
+ *  the actual HTML-like template — the only region safe to run tag-level
+ *  fixes and head-tag insertions against. Returns the template's start
+ *  offset (0 if there's no frontmatter at all, which is valid Astro). */
+function astroTemplateStart(source: string): number {
+	const m = source.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
+	return m ? m[0].length : 0;
+}
+
+/** Whether this .astro file renders a full document shell (has its own
+ *  <html>/<head>) — Astro layout components typically do; leaf/island
+ *  components that get slotted into a layout typically don't. Only document
+ *  shells are safe targets for the head-tag fixes below (lang/meta/title/
+ *  canonical/OG); the shared tag-level fixes (alt/noopener/CTA/labels) still
+ *  run on every .astro file via the common markupFixes pass regardless. */
+function isAstroDocumentFile(path: string, source: string): boolean {
+	if (!/\.astro$/.test(path)) return false;
+	return /<html\b[^>]*>/i.test(source.slice(astroTemplateStart(source)));
 }
 
 function isPageOrLayoutFile(path: string): boolean {
@@ -181,6 +202,155 @@ export function runJsxAutoFix(file: ProjectFile, allFiles: ProjectFile[], pageUr
 	source = fixClickableDivRole(source, ctx);
 	source = fixMissingFieldLabel(source, ctx);
 	checkHashOnlyLinks(source, ctx);
+
+	// ======================= Astro document shell (<html>/<head> in a .astro layout) =======================
+	// Astro files fence an optional JS "frontmatter" component script at the
+	// top with a pair of `---` lines; only the part after that fence is the
+	// actual template. Cheerio isn't used here at all — parsing an .astro
+	// file as HTML would treat the frontmatter as stray text and could
+	// relocate or mangle it, since it isn't valid HTML. Every fix below is a
+	// narrow, anchored text edit confined to the substring after the fence
+	// (and, for anything landing in <head>, further confined to the first
+	// <head>...</head> span — head never nests another head, so the first
+	// closing tag found is always the right one).
+	if (isAstroDocumentFile(file.path, source)) {
+		const templateStart = astroTemplateStart(source);
+
+		const htmlTagMatch = source.slice(templateStart).match(/<html\b[^>]*>/i);
+		if (htmlTagMatch && !/\blang\s*=/i.test(htmlTagMatch[0])) {
+			const newTag = insertAttrBeforeClose(htmlTagMatch[0], 'lang="en"');
+			source = source.slice(0, templateStart) + source.slice(templateStart).replace(htmlTagMatch[0], newTag);
+			fixed("Missing lang attribute", "Accessibility", "high", 'Set lang="en" on the root <html> tag — change this if the site isn\'t in English.');
+		}
+
+		// Every helper below re-derives <head>'s open/close position from the
+		// CURRENT `source` on every call, rather than caching an offset —
+		// caching would go stale the moment any earlier insertion shifts the
+		// text, and a stale offset here means splicing into the wrong spot
+		// (mid-tag, or past </head> into <body>). Recomputing is cheap at
+		// this file count and is the only way to keep every insertion
+		// anchored correctly regardless of how many fixes already landed.
+		const headBounds = (): { openEnd: number; closeStart: number } | null => {
+			const afterTemplate = source.slice(templateStart);
+			const openMatch = afterTemplate.match(/<head\b[^>]*>/i);
+			if (!openMatch) return null;
+			const openEnd = templateStart + afterTemplate.indexOf(openMatch[0]) + openMatch[0].length;
+			const closeStart = source.indexOf("</head>", openEnd);
+			if (closeStart < 0) return null;
+			return { openEnd, closeStart };
+		};
+		const headBlock = (): string => {
+			const b = headBounds();
+			return b ? source.slice(b.openEnd, b.closeStart) : "";
+		};
+		/** Inserts immediately before </head> — the safe default spot for any
+		 *  new tag, since it never has to reason about what else is already
+		 *  in <head> or in what order. */
+		const insertBeforeHeadClose = (snippet: string) => {
+			const b = headBounds();
+			if (!b) return;
+			source = source.slice(0, b.closeStart) + snippet + source.slice(b.closeStart);
+		};
+		/** Only charset needs to land right after <head>, not just "somewhere
+		 *  in it" — the HTML spec requires it within the first 1024 bytes,
+		 *  and convention is first child of <head>. */
+		const insertAfterHeadOpen = (snippet: string) => {
+			const b = headBounds();
+			if (!b) return;
+			source = source.slice(0, b.openEnd) + snippet + source.slice(b.openEnd);
+		};
+
+		if (headBounds()) {
+			if (!/<meta\s+charset=/i.test(headBlock())) {
+				insertAfterHeadOpen(`\n\t\t<meta charset="utf-8">`);
+				fixed("Missing charset declaration", "SEO", "medium", 'Added <meta charset="utf-8"> as the first tag in <head>.');
+			}
+
+			const viewportMatch = headBlock().match(/<meta\s+name=(["'])viewport\1\s+content=(["'])([^"']*)\2\s*\/?>/i);
+			if (!viewportMatch) {
+				insertBeforeHeadClose(`\n\t\t<meta name="viewport" content="width=device-width, initial-scale=1">`);
+				fixed("No responsive viewport meta tag", "Conversions", "high", "Added a standard responsive viewport meta tag.");
+			} else if (/user-scalable=no|maximum-scale=1(\.0)?\b/i.test(viewportMatch[3])) {
+				const cleaned = viewportMatch[3]
+					.replace(/,?\s*user-scalable=no/gi, "")
+					.replace(/,?\s*maximum-scale=1(\.0)?\b/gi, "")
+					.replace(/^,\s*/, "");
+				source = source.replace(viewportMatch[0], `<meta name=${viewportMatch[1]}viewport${viewportMatch[1]} content=${viewportMatch[2]}${cleaned || "width=device-width, initial-scale=1"}${viewportMatch[2]} />`);
+				fixed("Pinch-to-zoom is disabled", "Accessibility", "medium", "Removed user-scalable=no / maximum-scale=1 from the viewport tag.");
+			}
+
+			if (!/<link\s+rel=(["'])(?:shortcut )?icon\1/i.test(headBlock())) {
+				insertBeforeHeadClose(`\n\t\t<link rel="icon" href="/favicon.ico">`);
+				fixed("Missing favicon", "SEO", "low", 'Added <link rel="icon" href="/favicon.ico"> — make sure a favicon.ico actually exists at that path.');
+			}
+
+			if (!/<link\s+rel=(["'])canonical\1\s+href=/i.test(headBlock())) {
+				insertBeforeHeadClose(`\n\t\t<link rel="canonical" href="${pageUrl}">`);
+				fixed("Missing canonical tag", "SEO", "medium", `Added a self-referencing canonical tag pointing at ${pageUrl}.`);
+			}
+
+			// Title/description: only handled when they're static text — a
+			// dynamic Astro expression (`<title>{frontmatterVar}</title>`)
+			// could be anything at runtime, and guessing past a `{…}`
+			// interpolation risks writing content that fights whatever the
+			// frontmatter script actually computes. Static-only, same
+			// conservative bar as everywhere else in this file.
+			const titleMatch = headBlock().match(/<title>([^<{}]*)<\/title>/i);
+			const hasDynamicTitle = /<title>[\s\S]*?\{[\s\S]*?<\/title>/i.test(headBlock());
+			const titleText = titleMatch?.[1]?.trim() || "";
+			if (!titleMatch && !hasDynamicTitle) {
+				needsAI(
+					"title",
+					"Title tag is missing",
+					"SEO",
+					"critical",
+					`File: ${file.path}. URL: ${pageUrl}.`,
+					(s) => {
+						const closeIdx = s.indexOf("</head>");
+						if (closeIdx < 0) return s;
+						return s.slice(0, closeIdx) + `\t\t<title>__TEXT_PLACEHOLDER__</title>\n` + s.slice(closeIdx);
+					},
+				);
+			} else if (titleMatch && (titleText.length < 10 || titleText.length > 65)) {
+				skipped(
+					"Title tag length is off",
+					"SEO",
+					"medium",
+					`Current title ("${titleText.length} chars"): "${titleText}" — rewrite to 50-60 characters by hand.`,
+				);
+			}
+
+			const descMatch = headBlock().match(/<meta\s+name=(["'])description\1\s+content=(["'])([^"']*)\2/i);
+			const hasDynamicDesc = /<meta\s+name=(["'])description\1\s+content=(["'])[^"']*\{[^"']*\2/i.test(headBlock());
+			if (!descMatch && !hasDynamicDesc) {
+				needsAI(
+					"meta-description",
+					"No meta description",
+					"SEO",
+					"high",
+					`Page title: "${titleText}". File: ${file.path}. URL: ${pageUrl}.`,
+					(s) => {
+						const closeIdx = s.indexOf("</head>");
+						if (closeIdx < 0) return s;
+						return s.slice(0, closeIdx) + `\t\t<meta name="description" content="__ATTR_PLACEHOLDER__">\n` + s.slice(closeIdx);
+					},
+				);
+			}
+
+			// og:title/og:description: only a safe deterministic mirror when
+			// this file's own title/description are static (resolved above)
+			// — never invent a value here, and never mirror a dynamic
+			// expression as if it were the literal string.
+			if (titleMatch && !/property=(["'])og:title\1/i.test(headBlock())) {
+				insertBeforeHeadClose(`\n\t\t<meta property="og:title" content="${titleText.replace(/"/g, "&quot;")}">`);
+				fixed("og:title missing", "SEO", "medium", "Mirrored the existing <title> into an og:title tag.");
+			}
+			if (descMatch && !/property=(["'])og:description\1/i.test(headBlock())) {
+				insertBeforeHeadClose(`\n\t\t<meta property="og:description" content="${descMatch[3].replace(/"/g, "&quot;")}">`);
+				fixed("og:description missing", "SEO", "medium", "Mirrored the existing meta description into og:description.");
+			}
+		}
+	}
 
 	// ======================= <html lang="..."> — App Router root layout =======================
 	if (/(^|\/)app\/layout\.(tsx|jsx)$/.test(file.path)) {
@@ -327,6 +497,7 @@ export function applyJsxAITargetValues(
 	targets: JsxAITarget[],
 	values: Record<string, string>,
 	sourceLabel: "ai" | "duplicate",
+	confidence: Record<string, "high" | "low"> = {},
 ): { content: string; results: AutoFixResult[] } {
 	const results: AutoFixResult[] = [];
 	let content = source;
@@ -366,13 +537,19 @@ export function applyJsxAITargetValues(
 			.replace("__TITLE_PLACEHOLDER__", escapeForJsStringLiteral(value))
 			.replace("__DESC_PLACEHOLDER__", escapeForJsStringLiteral(value));
 
+		const lowConfidence = sourceLabel === "ai" && confidence[target.id] === "low";
 		results.push({
 			id: target.id,
 			title: target.title,
 			category: target.category,
 			severity: target.severity,
-			status: sourceLabel === "ai" ? "fixed" : "duplicated",
-			note: sourceLabel === "ai" ? `AI-generated: "${truncate(value, 80)}"` : `Reused a similar fix generated earlier this session: "${truncate(value, 80)}"`,
+			status: sourceLabel === "ai" ? (lowConfidence ? "needs-review" : "fixed") : "duplicated",
+			note:
+				sourceLabel === "ai"
+					? lowConfidence
+						? `AI flagged this as a low-confidence guess: "${truncate(value, 80)}" — the context wasn't specific enough to be sure; double-check before trusting it.`
+						: `AI-generated: "${truncate(value, 80)}"`
+					: `Reused a similar fix generated earlier this session: "${truncate(value, 80)}"`,
 		});
 	}
 

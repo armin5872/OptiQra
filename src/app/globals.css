@@ -3472,8 +3472,16 @@ ol.md-list li::before {
 	background: var(--accent);
 }
 
+.autofix-chip-needs-review {
+	background: var(--sev-medium, #b8860b);
+}
+
 .autofix-result-ai-needed {
 	border-left-color: var(--accent);
+}
+
+.autofix-result-needs-review {
+	border-left-color: var(--sev-medium, #b8860b);
 }
 
 .autofix-result-badge {
