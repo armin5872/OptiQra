@@ -15,6 +15,7 @@ import AIProviderSetup from "./components/AIProviderSetup";
 import AIFixButton from "./components/AIFixButton";
 import AISiteInsights from "./components/AISiteInsights";
 import AIEngineTest from "./components/AIEngineTest";
+import CoreWebVitalsPanel from "./components/CoreWebVitalsPanel";
 import ReportDownload from "./components/ReportDownload";
 import SiteCloneViewer from "./components/SiteCloneViewer";
 import ProjectUploadPanel from "./components/ProjectUploadPanel";
@@ -1210,6 +1211,12 @@ export default function Home() {
 										url={reportData.url}
 										mode={key}
 										siteWide={reportData.mode === "site"}
+									/>
+								)}
+								{key === "speed" && (
+									<CoreWebVitalsPanel
+										key={`speed-${activeScanId ?? reportData.url}`}
+										url={reportData.url}
 									/>
 								)}
 								{cat.issues.map((iss, idx) => (

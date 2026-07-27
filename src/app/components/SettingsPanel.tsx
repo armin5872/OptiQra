@@ -20,6 +20,7 @@ import {
 	type NotificationPermissionState,
 } from "@/lib/notifications";
 import CustomRulesPanel from "./CustomRulesPanel";
+import PageSpeedSetup from "./PageSpeedSetup";
 import { runCustomJS } from "@/lib/customCode";
 
 // Simple debounce for slider inputs so we don't update 60x/second
@@ -807,6 +808,20 @@ export default function SettingsPanel() {
 														update("analyzer", { showPassedChecks: !settings.analyzer.showPassedChecks })
 													}
 												/>
+											</div>
+										</div>
+										<div className="settings-group" style={{ marginTop: 16 }}>
+											<div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}>
+												<div className="settings-row-label">
+													<strong>Core Web Vitals (real data)</strong>
+													<span>
+														The Performance card above uses fast heuristics (HTML size, TTFB, etc). Connect your
+														own free Google PageSpeed Insights API key to also pull real LCP, INP, and CLS &mdash;
+														from actual visitors when available, otherwise a live Lighthouse run &mdash; for the
+														page you scan.
+													</span>
+												</div>
+												<PageSpeedSetup />
 											</div>
 										</div>
 									</>
