@@ -2,19 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AI_PROVIDERS, type AIProviderId } from "@/lib/aiFix";
-
-const PROVIDER_KEY = "optiqra_ai_provider";
-const API_KEY_PREFIX = "optiqra_ai_key_"; // + providerId, kept separate per provider so switching doesn't clobber keys
-const MODEL_KEY_PREFIX = "optiqra_ai_model_"; // + providerId, so each provider remembers its own last-used model
+import { getAIProviderState, saveAIProviderState, type AIProviderStoredState } from "@/lib/aiProviderStore";
 
 // useAIProvider() is called independently by several components at once
 // (AIProviderSetup, AIFixButton, AISiteInsights, ProjectUploadPanel, ...).
-// Each keeps its own local state seeded from sessionStorage on mount, so
-// without this event, saving a key in one already-mounted component (e.g.
-// the setup panel) never reaches the others (e.g. an insights/fix button
-// that was already on screen) — they'd keep reporting isConfigured=false
-// until the whole page remounted. This custom event lets every instance
-// re-sync the moment any one of them writes to storage.
+// Each keeps its own local state loaded from IndexedDB on mount, so without
+// this event, saving a key in one already-mounted component (e.g. the setup
+// panel) never reaches the others (e.g. an insights/fix button that was
+// already on screen) — they'd keep reporting isConfigured=false until the
+// whole page remounted. This custom event lets every instance re-sync the
+// moment any one of them writes to storage.
 const AI_PROVIDER_CHANGE_EVENT = "optiqra-ai-provider-change";
 
 interface AIProviderState {
@@ -23,14 +20,10 @@ interface AIProviderState {
 	model: string;
 }
 
-function readState(): AIProviderState {
-	if (typeof window === "undefined") return { provider: null, apiKey: "", model: "" };
-
-	const provider = sessionStorage.getItem(PROVIDER_KEY) as AIProviderId | null;
-	const apiKey = provider ? (sessionStorage.getItem(API_KEY_PREFIX + provider) ?? "") : "";
-	const storedModel = provider ? sessionStorage.getItem(MODEL_KEY_PREFIX + provider) : null;
-	const model = provider ? storedModel || AI_PROVIDERS[provider].defaultModel : "";
-
+function toState(stored: AIProviderStoredState): AIProviderState {
+	const provider = stored.provider;
+	const apiKey = provider ? (stored.apiKeys[provider] ?? "") : "";
+	const model = provider ? stored.models[provider] || AI_PROVIDERS[provider].defaultModel : "";
 	return { provider, apiKey, model };
 }
 
@@ -39,49 +32,64 @@ export function useAIProvider() {
 	const [hydrated, setHydrated] = useState(false);
 
 	useEffect(() => {
-		setState(readState());
-		setHydrated(true);
+		let cancelled = false;
 
-		// Re-sync when ANY useAIProvider() instance (this tab) saves/clears,
-		// and when another tab changes sessionStorage-backed... actually storage
-		// events don't fire for sessionStorage across tabs, but we still listen
-		// for completeness / future-proofing if this ever moves to localStorage.
-		const resync = () => setState(readState());
+		const load = async () => {
+			const stored = await getAIProviderState();
+			if (cancelled) return;
+			setState(toState(stored));
+			setHydrated(true);
+		};
+		load();
+
+		// Re-sync when ANY useAIProvider() instance (this tab) saves/clears.
+		const resync = () => load();
 		window.addEventListener(AI_PROVIDER_CHANGE_EVENT, resync);
-		window.addEventListener("storage", resync);
 		return () => {
+			cancelled = true;
 			window.removeEventListener(AI_PROVIDER_CHANGE_EVENT, resync);
-			window.removeEventListener("storage", resync);
 		};
 	}, []);
 
-	const setProvider = useCallback((provider: AIProviderId, apiKey: string, model?: string) => {
-		const resolvedModel = model || sessionStorage.getItem(MODEL_KEY_PREFIX + provider) || AI_PROVIDERS[provider].defaultModel;
-		sessionStorage.setItem(PROVIDER_KEY, provider);
-		sessionStorage.setItem(API_KEY_PREFIX + provider, apiKey);
-		sessionStorage.setItem(MODEL_KEY_PREFIX + provider, resolvedModel);
+	const setProvider = useCallback(async (provider: AIProviderId, apiKey: string, model?: string) => {
+		const stored = await getAIProviderState();
+		const resolvedModel = model || stored.models[provider] || AI_PROVIDERS[provider].defaultModel;
+		const next: AIProviderStoredState = {
+			provider,
+			apiKeys: { ...stored.apiKeys, [provider]: apiKey },
+			models: { ...stored.models, [provider]: resolvedModel },
+		};
+		await saveAIProviderState(next);
 		setState({ provider, apiKey, model: resolvedModel });
 		window.dispatchEvent(new Event(AI_PROVIDER_CHANGE_EVENT));
 	}, []);
 
-	const setModel = useCallback((model: string) => {
-		setState((prev) => {
-			if (!prev.provider) return prev;
-			sessionStorage.setItem(MODEL_KEY_PREFIX + prev.provider, model);
-			return { ...prev, model };
-		});
+	const setModel = useCallback(async (model: string) => {
+		const stored = await getAIProviderState();
+		if (!stored.provider) return;
+		const next: AIProviderStoredState = {
+			...stored,
+			models: { ...stored.models, [stored.provider]: model },
+		};
+		await saveAIProviderState(next);
+		setState((prev) => ({ ...prev, model }));
 		window.dispatchEvent(new Event(AI_PROVIDER_CHANGE_EVENT));
 	}, []);
 
-	const clear = useCallback(() => {
-		if (state.provider) {
-			sessionStorage.removeItem(API_KEY_PREFIX + state.provider);
-			sessionStorage.removeItem(MODEL_KEY_PREFIX + state.provider);
+	const clear = useCallback(async () => {
+		const stored = await getAIProviderState();
+		if (stored.provider) {
+			const apiKeys = { ...stored.apiKeys };
+			const models = { ...stored.models };
+			delete apiKeys[stored.provider];
+			delete models[stored.provider];
+			await saveAIProviderState({ provider: null, apiKeys, models });
+		} else {
+			await saveAIProviderState({ provider: null, apiKeys: {}, models: {} });
 		}
-		sessionStorage.removeItem(PROVIDER_KEY);
 		setState({ provider: null, apiKey: "", model: "" });
 		window.dispatchEvent(new Event(AI_PROVIDER_CHANGE_EVENT));
-	}, [state.provider]);
+	}, []);
 
 	const isConfigured = hydrated && !!state.provider && !!state.apiKey;
 

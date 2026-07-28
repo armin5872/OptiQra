@@ -153,8 +153,8 @@ export default function AIProviderSetup() {
 				/>
 			</div>
 			<p className="ai-setup-hint">
-				Stored only in this browser tab&apos;s session storage. Sent directly to {config.label} per request —
-				never saved on our servers.{" "}
+				Saved in this browser only (IndexedDB), so you won&apos;t need to re-enter it next time. Sent directly
+				to {config.label} per request — never saved on our servers.{" "}
 				<a href={config.keyUrl} target="_blank" rel="noreferrer">
 					Get a {config.label} key ↗
 				</a>

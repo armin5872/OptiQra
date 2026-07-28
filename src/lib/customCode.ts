@@ -9,7 +9,7 @@
  *  - It still runs with the same privileges as the rest of the page, in the
  *    same origin — a script pasted in here can read anything else this
  *    origin can reach, including the AI provider API key OptiqRA keeps in
- *    sessionStorage (see useAIProvider.ts) and everything in the settings
+ *    IndexedDB (see useAIProvider.ts / aiProviderStore.ts) and everything in the settings
  *    IndexedDB. That's why the UI gates it behind an explicit "I understand
  *    the risk" acknowledgement and a manual "Run" action rather than
  *    executing on every keystroke.

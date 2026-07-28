@@ -92,7 +92,7 @@ export default function PageSpeedSetup() {
 			</div>
 
 			<p className="ai-setup-hint">
-				Stored only in this browser tab&apos;s session storage. Sent directly to Google&apos;s PageSpeed
+				Saved in this browser only (IndexedDB), so you won&apos;t need to re-enter it next time. Sent directly to Google&apos;s PageSpeed
 				Insights API per request — never saved on our servers.{" "}
 				<a href={PSI_KEY_INFO_URL} target="_blank" rel="noreferrer">
 					Get a free API key ↗

@@ -2,14 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { PageSpeedStrategy } from "@/lib/pagespeed";
+import { getPageSpeedState, savePageSpeedState, type PageSpeedStoredState } from "@/lib/pagespeedKeyStore";
 
-// Deliberately sessionStorage, not settingsStore/IndexedDB: settingsStore's
-// contents get written straight into the downloadable "export settings"
-// JSON file (see SettingsPanel's exportSettingsAsJSON), so a secret key
-// living there would end up inside that file. This mirrors the exact same
-// choice useAIProvider.ts already made for AI provider keys.
-const KEY_STORAGE_KEY = "optiqra_pagespeed_key";
-const STRATEGY_STORAGE_KEY = "optiqra_pagespeed_strategy";
 const CHANGE_EVENT = "optiqra-pagespeed-key-change";
 
 interface PageSpeedKeyState {
@@ -17,49 +11,52 @@ interface PageSpeedKeyState {
 	strategy: PageSpeedStrategy;
 }
 
-function readState(): PageSpeedKeyState {
-	if (typeof window === "undefined") return { apiKey: "", strategy: "mobile" };
-	const apiKey = sessionStorage.getItem(KEY_STORAGE_KEY) ?? "";
-	const storedStrategy = sessionStorage.getItem(STRATEGY_STORAGE_KEY);
-	const strategy: PageSpeedStrategy = storedStrategy === "desktop" ? "desktop" : "mobile";
-	return { apiKey, strategy };
-}
-
 /** Mirrors useAIProvider.ts's storage pattern for the user's own PageSpeed
- *  Insights API key: sessionStorage only (this tab, this session), synced
- *  across every mounted component that reads it via a custom event. */
+ *  Insights API key: persisted in its own IndexedDB store (see
+ *  pagespeedKeyStore.ts), synced across every mounted component that reads
+ *  it via a custom event. */
 export function usePageSpeedKey() {
 	const [state, setState] = useState<PageSpeedKeyState>({ apiKey: "", strategy: "mobile" });
 	const [hydrated, setHydrated] = useState(false);
 
 	useEffect(() => {
-		setState(readState());
-		setHydrated(true);
+		let cancelled = false;
 
-		const resync = () => setState(readState());
+		const load = async () => {
+			const stored = await getPageSpeedState();
+			if (cancelled) return;
+			setState(stored);
+			setHydrated(true);
+		};
+		load();
+
+		const resync = () => load();
 		window.addEventListener(CHANGE_EVENT, resync);
-		window.addEventListener("storage", resync);
 		return () => {
+			cancelled = true;
 			window.removeEventListener(CHANGE_EVENT, resync);
-			window.removeEventListener("storage", resync);
 		};
 	}, []);
 
-	const setApiKey = useCallback((apiKey: string) => {
-		if (apiKey) sessionStorage.setItem(KEY_STORAGE_KEY, apiKey);
-		else sessionStorage.removeItem(KEY_STORAGE_KEY);
+	const setApiKey = useCallback(async (apiKey: string) => {
+		const stored = await getPageSpeedState();
+		const next: PageSpeedStoredState = { ...stored, apiKey };
+		await savePageSpeedState(next);
 		setState((prev) => ({ ...prev, apiKey }));
 		window.dispatchEvent(new Event(CHANGE_EVENT));
 	}, []);
 
-	const setStrategy = useCallback((strategy: PageSpeedStrategy) => {
-		sessionStorage.setItem(STRATEGY_STORAGE_KEY, strategy);
+	const setStrategy = useCallback(async (strategy: PageSpeedStrategy) => {
+		const stored = await getPageSpeedState();
+		const next: PageSpeedStoredState = { ...stored, strategy };
+		await savePageSpeedState(next);
 		setState((prev) => ({ ...prev, strategy }));
 		window.dispatchEvent(new Event(CHANGE_EVENT));
 	}, []);
 
-	const clear = useCallback(() => {
-		sessionStorage.removeItem(KEY_STORAGE_KEY);
+	const clear = useCallback(async () => {
+		const stored = await getPageSpeedState();
+		await savePageSpeedState({ ...stored, apiKey: "" });
 		setState((prev) => ({ ...prev, apiKey: "" }));
 		window.dispatchEvent(new Event(CHANGE_EVENT));
 	}, []);
