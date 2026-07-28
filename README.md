@@ -250,7 +250,7 @@ Outbound scan requests are guarded against SSRF, and API keys for AI providers a
 - [x] Twitter card preview
 - [x] Security score improvements
 - [ ] HTTP/2 and HTTP/3 detection
-- [ ] Core Web Vitals visualization
+- [x] Core Web Vitals visualization
 
 ### v0.5
 
