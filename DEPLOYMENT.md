@@ -32,8 +32,9 @@ cd OptiQra
 # Install dependencies
 npm install
 
-# Copy environment template
-cp .env.example .env.local
+# (Optional) create .env.local for Sentry/error monitoring —
+# see the "Environment variables" section in README.md for the full list
+touch .env.local
 
 # Start development server
 npm run dev

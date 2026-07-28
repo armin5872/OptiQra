@@ -106,7 +106,7 @@ In a world where one well-placed answer-engine citation is worth more traffic th
 
 ### Prerequisites
 
-- Node.js 18 or newer
+- Node.js 20 or newer (see `.nvmrc`)
 - npm
 
 ### Local development
@@ -122,6 +122,19 @@ Open http://localhost:3000 in your browser.
 
 The app runs its built-in audits without any configuration. AI-powered fixes and insights use a provider API key you enter in the UI rather than an environment variable, so nothing needs to be set for those either.
 
+Everything below is optional and only matters if you want error monitoring locally. Create a `.env.local` in the project root (it's gitignored) and set any of:
+
+| Variable | Purpose |
+|---|---|
+| `NODE_ENV` | `development` / `production` — set automatically by `next dev` / `next start` |
+| `NEXT_TELEMETRY_DISABLED` | Set to `1` to opt out of Next.js telemetry |
+| `PORT` | Dev server port (defaults to `3000`) |
+| `NEXT_PUBLIC_SENTRY_DSN` / `SENTRY_DSN` | Sentry DSN — leave unset and Sentry no-ops entirely |
+| `SENTRY_ORG` / `SENTRY_PROJECT` | Your Sentry project, for source map uploads |
+| `SENTRY_AUTH_TOKEN` | Only needed in CI/production builds, to upload source maps |
+
+Never commit real values for these — `.env.local` is in `.gitignore` for exactly that reason.
+
 ## Available scripts
 
 ```bash
@@ -130,6 +143,8 @@ npm run build       # Create a production build
 npm run start       # Start the production server
 npm run lint        # Run ESLint
 npm run type-check  # Run the TypeScript compiler in check-only mode
+npm test            # Run the Playwright e2e suite (alias: npm run test:e2e)
+npm run test:e2e:ui # Run the e2e suite in Playwright's UI mode
 ```
 
 ## Docker
@@ -213,7 +228,7 @@ Outbound scan requests are guarded against SSRF, and API keys for AI providers a
 - [x] Consistent OptiQra branding across package metadata, Docker, and deployment docs
 - [x] `.gitignore` and build-artifact cleanup for a clean production checkout
 - [x] `type-check` script wired up alongside `lint` for CI/pre-deploy checks
-- [ ] Automated test suite
+- [x] Automated test suite (Playwright e2e — `npm test`)
 
 ### v0.2
 
