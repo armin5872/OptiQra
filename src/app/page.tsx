@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import CrawlTree from "./components/CrawlTree";
 import type { PageNode, Issue } from "./components/CrawlTree";
 import CrawlTree3D from "./components/CrawlTree3D";
+import CrawlTree3DGalaxy from "./components/CrawlTree3DGalaxy";
 import {
 	ScanAnimationPicker,
 	NetworkPulse3D,
@@ -118,9 +119,9 @@ export default function Home() {
 	 *  the scan-handling logic above doesn't pay for extra re-renders it
 	 *  doesn't need. */
 	const [livePageNodes, setLivePageNodes] = useState<PageNode[]>([]);
-	const [liveCrawlView, setLiveCrawlView] = useState<"off" | "2d" | "3d">("off");
+	const [liveCrawlView, setLiveCrawlView] = useState<"off" | "2d" | "3d" | "galaxy">("off");
 	const [scanAnimStyle, setScanAnimStyle] = useState<ScanAnimationStyle>("classic");
-	const [reportTreeView, setReportTreeView] = useState<"2d" | "3d">("2d");
+	const [reportTreeView, setReportTreeView] = useState<"2d" | "3d" | "galaxy">("2d");
 	// If the experimental toggle is off, every render site below that picks
 	// between 2D/3D also checks `!settings.experimental.crawlTree3D` and
 	// falls back to 2D — so turning the setting off always shows 2D on the
@@ -936,12 +937,23 @@ export default function Home() {
 											3D
 										</button>
 									)}
+									{settings.experimental.crawlTree3D && (
+										<button
+											type="button"
+											className={liveCrawlView === "galaxy" ? "active" : ""}
+											onClick={() => setLiveCrawlView("galaxy")}
+										>
+											🌌 Galaxy
+										</button>
+									)}
 								</div>
 							</div>
 							{liveCrawlView !== "off" && livePageNodes.length > 0 && (
 								<div className="live-crawl-tree-wrap">
 									{liveCrawlView === "2d" || !settings.experimental.crawlTree3D ?
 										<CrawlTree pages={livePageNodes} title="Live crawl tree" />
+									: liveCrawlView === "galaxy" ?
+										<CrawlTree3DGalaxy pages={livePageNodes} title="Live crawl tree (galaxy)" />
 									:	<CrawlTree3D pages={livePageNodes} title="Live crawl tree (3D)" />}
 								</div>
 							)}
@@ -1039,12 +1051,26 @@ export default function Home() {
 												3D
 											</button>
 										)}
+										{settings.experimental.crawlTree3D && (
+											<button
+												type="button"
+												className={reportTreeView === "galaxy" ? "active" : ""}
+												onClick={() => setReportTreeView("galaxy")}
+											>
+												🌌 Galaxy
+											</button>
+										)}
 									</div>
 								</div>
 								{reportTreeView === "2d" || !settings.experimental.crawlTree3D ? (
 									<CrawlTree
 										pages={reportData.pages}
 										title="Site structure & performance"
+									/>
+								) : reportTreeView === "galaxy" ? (
+									<CrawlTree3DGalaxy
+										pages={reportData.pages}
+										title="Site structure & performance (galaxy)"
 									/>
 								) : (
 									<CrawlTree3D

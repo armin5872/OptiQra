@@ -4722,3 +4722,55 @@ body {
 		max-width: none;
 	}
 }
+
+/* ---------- Experimental: galaxy crawl tree ---------- */
+.crawl-tree-galaxy-section {
+	background: radial-gradient(circle at 30% 20%, #161c33, #0a0e1a 70%);
+	border-color: #2b3568;
+}
+.crawl-tree-galaxy-section .crawl-tree-head h3,
+.crawl-tree-galaxy-section .crawl-tree-stats,
+.crawl-tree-galaxy-section .crawl-tree-hint,
+.crawl-tree-galaxy-section .crawl-tree-legend span {
+	color: #d7ddff;
+}
+.crawl-tree-galaxy-section .crawl-tree-hint {
+	color: #9aa6df;
+}
+.crawl-tree-galaxy-btns {
+	display: flex;
+	gap: 8px;
+}
+.crawl-tree-galaxy-section .crawl-tree-3d-rotate-btn {
+	border-color: #3b4784;
+	background: rgba(255, 255, 255, 0.04);
+	color: #c3cbfa;
+}
+.crawl-tree-galaxy-section .crawl-tree-3d-rotate-btn.active {
+	border-color: #8fa2ff;
+	color: #eef1ff;
+	background: rgba(143, 162, 255, 0.16);
+}
+.crawl-tree-galaxy-canvas {
+	background: radial-gradient(circle at 50% 30%, #131a34, #05070f 75%);
+	box-shadow: inset 0 0 60px rgba(80, 110, 255, 0.12);
+}
+.crawl-tree-galaxy-section .crawl-tree-3d-panel {
+	background: #10162c;
+	border-color: #3b4784;
+	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+}
+.crawl-tree-galaxy-section .crawl-tree-3d-panel-path,
+.crawl-tree-galaxy-section .crawl-tree-3d-panel-score,
+.crawl-tree-galaxy-section .crawl-tree-3d-panel-cats li {
+	color: #d7ddff;
+}
+.crawl-tree-galaxy-section .crawl-tree-3d-panel-close {
+	color: #9aa6df;
+}
+
+@media (max-width: 720px) {
+	.crawl-tree-galaxy-btns {
+		flex-wrap: wrap;
+	}
+}
