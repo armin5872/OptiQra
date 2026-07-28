@@ -5,6 +5,7 @@ import { runAutoFix, applyAITargetValues, duplicateBankKey, type AutoFixResult, 
 import { runProjectFix, detectProjectStack, type ProjectFile } from "@/lib/projectFixEngine";
 import { runJsxAutoFix, applyJsxAITargetValues, isFixableSourceFile } from "@/lib/jsxAutoFix";
 import { buildAutoFixBatchPrompt, parseAutoFixResponse } from "@/lib/autoFixPrompt";
+import { buildFullRewritePrompt, parseFullRewriteResponse, checkFullRewriteSafety, type RewriteIssue } from "@/lib/fullAiFixEngine";
 import { AI_PROVIDERS, type AIProviderId } from "@/lib/aiFix";
 import { completeFix } from "@/lib/aiProviders";
 import { getErrorMessage } from "@/lib/errorUtils";
@@ -17,6 +18,11 @@ const MAX_TOTAL_UNCOMPRESSED_BYTES = 60 * 1024 * 1024; // 60MB
 const MAX_FILE_COUNT = 3000;
 const MAX_HTML_FILES_TO_FIX = 250; // guardrail against runaway AI cost on huge sites
 const MAX_SOURCE_FILES_TO_FIX = 250; // same guardrail, for non-full-document source files (.tsx/.jsx/.vue/.svelte/Angular/JS/HTML fragments)
+// "Full AI Fix" sends a whole file (not just a handful of short strings) on every
+// request and waits for a whole file back, so it's both slower per-file and pricier
+// per-file than the batched content-fill pass — a much tighter cap keeps it inside
+// maxDuration on large projects instead of timing out partway through.
+const MAX_FILES_TO_FULL_FIX = 40;
 
 type ProjectMode = "audit" | "fix";
 
@@ -86,6 +92,56 @@ async function resolveAITargetValues(
 		return { values, confidence, usedAI: true };
 	} catch (err) {
 		return { values: {}, confidence: {}, usedAI: false, aiError: getErrorMessage(err, "unknown error") };
+	}
+}
+
+/** Builds the plain-English issue list the full-rewrite prompt gets: every
+ *  AITarget (content the batched pass didn't already fill) plus every
+ *  deterministic result that's still "skipped" or "ai-needed" after the
+ *  earlier passes ran — i.e. exactly what's left for the AI to clean up,
+ *  not a re-statement of things already fixed mechanically. */
+function buildRewriteIssueList(results: AutoFixResult[], targets: AITarget[], unresolvedTargetIds: Set<string>): RewriteIssue[] {
+	const issues: RewriteIssue[] = [];
+	for (const t of targets) {
+		if (!unresolvedTargetIds.has(t.id)) continue; // batched pass already filled this one
+		issues.push({ title: t.title, category: t.category, severity: t.severity, detail: t.context });
+	}
+	for (const r of results) {
+		if (r.status === "skipped" || r.status === "ai-needed") {
+			issues.push({ title: r.title, category: r.category, severity: r.severity, detail: r.note });
+		}
+	}
+	return issues;
+}
+
+/** Runs the opt-in full-file AI rewrite pass on one file: sends the file's
+ *  full current content (already through the deterministic + batched-fill
+ *  passes) plus its remaining issues, and — if the response passes the
+ *  coarse structural safety check — returns the rewritten content. On any
+ *  failure (AI error, or a rewrite that fails the safety check) the
+ *  original content is returned unchanged, so the caller can just always
+ *  use the returned `content` without a separate branch for "did it work". */
+async function runFullFileRewrite(
+	path: string,
+	content: string,
+	issues: RewriteIssue[],
+	pageUrl: string,
+	stackGuidance: string,
+	provider: string,
+	apiKey: string,
+	model: string,
+): Promise<{ content: string; changed: boolean; note?: string }> {
+	if (issues.length === 0) return { content, changed: false };
+	const resolvedModel = model || AI_PROVIDERS[provider as AIProviderId].defaultModel;
+	const { system, user } = buildFullRewritePrompt(path, content, issues, pageUrl, stackGuidance);
+	try {
+		const raw = await completeFix(provider as AIProviderId, { apiKey, model: resolvedModel, system, user });
+		const rewritten = parseFullRewriteResponse(raw);
+		const safety = checkFullRewriteSafety(content, rewritten, path);
+		if (!safety.ok) return { content, changed: false, note: safety.reason };
+		return { content: rewritten, changed: true };
+	} catch (err) {
+		return { content, changed: false, note: `AI full-fix call failed (${getErrorMessage(err, "unknown error")}) — kept the mechanically-fixed version of ${path}.` };
 	}
 }
 
@@ -183,6 +239,11 @@ export async function POST(req: NextRequest) {
 	const apiKey = (form.get("apiKey") as string) || "";
 	const model = (form.get("model") as string) || "";
 	const hasAI = mode === "fix" && !!provider && !!apiKey && !!AI_PROVIDERS[provider as AIProviderId];
+	// "assisted" (default): deterministic engine + narrow AI content-fill, same as before.
+	// "full": after the deterministic pass, hands each touched file's full content plus its
+	// remaining issues to the AI and asks for the whole file back, fixed — a much larger
+	// scope of change, so it only ever runs on top of hasAI and only in "fix" mode.
+	const fixMode: "assisted" | "full" = mode === "fix" && hasAI && form.get("fixMode") === "full" ? "full" : "assisted";
 	const MAX_DUPLICATE_BANK_CHARS = 2 * 1024 * 1024; // 2MB of JSON — generous for a bank of short text snippets
 	const duplicateBankRaw = (form.get("duplicateBank") as string) || "{}";
 	let duplicateBank: Record<string, string> = {};
@@ -303,8 +364,8 @@ export async function POST(req: NextRequest) {
 	}
 
 	const stack = detectProjectStack(files);
-	const htmlFilesToFix = htmlFiles.slice(0, MAX_HTML_FILES_TO_FIX);
-	const sourceFilesToFix = sourceFiles.slice(0, MAX_SOURCE_FILES_TO_FIX);
+	const htmlFilesToFix = htmlFiles.slice(0, fixMode === "full" ? MAX_FILES_TO_FULL_FIX : MAX_HTML_FILES_TO_FIX);
+	const sourceFilesToFix = sourceFiles.slice(0, fixMode === "full" ? MAX_FILES_TO_FULL_FIX : MAX_SOURCE_FILES_TO_FIX);
 	const totalSteps = htmlFilesToFix.length + sourceFilesToFix.length + 1; // +1 for the project-wide pass
 
 	const stream = new ReadableStream<Uint8Array>({
@@ -331,7 +392,12 @@ export async function POST(req: NextRequest) {
 			try {
 				enqueue({
 					type: "status",
-					message: mode === "audit" ? `Auditing ${stack.summary} project…` : `Auto-fixing ${stack.summary} project…`,
+					message:
+						mode === "audit"
+							? `Auditing ${stack.summary} project…`
+							: fixMode === "full"
+								? `Auto-fixing ${stack.summary} project (AI is rewriting flagged files directly)…`
+								: `Auto-fixing ${stack.summary} project…`,
 				});
 
 				const perFileSummaries: PerFileSummary[] = [];
@@ -376,8 +442,26 @@ export async function POST(req: NextRequest) {
 						}
 					}
 
+					let combinedResults = [...results, ...aiResults];
 					if (mode === "fix") file.content = $.html();
-					perFileSummaries.push({ path: file.path, results: [...results, ...aiResults] });
+
+					if (mode === "fix" && fixMode === "full") {
+						const unresolvedIds = new Set(aiResults.filter((r) => r.status === "ai-needed" || r.status === "skipped").map((r) => r.id));
+						const issues = buildRewriteIssueList(combinedResults, aiTargets, unresolvedIds);
+						const rewrite = await runFullFileRewrite(file.path, file.content, issues, pageUrl, stack.guidance, provider, apiKey, model);
+						if (rewrite.changed) {
+							file.content = rewrite.content;
+							combinedResults = combinedResults.map((r) =>
+								r.status === "ai-needed" || r.status === "skipped"
+									? { ...r, status: "fixed", note: "Resolved by the AI full-fix pass, which rewrote the whole file." }
+									: r,
+							);
+						} else if (rewrite.note) {
+							combinedResults = combinedResults.map((r) => (r.status === "skipped" ? { ...r, note: `${rewrite.note}` } : r));
+						}
+					}
+
+					perFileSummaries.push({ path: file.path, results: combinedResults });
 					step += 1;
 					enqueue({ type: "progress", processed: step, total: totalSteps, currentFile: file.path });
 				}
@@ -449,7 +533,25 @@ export async function POST(req: NextRequest) {
 					}
 
 					if (mode === "fix") file.content = updatedContent;
-					perFileSummaries.push({ path: file.path, results: [...results2, ...aiResults] });
+					let combinedResults2 = [...results2, ...aiResults];
+
+					if (mode === "fix" && fixMode === "full") {
+						const unresolvedIds = new Set(aiResults.filter((r) => r.status === "ai-needed" || r.status === "skipped").map((r) => r.id));
+						const issues = buildRewriteIssueList(combinedResults2, aiTargets, unresolvedIds);
+						const rewrite = await runFullFileRewrite(file.path, file.content, issues, pageUrl, stack.guidance, provider, apiKey, model);
+						if (rewrite.changed) {
+							file.content = rewrite.content;
+							combinedResults2 = combinedResults2.map((r) =>
+								r.status === "ai-needed" || r.status === "skipped"
+									? { ...r, status: "fixed", note: "Resolved by the AI full-fix pass, which rewrote the whole file." }
+									: r,
+							);
+						} else if (rewrite.note) {
+							combinedResults2 = combinedResults2.map((r) => (r.status === "skipped" ? { ...r, note: `${rewrite.note}` } : r));
+						}
+					}
+
+					perFileSummaries.push({ path: file.path, results: combinedResults2 });
 					step += 1;
 					enqueue({ type: "progress", processed: step, total: totalSteps, currentFile: file.path });
 				}
@@ -482,6 +584,7 @@ export async function POST(req: NextRequest) {
 
 				const data: Record<string, unknown> = {
 					mode,
+					fixMode,
 					stack: stack.summary,
 					summary,
 					perFileResults: perFileSummaries,

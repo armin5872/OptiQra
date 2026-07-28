@@ -8,6 +8,7 @@ import { readNDJSONStream } from "@/lib/ndjsonStream";
 import type { AutoFixResult } from "@/lib/autoFixEngine";
 
 type ProjectMode = "audit" | "fix";
+type FixMode = "assisted" | "full";
 
 interface PerFileSummary {
 	path: string;
@@ -16,6 +17,7 @@ interface PerFileSummary {
 
 interface ProjectResponseData {
 	mode: ProjectMode;
+	fixMode?: FixMode;
 	zipBase64?: string;
 	stack: string;
 	summary: {
@@ -122,6 +124,11 @@ const STATUS_LABEL: Record<AutoFixResult["status"], string> = {
 export default function ProjectUploadPanel() {
 	const { provider, apiKey, model, isConfigured, hydrated } = useAIProvider();
 	const [mode, setMode] = useState<ProjectMode>("audit");
+	// "assisted" is the deterministic engine + narrow AI content-fill (titles, alt text,
+	// etc). "full" hands each flagged file's whole content to the AI and asks for the
+	// entire file back, fixed — only meaningful once an AI key is configured, and only
+	// sent to the server when mode === "fix".
+	const [fixMode, setFixMode] = useState<FixMode>("assisted");
 	const [dragOver, setDragOver] = useState(false);
 	const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle");
 	const [error, setError] = useState<string | null>(null);
@@ -149,6 +156,7 @@ export default function ProjectUploadPanel() {
 			form.append("provider", provider || "");
 			form.append("apiKey", apiKey);
 			form.append("model", model);
+			if (fixMode === "full") form.append("fixMode", "full");
 		}
 		form.append("duplicateBank", JSON.stringify(readDuplicateBank()));
 
@@ -317,6 +325,46 @@ export default function ProjectUploadPanel() {
 							project if one exists, or stay unfixed.
 						</p>
 					)}
+					{hydrated && isConfigured && (
+						<div className="upload-mode-toggle upload-fixmode-toggle" role="tablist" aria-label="AI fix depth">
+							<button
+								type="button"
+								role="tab"
+								aria-selected={fixMode === "assisted"}
+								className={`upload-mode-btn ${fixMode === "assisted" ? "active" : ""}`}
+								onClick={() => setFixMode("assisted")}
+								disabled={status === "uploading"}
+							>
+								<span className="upload-mode-icon" aria-hidden>🧩</span>
+								<span className="upload-mode-copy">
+									<span className="upload-mode-title">Automated + AI-assisted</span>
+									<span className="upload-mode-sub">Rules fix what they can; AI fills in missing content</span>
+								</span>
+							</button>
+							<button
+								type="button"
+								role="tab"
+								aria-selected={fixMode === "full"}
+								className={`upload-mode-btn ${fixMode === "full" ? "active" : ""}`}
+								onClick={() => setFixMode("full")}
+								disabled={status === "uploading"}
+							>
+								<span className="upload-mode-icon" aria-hidden>🤖</span>
+								<span className="upload-mode-copy">
+									<span className="upload-mode-title">Full AI Fix</span>
+									<span className="upload-mode-sub">AI reads each flagged file and rewrites it directly</span>
+								</span>
+							</button>
+						</div>
+					)}
+					{hydrated && isConfigured && fixMode === "full" && (
+						<p className="autofix-note">
+							Full AI Fix still runs the mechanical engine first, then hands each remaining flagged file&apos;s
+							complete content to the AI and asks for the whole file back, fixed. It&apos;s slower, uses more of
+							your AI credits, and touches more of each file than Automated + AI-assisted — review the diff in
+							the downloaded zip before shipping it. Capped to the first 40 files per pass.
+						</p>
+					)}
 				</>
 			)}
 			{mode === "audit" && (
@@ -381,6 +429,9 @@ export default function ProjectUploadPanel() {
 									<span className="autofix-chip autofix-chip-skipped">{result.summary.skipped} intentionally left alone</span>
 								)}
 							</>
+						)}
+						{result.mode === "fix" && result.fixMode === "full" && (
+							<span className="autofix-chip autofix-chip-needs-review">Full AI Fix — review before shipping</span>
 						)}
 						<span className="autofix-stack-note">Detected stack: {result.stack}</span>
 						{result.mode === "fix" && result.zipBase64 && (
