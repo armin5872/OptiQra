@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Issue } from "./CrawlTree";
 import { useAIProvider } from "@/lib/hooks/useAIProvider";
 import type { InsightsCategorySummary } from "@/lib/aiInsights";
+import type { InsightsMood } from "@/lib/settingsStore";
 import { getErrorMessage } from "@/lib/errorUtils";
 import { readNDJSONStream, type DeltaStreamEvent } from "@/lib/ndjsonStream";
 import MarkdownLite from "./MarkdownLite";
@@ -28,6 +29,9 @@ interface Props {
 	autoGenerate?: boolean;
 	/** From Settings → AI Assistant. Defaults to "detailed". */
 	tone?: "concise" | "detailed";
+	/** From Settings → AI Assistant. The AI's personality/voice — separate
+	 *  from `tone`, which only controls length. Defaults to "normal". */
+	mood?: InsightsMood;
 	/** Detected tech stack of the scanned site, if known — lets recommendations
 	 *  be phrased for this stack instead of generically. */
 	stack?: { primary: string; summary: string; guidance: string };
@@ -66,6 +70,7 @@ export default function AISiteInsights({
 	categories,
 	autoGenerate,
 	tone,
+	mood,
 	stack,
 }: Props) {
 	const { provider, apiKey, model, isConfigured, hydrated } = useAIProvider();
@@ -94,6 +99,7 @@ export default function AISiteInsights({
 					overallScore,
 					categories: summarizeCategories(categories),
 					tone,
+					mood,
 					stack,
 				}),
 			});

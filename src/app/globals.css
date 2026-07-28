@@ -3998,6 +3998,49 @@ body {
 	color: #fff;
 }
 
+/* AI mood picker: a wrapping grid of selectable cards, used instead of the
+   segmented control since there are too many options (9) to fit inline. */
+.settings-mood-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+	gap: 8px;
+	margin-top: 4px;
+}
+.settings-mood-card {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 3px;
+	text-align: left;
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	padding: 10px 12px;
+	cursor: pointer;
+	transition:
+		border-color 0.15s ease,
+		background 0.15s ease;
+}
+.settings-mood-card strong {
+	font-size: 13px;
+	color: var(--ink);
+}
+.settings-mood-card span {
+	font-size: 11.5px;
+	color: var(--ink-soft);
+	line-height: 1.35;
+}
+.settings-mood-card:hover {
+	border-color: var(--accent);
+}
+.settings-mood-card.active {
+	border-color: var(--accent);
+	background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+}
+.settings-mood-card.active strong {
+	color: var(--accent);
+}
+
 /* Toggle switch */
 .settings-switch {
 	position: relative;

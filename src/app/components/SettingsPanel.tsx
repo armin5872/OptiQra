@@ -878,6 +878,37 @@ export default function SettingsPanel() {
 													</div>
 												</div>
 											</div>
+											<div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
+												<div className="settings-row-label">
+													<strong>AI mood</strong>
+													<span>The AI's personality/voice — stacks with the insight style above</span>
+												</div>
+												<div className="settings-mood-grid">
+													{(
+														[
+															{ id: "normal", label: "Normal", desc: "Plain and neutral, no persona" },
+															{ id: "professional", label: "Professional", desc: "Formal, boardroom-ready" },
+															{ id: "friendly", label: "Friendly", desc: "Warm, encouraging coach" },
+															{ id: "energetic", label: "Energetic", desc: "Hyped-up and enthusiastic" },
+															{ id: "quirky", label: "Quirky", desc: "Sassy, foul-mouthed dev buddy" },
+															{ id: "sarcastic", label: "Sarcastic", desc: "Dry, deadpan, backhanded" },
+															{ id: "fullDev", label: "Full dev mode", desc: "Dense technical jargon" },
+															{ id: "nonDev", label: "Non-dev friendly", desc: "Zero jargon, plain impact" },
+															{ id: "experimental", label: "Experimental", desc: "Angry energetic + quirky mashup" },
+														] as const
+													).map((m) => (
+														<button
+															key={m.id}
+															type="button"
+															className={`settings-mood-card ${settings.ai.insightsMood === m.id ? "active" : ""}`}
+															onClick={() => update("ai", { insightsMood: m.id })}
+														>
+															<strong>{m.label}</strong>
+															<span>{m.desc}</span>
+														</button>
+													))}
+												</div>
+											</div>
 										</div>
 									</>
 								)}

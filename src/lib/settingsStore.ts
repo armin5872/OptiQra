@@ -22,6 +22,16 @@ export type FontScale = "small" | "default" | "large";
 export type ScanDepthId = "quick" | "standard" | "full" | "crawl" | "custom";
 export type ExportFormat = "pdf" | "docx" | "json";
 export type InsightsTone = "concise" | "detailed";
+export type InsightsMood =
+	| "normal"
+	| "professional"
+	| "friendly"
+	| "energetic"
+	| "quirky"
+	| "sarcastic"
+	| "fullDev"
+	| "nonDev"
+	| "experimental";
 export type MotionSpeed = "slow" | "normal" | "fast";
 export type FontFamilyChoice = "default" | "system" | "serif" | "mono" | "custom";
 export type FontWeightChoice = "normal" | "medium" | "semibold";
@@ -69,6 +79,9 @@ export interface OptiqraSettings {
 	ai: {
 		autoGenerateInsights: boolean;
 		insightsTone: InsightsTone;
+		/** Separate from insightsTone (which controls length) — this controls
+		 *  the AI's personality/voice. Defaults to "normal". */
+		insightsMood: InsightsMood;
 	};
 	notifications: {
 		enabled: boolean;
@@ -153,6 +166,7 @@ export const DEFAULT_SETTINGS: OptiqraSettings = {
 	ai: {
 		autoGenerateInsights: false,
 		insightsTone: "detailed",
+		insightsMood: "normal",
 	},
 	notifications: {
 		enabled: true,

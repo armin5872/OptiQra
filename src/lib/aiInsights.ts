@@ -1,5 +1,6 @@
 import type { AIProviderId } from "@/lib/aiFix";
 import type { StackPromptContext } from "@/lib/stackDetector";
+import type { InsightsMood } from "@/lib/settingsStore";
 
 /** Compact, prompt-ready slice of a Category — just enough for the model to
  *  reason about site-wide patterns without shipping every issue's full detail. */
@@ -27,6 +28,9 @@ export interface GenerateInsightsRequest {
 	categories: InsightsCategorySummary[];
 	/** From Settings → AI Assistant. Defaults to "detailed" when omitted. */
 	tone?: "concise" | "detailed";
+	/** From Settings → AI Assistant. The AI's personality/voice — separate
+	 *  axis from `tone`, which only controls length. Defaults to "normal". */
+	mood?: InsightsMood;
 	/** Detected tech stack of the scanned site, if known. */
 	stack?: StackPromptContext;
 }

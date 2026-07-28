@@ -1156,6 +1156,7 @@ export default function Home() {
 						categories={visibleCategories}
 						autoGenerate={settings.ai.autoGenerateInsights}
 						tone={settings.ai.insightsTone}
+					mood={settings.ai.insightsMood}
 						stack={reportData.stack}
 					/>
 
