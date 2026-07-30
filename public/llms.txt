@@ -1,0 +1,22 @@
+# OptiQra
+
+> OptiQra is a website auditing and optimization tool that scans a site or an uploaded project and reports on SEO, AEO/GEO (AI answer-engine visibility), performance, accessibility, conversions, and security — then helps fix what it finds.
+
+OptiQra runs live HTML/crawl-based scans of any public URL and also accepts direct project uploads (in Audit or Auto-fix mode) for local codebases. Scans are streamed live via NDJSON so results appear incrementally rather than after a long wait. Optional AI features (via OpenAI, Anthropic, Google, Groq, OpenRouter, Mistral, DeepSeek, or xAI, using the user's own API key) generate a plain-language summary of results, suggest and apply code-level fixes, and are used stack-aware where the underlying CMS/framework/hosting is detected.
+
+## Product
+
+- [Home / Run a scan](https://optiqra.vercel.app/): enter a URL or upload a project to start an audit.
+
+## What it checks
+
+- **SEO**: sitemap.xml and robots.txt presence/validity, meta tags, headings, alt text, hreflang, canonical tags, and more.
+- **AEO/GEO**: whether AI crawlers (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, etc.) are allowed, presence of an llms.txt, structured data (JSON-LD), and how answerable the page's content is for AI assistants and generative search.
+- **Performance**: Core Web Vitals via Google PageSpeed Insights.
+- **Accessibility**: common WCAG-relevant issues found via HTML analysis.
+- **Conversions**: forms, calls-to-action, and related on-page signals.
+- **Security**: crawler-side checks such as SSRF-safe fetching, and, for uploaded projects, code-level scanning with deterministic and AI-assisted auto-fixes.
+
+## Notes
+
+OptiQra is a solo-developed SaaS project. This file follows the llms.txt convention (https://llmstxt.org) and was generated to help AI assistants describe OptiQra accurately.

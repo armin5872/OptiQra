@@ -23,6 +23,7 @@ import ProjectUploadPanel from "./components/ProjectUploadPanel";
 import ScheduleManager from "./components/ScheduleManager";
 import SettingsPanel from "./components/SettingsPanel";
 import MissingFileBanner from "./components/MissingFileBanner";
+import LlmsTxtBanner from "./components/LlmsTxtBanner";
 import { useSettings } from "@/lib/hooks/useSettings";
 import { useTranslation } from "@/lib/hooks/useTranslation";
 import {
@@ -1232,6 +1233,17 @@ export default function Home() {
 										)}
 									</div>
 								)}
+								{key === "aeo" &&
+									cat.issues.some(
+										(i) => i.id === "aeo-llms-txt-missing" && !i.resolved,
+									) && (
+										<LlmsTxtBanner
+											key={`llms-banner-${activeScanId ?? reportData.url}`}
+											siteUrl={reportData.url}
+											pagesScanned={reportData.pagesScanned}
+											stack={reportData.stack}
+										/>
+									)}
 								{(key === "aeo" || key === "geo") && (
 									<AIEngineTest
 										key={`${key}-${activeScanId ?? reportData.url}`}

@@ -33,3 +33,34 @@ export function buildRobotsTxt(siteUrl: string): string {
 	const origin = new URL(siteUrl).origin;
 	return `User-agent: *\nAllow: /\n\nSitemap: ${origin}/sitemap.xml\n`;
 }
+
+/** Builds a bare-bones starter llms.txt (per the https://llmstxt.org
+ *  convention) purely from pages the crawler already visited — no AI call
+ *  involved. This is the always-available fallback that sits next to the
+ *  AI-assisted generator, the same way buildSitemapXml/buildRobotsTxt are
+ *  template-only. */
+export function buildLlmsTxt(siteUrl: string, pagesScanned?: string[]): string {
+	const origin = new URL(siteUrl).origin;
+	let host: string;
+	try {
+		host = new URL(siteUrl).hostname.replace(/^www\./, "");
+	} catch {
+		host = origin;
+	}
+
+	const pages = (pagesScanned && pagesScanned.length > 0 ? pagesScanned : [siteUrl]).slice(0, 25);
+	const links = pages
+		.map((u) => {
+			let label: string;
+			try {
+				const path = new URL(u).pathname.replace(/\/+$/, "");
+				label = path === "" || path === "/" ? "Home" : path.slice(1);
+			} catch {
+				label = u;
+			}
+			return `- [${label}](${u})`;
+		})
+		.join("\n");
+
+	return `# ${host}\n\n> Add a one or two sentence summary of what this site/product is and who it's for here.\n\n## Pages\n\n${links}\n\n## Notes\n\nThis is a starter file generated from the pages scanned during an OptiQra audit. Edit the summary above, prune or relabel links, and add any docs/API references AI assistants should know about. Learn more about this convention at https://llmstxt.org.\n`;
+}

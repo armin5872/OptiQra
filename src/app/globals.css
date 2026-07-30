@@ -1376,6 +1376,45 @@ h1 {
 	outline-offset: 2px;
 }
 
+.llms-ai-btn {
+	background: var(--ink);
+}
+.llms-ai-btn:hover {
+	background: color-mix(in srgb, var(--ink) 85%, var(--accent));
+}
+.llms-ai-btn:disabled {
+	background: var(--ink-soft);
+	cursor: not-allowed;
+	opacity: 0.6;
+}
+.llms-ai-hint {
+	margin-top: 6px;
+}
+.llms-ai-preview {
+	margin-top: 12px;
+	background: var(--bg);
+	border: 1px solid var(--line);
+	border-radius: 8px;
+	padding: 12px 14px;
+}
+.llms-ai-preview pre {
+	font-family: var(--font-mono, monospace);
+	font-size: 12.5px;
+	line-height: 1.6;
+	color: var(--ink);
+	white-space: pre-wrap;
+	word-break: break-word;
+	margin: 0;
+	max-height: 320px;
+	overflow-y: auto;
+}
+.llms-ai-preview-actions {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin-top: 10px;
+}
+
 /* ---------- Periodic scan scheduler ---------- */
 .schedule-manager {
 	position: relative;
