@@ -29,9 +29,16 @@ export type ProjectStackKind =
 	| "remix"
 	| "astro"
 	| "solid"
+	| "solidstart"
+	| "qwik"
+	| "gatsby"
 	| "preact"
 	| "vite-react"
 	| "cra"
+	| "react"
+	| "lit"
+	| "alpine"
+	| "ember"
 	| "static"
 	| "unknown";
 
@@ -50,9 +57,16 @@ const STACK_GUIDANCE: Record<ProjectStackKind, string> = {
 	remix: "This is Remix (React Router) source — content lands as plain text inside JSX markup or a meta() export.",
 	astro: "This is Astro source — content lands as plain text inside the HTML-like template section of a .astro file (below its --- frontmatter fence), so keep it free of JSX/Vue-style binding syntax.",
 	solid: "This is Solid.js source — content lands as plain text inside JSX markup; remember Solid's reactive values are read as function calls (signal()), not props, so don't reference that syntax in the content itself.",
+	solidstart: "This is SolidStart source — content lands as plain text inside JSX markup or a route's Meta/Title helper.",
+	qwik: "This is Qwik source — content lands as plain text inside JSX markup; keep it framework-agnostic since Qwik resumes rather than hydrates.",
+	gatsby: "This is Gatsby (React) source — content lands as plain text inside JSX markup, typically via gatsby-plugin-react-helmet or the Head API for per-page metadata.",
 	preact: "This is Preact source — content lands as plain text inside JSX markup, same conventions as React.",
-	"vite-react": "This is a Vite/CRA React project — content lands as plain text inside JSX markup.",
+	"vite-react": "This is a Vite + React project — content lands as plain text inside JSX markup.",
 	cra: "This is a Create React App project — content lands as plain text inside JSX markup.",
+	react: "This is a React project — content lands as plain text inside JSX markup.",
+	lit: "This is a Lit (web components) project — content lands as plain text inside a component's render() template literal.",
+	alpine: "This is an Alpine.js-enhanced static site — content lands as plain text directly in the markup; keep it free of x-data/x-text binding syntax.",
+	ember: "This is an Ember.js project — content lands as plain text inside a Handlebars (.hbs) template.",
 	static: "This is a static HTML project — content lands as plain text directly in the markup.",
 	unknown: "The project's framework couldn't be identified with confidence — keep content plain and framework-agnostic.",
 };
@@ -98,6 +112,17 @@ export function detectProjectStack(files: ProjectFile[]): { kind: ProjectStackKi
 	}
 	if (deps["@remix-run/react"]) return result("remix", "Remix");
 	if (deps.astro || hasFile(/(^|\/)astro\.config\.(js|ts|mjs)$/)) return result("astro", "Astro");
+	// Gatsby, SolidStart, and Qwik all sit on top of a base framework (React,
+	// Solid, or their own JSX-shaped runtime) that would otherwise match a
+	// broader bucket below — checked ahead of it so the summary/guidance
+	// reflects the actual meta-framework instead of the generic one under it.
+	if (deps.gatsby) return result("gatsby", `Gatsby${deps.gatsby ? " " + deps.gatsby : ""}`);
+	if (deps["@builder.io/qwik"] || deps["@builder.io/qwik-city"]) {
+		return result("qwik", `Qwik${deps["@builder.io/qwik"] ? " " + deps["@builder.io/qwik"] : ""}`);
+	}
+	if (deps["solid-start"] || hasFile(/(^|\/)vite\.config\.(js|ts|mjs).*solid-start/)) {
+		return result("solidstart", "SolidStart");
+	}
 	// Solid and Preact both ship JSX-shaped source that would otherwise fall
 	// into the generic "React" bucket below — checked ahead of it so the AI
 	// prompt and any framework-specific guidance actually reflects which one
@@ -108,12 +133,35 @@ export function detectProjectStack(files: ProjectFile[]): { kind: ProjectStackKi
 	if (deps.preact || deps["preact-render-to-string"]) {
 		return result("preact", `Preact${deps.preact ? " " + deps.preact : ""}`);
 	}
+	if (deps.lit || deps["lit-element"] || deps["lit-html"]) {
+		return result("lit", `Lit${deps.lit ? " " + deps.lit : ""}`);
+	}
+	if (deps["ember-cli"] || deps["ember-source"] || hasFile(/(^|\/)ember-cli-build\.js$/)) {
+		return result("ember", "Ember.js");
+	}
 	if (deps.vue || hasFile(/\.vue$/)) {
 		return result("vue", `Vue${deps.vue ? " " + deps.vue : ""}${deps.vite ? " + Vite" : ""}`);
 	}
 	if (deps["react-scripts"]) return result("cra", "Create React App");
 	if (deps.vite && deps.react) return result("vite-react", "Vite + React");
-	if (deps.react) return result("vite-react", "React");
+	if (deps.react) return result("react", `React${deps.react ? " " + deps.react : ""}`);
+	if (deps.alpinejs) return result("alpine", "Alpine.js");
+
+	// --- No package.json (or nothing recognized in it) — fall back to
+	// file-layout markers, common for a partial upload (just a `src/`
+	// folder, no root config) that still unambiguously identifies the stack. ---
+	if (!pkgFile) {
+		if (hasFile(/(^|\/)app\/(.*\/)?layout\.(tsx|jsx)$/) || hasFile(/(^|\/)pages\/_app\.(tsx|jsx)$/)) {
+			return result("next", "Next.js (detected from app/layout or pages/_app, no package.json found)");
+		}
+		if (hasFile(/(^|\/)angular\.json$/)) return result("angular", "Angular (no package.json found)");
+		if (hasFile(/\.vue$/)) return result("vue", "Vue (no package.json found)");
+		if (hasFile(/\.svelte$/)) return result("svelte", "Svelte (no package.json found)");
+		if (hasFile(/(^|\/)astro\.config\.(js|ts|mjs)$/) || hasFile(/\.astro$/)) return result("astro", "Astro (no package.json found)");
+		if (hasFile(/(^|\/)ember-cli-build\.js$/)) return result("ember", "Ember.js (no package.json found)");
+		if (hasFile(/\.(tsx|jsx)$/)) return result("react", "React (no package.json found — assumed from .tsx/.jsx files)");
+	}
+
 	if (files.some((f) => /\.html?$/i.test(f.path))) return result("static", "Static HTML");
 	return result("unknown", "Unrecognized project layout");
 }

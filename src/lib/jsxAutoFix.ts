@@ -40,6 +40,21 @@ import {
 	fixMissingFieldLabel,
 	checkHashOnlyLinks,
 	insertAttrBeforeClose,
+	fixImageLazyLoading,
+	checkImageDimensions,
+	checkSrcsetSizes,
+	checkIconOnlyButtons,
+	checkLandmarks,
+	checkTableHeaders,
+	checkFormFieldCount,
+	fixAutoplayMedia,
+	checkHardcodedSecrets,
+	checkXssRiskyBindings,
+	checkMixedContent,
+	checkConsoleDebugger,
+	checkMissingListKeys,
+	checkFrameworkNativeComponents,
+	isLikelyPageLevelFile,
 	type MarkupFixContext,
 } from "@/lib/markupFixes";
 
@@ -71,13 +86,17 @@ export function isFixableSourceFile(path: string, content = ""): boolean {
 	if (TEST_FILE_RE.test(path)) return false;
 	if (/\.(tsx|jsx)$/.test(path)) return true;
 	if (/\.(vue|svelte|astro)$/.test(path)) return true;
+	if (/\.hbs$/.test(path)) return true; // Ember/Handlebars template — markup by definition
 	if (/\.(js|mjs|cjs)$/.test(path)) {
 		return /<[A-Za-z][\w.-]*[\s/>]/.test(content) || /target\s*=\s*["']_blank["']/.test(content);
 	}
 	if (/\.ts$/.test(path)) {
 		// Angular component with an INLINE template. A templateUrl points at a
 		// separate .html file, which gets picked up on its own as a fragment.
-		return /@Component\s*\(/.test(content) && /template\s*:\s*`/.test(content);
+		if (/@Component\s*\(/.test(content) && /template\s*:\s*`/.test(content)) return true;
+		// Lit component: render() returning an html`` tagged template literal.
+		if (/\brender\s*\(\s*\)\s*\{[\s\S]*?\bhtml\s*`/.test(content)) return true;
+		return false;
 	}
 	return false;
 }
@@ -164,7 +183,7 @@ function ancestorHasMetadata(files: ProjectFile[], filePath: string): boolean {
  * same way it already does for full HTML documents — a single batched AI
  * call, or the duplicate bank.
  */
-export function runJsxAutoFix(file: ProjectFile, allFiles: ProjectFile[], pageUrl: string): JsxFixOutcome {
+export function runJsxAutoFix(file: ProjectFile, allFiles: ProjectFile[], pageUrl: string, stackKind?: string): JsxFixOutcome {
 	let source = file.content;
 	const results: AutoFixResult[] = [];
 	const aiTargets: JsxAITarget[] = [];
@@ -201,7 +220,32 @@ export function runJsxAutoFix(file: ProjectFile, allFiles: ProjectFile[], pageUr
 	source = fixGenericCtaText(source, ctx);
 	source = fixClickableDivRole(source, ctx);
 	source = fixMissingFieldLabel(source, ctx);
+	source = fixImageLazyLoading(source, ctx);
+	source = fixAutoplayMedia(source, ctx);
 	checkHashOnlyLinks(source, ctx);
+	checkImageDimensions(source, ctx);
+	checkSrcsetSizes(source, ctx);
+	checkIconOnlyButtons(source, ctx);
+	checkTableHeaders(source, ctx);
+	checkFormFieldCount(source, ctx);
+	checkMissingListKeys(source, ctx);
+	checkFrameworkNativeComponents(source, ctx, stackKind);
+
+	// Landmark regions (<main>/<nav>/<footer>) and the checks above only make
+	// sense read against a whole page's markup — a reusable Button.tsx has no
+	// business containing a <footer>, so this only runs for files that are
+	// plausibly a full page/route/layout rather than a leaf component.
+	if (isLikelyPageLevelFile(file.path)) {
+		checkLandmarks(source, ctx);
+	}
+
+	// Source-only checks with no equivalent in the URL-crawl engine at all —
+	// these need the actual source text, which a live crawl of rendered HTML
+	// structurally never has access to.
+	checkHardcodedSecrets(source, ctx);
+	checkXssRiskyBindings(source, ctx);
+	checkMixedContent(source, ctx);
+	checkConsoleDebugger(source, ctx);
 
 	// ======================= Astro document shell (<html>/<head> in a .astro layout) =======================
 	// Astro files fence an optional JS "frontmatter" component script at the

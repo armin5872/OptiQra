@@ -10,6 +10,7 @@ import { AI_PROVIDERS, type AIProviderId } from "@/lib/aiFix";
 import { completeFix } from "@/lib/aiProviders";
 import { getErrorMessage } from "@/lib/errorUtils";
 import { checkTextIntegrity } from "@/lib/fixIntegrityGuard";
+import { buildProjectCategoryReport, overallScoreFromCategories } from "@/lib/projectAudit";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -472,7 +473,7 @@ export async function POST(req: NextRequest) {
 				// and HTML fragments that aren't complete documents. ---
 				for (const file of sourceFilesToFix) {
 					const pageUrl = siteUrl ? joinUrl(siteUrl, file.path) : file.path;
-					const { content, results, aiTargets } = runJsxAutoFix(file, files, pageUrl);
+					const { content, results, aiTargets } = runJsxAutoFix(file, files, pageUrl, stack.kind);
 					let updatedContent = content;
 					let aiResults: AutoFixResult[] = [];
 
@@ -582,11 +583,16 @@ export async function POST(req: NextRequest) {
 						projectResults.filter((r) => r.status === "skipped").length,
 				};
 
+				const categories = buildProjectCategoryReport(perFileSummaries, projectResults);
+				const overallScore = overallScoreFromCategories(categories);
+
 				const data: Record<string, unknown> = {
 					mode,
 					fixMode,
 					stack: stack.summary,
 					summary,
+					categories,
+					overallScore,
 					perFileResults: perFileSummaries,
 					projectResults,
 					duplicateBankUpdates: newDuplicateBankEntries,

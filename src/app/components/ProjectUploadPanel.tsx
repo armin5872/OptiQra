@@ -15,6 +15,15 @@ interface PerFileSummary {
 	results: AutoFixResult[];
 }
 
+interface ProjectCategory {
+	label: string;
+	score: number;
+	issues: { id: string; title: string; detail: string; fix?: string; severity: string; weight: number; resolved: boolean }[];
+	passed: { id: string; title: string }[];
+	source: string;
+	filesAnalyzed: number;
+}
+
 interface ProjectResponseData {
 	mode: ProjectMode;
 	fixMode?: FixMode;
@@ -29,6 +38,8 @@ interface ProjectResponseData {
 		needsReview: number;
 		skipped: number;
 	};
+	categories?: Record<string, ProjectCategory>;
+	overallScore?: number;
 	perFileResults: PerFileSummary[];
 	projectResults: AutoFixResult[];
 	duplicateBankUpdates: Record<string, string>;
@@ -135,6 +146,7 @@ export default function ProjectUploadPanel() {
 	const [result, setResult] = useState<ProjectResponseData | null>(null);
 	const [showKeyPanel, setShowKeyPanel] = useState(false);
 	const [expandedFile, setExpandedFile] = useState<string | null>(null);
+	const [openCategory, setOpenCategory] = useState<string | null>(null);
 	const [progress, setProgress] = useState<{ processed: number; total: number } | null>(null);
 	const [statusMessage, setStatusMessage] = useState("");
 	const folderInputRef = useRef<HTMLInputElement>(null);
@@ -445,6 +457,76 @@ export default function ProjectUploadPanel() {
 							</button>
 						)}
 					</div>
+
+					{result.categories && result.overallScore !== undefined && (
+						<div className="project-audit-report">
+							<div className="autofix-stack-note" style={{ marginBottom: 8 }}>
+								Overall project score: <strong>{result.overallScore}</strong>/100 — same scoring model as a live URL
+								scan (SEO, Performance, Accessibility, Conversions), plus two checks unique to reading real source:
+								Security and Best Practices.
+							</div>
+							<div className="cards">
+								{Object.entries(result.categories).map(([key, cat]) => {
+									const openIssues = cat.issues.length;
+									const color = cat.score >= 80 ? "var(--good)" : cat.score >= 60 ? "var(--warn)" : "var(--critical)";
+									return (
+										<div
+											key={key}
+											className="card"
+											role="button"
+											tabIndex={0}
+											aria-expanded={openCategory === key}
+											onClick={() => setOpenCategory((cur) => (cur === key ? null : key))}
+											onKeyDown={(e) => {
+												if (e.key === "Enter" || e.key === " ") {
+													e.preventDefault();
+													setOpenCategory((cur) => (cur === key ? null : key));
+												}
+											}}
+										>
+											<div className="card-head">
+												<div className="card-name">{cat.label}</div>
+												<div className="card-score" style={{ color }}>
+													{cat.score}
+												</div>
+											</div>
+											<div className="card-count">
+												{openIssues} open issue{openIssues === 1 ? "" : "s"}
+											</div>
+											<div className="card-bar">
+												<div style={{ width: `${cat.score}%`, background: color }}></div>
+											</div>
+											<div className="card-source">Static code scan · {cat.filesAnalyzed} files</div>
+										</div>
+									);
+								})}
+							</div>
+							{openCategory && result.categories[openCategory] && (
+								<ul className="autofix-results-list">
+									{result.categories[openCategory].issues.map((iss) => (
+										<li key={iss.id} className="finding">
+											<span className={`sev-dot sev-${iss.severity}`}></span>
+											<div className="finding-body">
+												<span className={`sev-badge sev-badge-${iss.severity}`}>{iss.severity}</span>
+												<div className="finding-title">{iss.title}</div>
+												<div className="finding-detail">{iss.detail}</div>
+												{iss.fix && <div className="finding-fix">Fix: {iss.fix}</div>}
+											</div>
+										</li>
+									))}
+									{result.categories[openCategory].issues.length === 0 && (
+										<li className="finding">
+											<span className="sev-dot sev-good"></span>
+											<div className="finding-body">
+												<div className="finding-title">Nothing found in this category</div>
+											</div>
+										</li>
+									)}
+								</ul>
+							)}
+						</div>
+					)}
+
 					{result.summary.filesSkippedTooMany > 0 && (
 						<p className="autofix-note">
 							Scanned the first {result.summary.filesFixed} files; {result.summary.filesSkippedTooMany} more were
