@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "outDir": "../dist-server",
+    "rootDir": "..",
+    "resolveJsonModule": true,
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "baseUrl": "..",
+    "paths": { "@/*": ["src/*"] }
+  },
+  "include": ["index.ts", "scheduler-daemon.ts", "store/**/*.ts", "types/**/*.d.ts", "../src/lib/scanCompare.ts", "../src/lib/errorUtils.ts", "../src/lib/ndjsonStream.ts"]
+}

@@ -1,0 +1,55 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "OptiQra",
+  "version": "2.0.0",
+  "identifier": "com.optiqra.app",
+  "build": {
+    "beforeDevCommand": "",
+    "beforeBuildCommand": "",
+    "devUrl": "http://localhost:4173",
+    "frontendDist": "../.next-tauri-placeholder"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "OptiQra",
+        "width": 1400,
+        "height": 900,
+        "minWidth": 1000,
+        "minHeight": 700,
+        "url": "http://localhost:4173",
+        "visible": true
+      }
+    ],
+    "security": {
+      "csp": null
+    },
+    "trayIcon": {
+      "iconPath": "icons/tray.png",
+      "iconAsTemplate": true,
+      "menuOnLeftClick": false
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "externalBin": ["binaries/optiqra-server"],
+    "resources": [],
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/armin5872/optiqra-desktop/releases/latest/download/latest.json"
+      ],
+      "pubkey": "REPLACE_WITH_YOUR_GENERATED_PUBKEY"
+    }
+  }
+}
