@@ -8,23 +8,71 @@ on:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: macos-latest
+            target: aarch64-apple-darwin
             args: "--target aarch64-apple-darwin"
           - os: macos-latest
+            target: x86_64-apple-darwin
             args: "--target x86_64-apple-darwin"
           - os: windows-latest
+            target: x86_64-pc-windows-msvc
             args: ""
           - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
             args: ""
 
     runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install Linux system dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libxdo-dev \
+            libsoup-3.0-dev
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install npm dependencies
+        run: npm ci
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+          TAURI_SIDECAR_TARGET_TRIPLE: ${{ matrix.target }}
+          DOCKER_BUILD: 1
+        with:
+          projectPath: .
+          args: ${{ matrix.args }}
+          beforeBuildCommand: "npm run build && npm run desktop:compile && npm run desktop:package"

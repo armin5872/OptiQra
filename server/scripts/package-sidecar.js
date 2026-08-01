@@ -36,17 +36,31 @@ const PKG_TARGETS = {
 	"linux-x64": "node20-linux-x64",
 };
 
+// Reverse lookup (Rust target triple -> pkg target) for the explicit-override path.
+const PKG_TARGET_BY_TRIPLE = Object.fromEntries(
+	Object.keys(TARGET_TRIPLES).map((key) => [TARGET_TRIPLES[key], PKG_TARGETS[key]]),
+);
+
 function main() {
 	if (!fs.existsSync(ENTRY)) {
 		console.error(`Missing ${ENTRY} — run "npm run desktop:compile" first.`);
 		process.exit(1);
 	}
 
+	// Normally the sidecar's target triple matches the host running this
+	// script. That breaks down when the *Rust* build is cross-compiling on
+	// the same host — e.g. CI builds x86_64-apple-darwin on an Apple
+	// Silicon (arm64) runner via `cargo build --target x86_64-apple-darwin`.
+	// process.platform/arch would report arm64 there and produce a sidecar
+	// binary with the wrong name, which Tauri's bundler then can't find.
+	// TAURI_SIDECAR_TARGET_TRIPLE (set explicitly in CI, see release.yml)
+	// overrides the host-inferred triple for exactly that case.
+	const explicitTriple = process.env.TAURI_SIDECAR_TARGET_TRIPLE;
 	const key = `${process.platform}-${process.arch}`;
-	const triple = TARGET_TRIPLES[key];
-	const pkgTarget = PKG_TARGETS[key];
+	const triple = explicitTriple || TARGET_TRIPLES[key];
+	const pkgTarget = explicitTriple ? PKG_TARGET_BY_TRIPLE[explicitTriple] : PKG_TARGETS[key];
 	if (!triple || !pkgTarget) {
-		console.error(`Unsupported platform/arch for packaging: ${key}`);
+		console.error(`Unsupported platform/arch for packaging: ${explicitTriple || key}`);
 		process.exit(1);
 	}
 
