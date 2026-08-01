@@ -1,0 +1,15 @@
+<!--
+  This file is intentionally unused at runtime.
+
+  OptiQra's window loads its UI from the sidecar server's own HTTP
+  endpoint (see src-tauri/tauri.conf.json: app.windows[0].url and
+  build.devUrl, both http://localhost:4173) rather than from Tauri's
+  bundled frontendDist. `tauri build` still requires frontendDist to
+  point at an existing directory, so this placeholder exists purely to
+  satisfy that check.
+-->
+<!doctype html>
+<html>
+  <head><meta charset="utf-8" /><title>OptiQra</title></head>
+  <body></body>
+</html>

@@ -83,33 +83,41 @@ function main() {
 	const outFile = path.join(OUT_DIR, `optiqra-server-${triple}${ext}`);
 
 	console.log(`Packaging sidecar for ${pkgTarget} -> ${outFile}`);
-	execFileSync(
-		"npx",
-		[
-			"@yao-pkg/pkg",
-			ENTRY,
-			"--target",
-			pkgTarget,
-			"--output",
-			outFile,
-			// Bundles .next/standalone alongside the executable rather than
-			// trying to snapshot it into the pkg binary itself — Next's
-			// standalone output includes its own node_modules subset and
-			// dynamic requires that pkg's static analysis won't catch.
-			//
-			// --no-bytecode requires every bundled package to be marked
-			// "public" (by license) or pkg has nothing valid to embed for
-			// the rest and refuses to build ("--no-bytecode and no source
-			// breaks final executable"). --public-packages "*" --public
-			// is pkg's documented way to opt everything in without editing
-			// every dependency's package.json.
-			"--no-bytecode",
-			"--public-packages",
-			"*",
-			"--public",
-		],
-		{ stdio: "inherit", cwd: ROOT },
-	);
+	const pkgArgs = [
+		"@yao-pkg/pkg",
+		ENTRY,
+		"--target",
+		pkgTarget,
+		"--output",
+		outFile,
+		// Bundles .next/standalone alongside the executable rather than
+		// trying to snapshot it into the pkg binary itself — Next's
+		// standalone output includes its own node_modules subset and
+		// dynamic requires that pkg's static analysis won't catch.
+		//
+		// --no-bytecode requires every bundled package to be marked
+		// "public" (by license) or pkg has nothing valid to embed for
+		// the rest and refuses to build ("--no-bytecode and no source
+		// breaks final executable"). --public-packages "*" --public
+		// is pkg's documented way to opt everything in without editing
+		// every dependency's package.json.
+		"--no-bytecode",
+		"--public-packages",
+		"*",
+		"--public",
+	];
+	// On Windows, npx resolves to npx.cmd, and execFileSync can't invoke
+	// .cmd files without shell:true (Node won't run batch files directly —
+	// "spawnSync npx ENOENT"). shell:true needs a single command string
+	// rather than an argv array, so quote each arg defensively (only "*"
+	// here needs it, but quote everything to be safe against future args
+	// with spaces).
+	const quote = (arg) => (process.platform === "win32" ? `"${arg}"` : arg);
+	execFileSync("npx", pkgArgs.map(quote), {
+		stdio: "inherit",
+		cwd: ROOT,
+		shell: process.platform === "win32",
+	});
 
 	// pkg only bundles what static analysis finds from ENTRY. Next's
 	// standalone server does its own dynamic requires (route handlers,
