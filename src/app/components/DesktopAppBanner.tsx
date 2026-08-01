@@ -22,13 +22,13 @@ export default function DesktopAppBanner() {
 	}
 
 	return (
-		<div className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur px-4 py-3 mb-4">
+		<div className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/5 px-4 py-3 mb-4">
 			<div className="flex items-center gap-3 min-w-0">
 				<span className="text-xl" aria-hidden>
 					🖥️
 				</span>
-				<p className="text-sm text-white/80 truncate">
-					<strong className="text-white">Get the OptiQra desktop app</strong>{" "}
+				<p className="text-sm text-black/80 truncate">
+					<strong className="text-black">Get the OptiQra desktop app</strong>{" "}
 					— scheduled scans run in the background, and project audits work
 					fully offline.
 				</p>
@@ -43,7 +43,7 @@ export default function DesktopAppBanner() {
 				<button
 					onClick={dismiss}
 					aria-label="Dismiss"
-					className="text-white/40 hover:text-white/70 text-sm px-1"
+					className="text-black/40 hover:text-white/70 text-sm px-1"
 				>
 					✕
 				</button>
