@@ -29,11 +29,25 @@ const TARGET_TRIPLES = {
 	"linux-x64": "x86_64-unknown-linux-gnu",
 };
 
+// Pinned to an EXACT version, not a floating major tag like "node20" or
+// "node22". Floating tags resolve to whatever patch pkg's internal table
+// currently considers latest for that major — which is sometimes a patch
+// pkg-fetch hasn't actually published a prebuilt binary for yet. When that
+// happens pkg silently falls back to compiling the entire Node.js runtime
+// from source (V8, ICU, libuv, ...), a 30-60+ minute build that isn't
+// viable in CI and isn't what we want anyway. 22.23.2 is confirmed to
+// fetch real prebuilt binaries (verified for all four targets below —
+// linux-x64, macos-x64, macos-arm64, win-x64) as of writing.
+// Before bumping this, actually run `npx pkg-fetch -n node<version> -p
+// <platform> -a <arch> -o /tmp/test` for each target — a version can
+// appear in pkg-fetch's SHA manifest without an uploaded binary existing
+// yet (that's exactly what broke the floating "node20" tag here, which
+// resolved to 20.20.2 — present in the manifest, missing on macOS arm64).
 const PKG_TARGETS = {
-	"darwin-arm64": "node20-macos-arm64",
-	"darwin-x64": "node20-macos-x64",
-	"win32-x64": "node20-win-x64",
-	"linux-x64": "node20-linux-x64",
+	"darwin-arm64": "node22.23.2-macos-arm64",
+	"darwin-x64": "node22.23.2-macos-x64",
+	"win32-x64": "node22.23.2-win-x64",
+	"linux-x64": "node22.23.2-linux-x64",
 };
 
 // Reverse lookup (Rust target triple -> pkg target) for the explicit-override path.
