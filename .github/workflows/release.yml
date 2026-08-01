@@ -65,14 +65,20 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
+      - name: Build frontend and sidecar
+        env:
+          TAURI_SIDECAR_TARGET_TRIPLE: ${{ matrix.target }}
+          DOCKER_BUILD: 1
+        run: |
+          npm run build
+          npm run desktop:compile
+          npm run desktop:package
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
-          TAURI_SIDECAR_TARGET_TRIPLE: ${{ matrix.target }}
-          DOCKER_BUILD: 1
         with:
           projectPath: .
           args: ${{ matrix.args }}
-          beforeBuildCommand: "npm run build && npm run desktop:compile && npm run desktop:package"
