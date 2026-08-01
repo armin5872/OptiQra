@@ -1,4 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
+import { syncScheduleToDesktop, deleteScheduleFromDesktop } from "@/lib/desktopBridge";
 
 /**
  * Persists periodic-scan schedules in IndexedDB (same pattern as
@@ -81,6 +82,9 @@ function getDB() {
 export async function saveSchedule(schedule: ScanSchedule): Promise<ScanSchedule> {
 	const db = await getDB();
 	await db.put(STORE_NAME, schedule);
+	// Best-effort mirror into the file store the desktop sidecar's
+	// scheduler daemon reads — see src/lib/desktopBridge.ts. No-op on web.
+	syncScheduleToDesktop(schedule);
 	return schedule;
 }
 
@@ -98,6 +102,7 @@ export async function getSchedule(id: string): Promise<ScanSchedule | undefined>
 export async function deleteSchedule(id: string): Promise<void> {
 	const db = await getDB();
 	await db.delete(STORE_NAME, id);
+	deleteScheduleFromDesktop(id);
 }
 
 export async function updateSchedule(
@@ -109,5 +114,6 @@ export async function updateSchedule(
 	if (!existing) return undefined;
 	const updated = { ...existing, ...patch };
 	await db.put(STORE_NAME, updated);
+	syncScheduleToDesktop(updated);
 	return updated;
 }

@@ -1,4 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
+import { isDesktop, listDesktopScans, readDesktopScan } from "@/lib/desktopBridge";
 
 /**
  * Persists full scan reports in IndexedDB so past scans survive reloads,
@@ -54,6 +55,31 @@ function getDB() {
 	return dbPromise;
 }
 
+let desktopMerged = false;
+
+/** Pulls in any scans the desktop sidecar's scheduler daemon ran while
+ *  the window was closed (see server/README.md's "the one real gap
+ *  left") — those land in the daemon's file store, not IndexedDB, until
+ *  this runs. Called once per session, lazily, from getAllScans() below,
+ *  rather than requiring a useEffect wired into page.tsx: same effect,
+ *  smaller diff against the existing app. No-ops instantly on web. */
+async function mergeDesktopScansOnce(db: IDBPDatabase<ScanDB>) {
+	if (desktopMerged || !isDesktop()) return;
+	desktopMerged = true;
+	try {
+		const remote = await listDesktopScans();
+		for (const entry of remote) {
+			const existing = await db.get(STORE_NAME, entry.id);
+			if (existing) continue;
+			const full = await readDesktopScan(entry.id);
+			if (!full) continue;
+			await db.put(STORE_NAME, full as StoredScan);
+		}
+	} catch (err) {
+		console.warn("[scanStore] desktop scan merge failed:", err);
+	}
+}
+
 /** Save (or overwrite) a full scan report. Returns the stored record. */
 export async function saveScan(
 	scan: Omit<StoredScan, "id" | "createdAt"> & { id?: string; createdAt?: number },
@@ -74,6 +100,7 @@ export async function saveScan(
 /** All stored scans, newest first. */
 export async function getAllScans(): Promise<StoredScan[]> {
 	const db = await getDB();
+	await mergeDesktopScansOnce(db);
 	const all = await db.getAllFromIndex(STORE_NAME, "by-createdAt");
 	return all.reverse();
 }

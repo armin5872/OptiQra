@@ -18,6 +18,7 @@ import AISiteInsights from "./components/AISiteInsights";
 import AIEngineTest from "./components/AIEngineTest";
 import CoreWebVitalsPanel from "./components/CoreWebVitalsPanel";
 import ReportDownload from "./components/ReportDownload";
+import PostScanDesktopCTA from "./components/PostScanDesktopCTA";
 import SiteCloneViewer from "./components/SiteCloneViewer";
 import ProjectUploadPanel from "./components/ProjectUploadPanel";
 import ScheduleManager from "./components/ScheduleManager";
@@ -1148,6 +1149,8 @@ export default function Home() {
 							<div className="label">Overall vitals</div>
 						</div>
 					</div>
+
+					<PostScanDesktopCTA />
 
 					<AISiteInsights
 						siteUrl={reportData.url}

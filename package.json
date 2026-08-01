@@ -14,7 +14,12 @@
     "test": "playwright test",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:e2e:report": "playwright show-report"
+    "test:e2e:report": "playwright show-report",
+    "tauri": "tauri",
+    "desktop:dev": "concurrently -k \"next dev -p 4173\" \"tauri dev\"",
+    "desktop:build": "DOCKER_BUILD=1 next build && npm run desktop:compile && npm run desktop:package && tauri build",
+    "desktop:compile": "tsc -p server/tsconfig.json",
+    "desktop:package": "node server/scripts/package-sidecar.js"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.67.0",
@@ -27,6 +32,7 @@
     "jszip": "^3.10.1",
     "next": "16.2.10",
     "next-pwa": "^5.6.0",
+    "node-notifier": "^10",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "three": "^0.180.0",
@@ -40,6 +46,11 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/three": "^0.180.0",
+    "@tauri-apps/cli": "^2",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-shell": "^2",
+    "concurrently": "^9",
+    "@yao-pkg/pkg": "^6",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
     "tailwindcss": "^4",
