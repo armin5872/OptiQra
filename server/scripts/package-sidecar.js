@@ -96,7 +96,17 @@ function main() {
 			// trying to snapshot it into the pkg binary itself — Next's
 			// standalone output includes its own node_modules subset and
 			// dynamic requires that pkg's static analysis won't catch.
+			//
+			// --no-bytecode requires every bundled package to be marked
+			// "public" (by license) or pkg has nothing valid to embed for
+			// the rest and refuses to build ("--no-bytecode and no source
+			// breaks final executable"). --public-packages "*" --public
+			// is pkg's documented way to opt everything in without editing
+			// every dependency's package.json.
 			"--no-bytecode",
+			"--public-packages",
+			"*",
+			"--public",
 		],
 		{ stdio: "inherit", cwd: ROOT },
 	);
