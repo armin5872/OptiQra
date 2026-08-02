@@ -84,3 +84,7 @@ jobs:
         with:
           projectPath: .
           args: ${{ matrix.args }}
+          tagName: ${{ github.ref_name }}
+          releaseName: "OptiQra ${{ github.ref_name }}"
+          releaseDraft: true
+          prerelease: false
