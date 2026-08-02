@@ -17,7 +17,18 @@ process.env.PORT = String(PORT);
 // listening as a side effect of being required — it's written that way
 // specifically so it can be required from a wrapper like this one instead
 // of only being runnable via `node server.js` directly.
-require("../.next/standalone/server.js");
+//
+// The installed app can't rely on a path relative to wherever this file
+// happens to sit — Tauri bundles resources into a platform-specific
+// location that main.rs resolves at runtime via app.path().resource_dir()
+// and passes down as OPTIQRA_STANDALONE_DIR. Fall back to the old
+// relative path only for local dev/testing (e.g. running
+// dist-server/server/index.js directly without going through Tauri).
+const standaloneDir = process.env.OPTIQRA_STANDALONE_DIR;
+const standaloneEntry = standaloneDir
+	? require("path").join(standaloneDir, "server.js")
+	: "../.next/standalone/server.js";
+require(standaloneEntry);
 
 function waitForServer(port: number, timeoutMs = 15000): Promise<void> {
 	const deadline = Date.now() + timeoutMs;

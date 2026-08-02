@@ -64,6 +64,12 @@ fn main() {
             // /api/auto-fix-project, scheduler, etc. Nothing about the
             // audit engine changes; it just runs locally instead of on
             // Vercel.
+            let standalone_dir = app
+                .path()
+                .resource_dir()
+                .expect("couldn't resolve resource dir")
+                .join("next-standalone");
+
             let shell = app.handle().shell();
             let (mut rx, _child) = shell
                 .sidecar("optiqra-server")
@@ -71,6 +77,10 @@ fn main() {
                 .env("PORT", "4173")
                 .env("OPTIQRA_DESKTOP", "1")
                 .env("OPTIQRA_DATA_DIR", data_dir.to_string_lossy().to_string())
+                .env(
+                    "OPTIQRA_STANDALONE_DIR",
+                    standalone_dir.to_string_lossy().to_string(),
+                )
                 .spawn()
                 .expect("failed to spawn optiqra-server sidecar");
 

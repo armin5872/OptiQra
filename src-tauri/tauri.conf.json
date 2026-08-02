@@ -41,7 +41,9 @@
       "icons/icon.ico"
     ],
     "externalBin": ["binaries/optiqra-server"],
-    "resources": [],
+    "resources": {
+      "binaries/.next/standalone": "next-standalone"
+    },
     "createUpdaterArtifacts": false
   },
   "plugins": {
