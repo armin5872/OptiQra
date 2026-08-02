@@ -42,14 +42,14 @@
     ],
     "externalBin": ["binaries/optiqra-server"],
     "resources": [],
-    "createUpdaterArtifacts": true
+    "createUpdaterArtifacts": false
   },
   "plugins": {
     "updater": {
       "endpoints": [
         "https://github.com/armin5872/optiqra-desktop/releases/latest/download/latest.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEExN0EwQTc4RDZGNDQ1REYKUldUZlJmVFdlQXA2b1psQVo4b2s5cVdwZjRUNUh2UkRkTk9qcnJPcXJXU1ZXbGFMWkVKU2pEc2EK"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM2M0NBOUM2MDc3RjlDNjMKUldSam5IOEh4cWs4TmxDUHhWTy9lOFJuN1h3OElrVEU2QmhlNFpDbkNkanFHdGVPekxjWkdZNEsK"
     }
   }
 }
