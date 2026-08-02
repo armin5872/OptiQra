@@ -16,6 +16,8 @@
 
 mod commands;
 
+use std::net::TcpStream;
+use std::time::Duration;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
@@ -111,6 +113,49 @@ fn main() {
                     _ => {}
                 })
                 .build(app)?;
+
+            // --- Wait for the sidecar to actually be ready, then show ---
+            // The window is created hidden (tauri.conf.json: visible: false)
+            // because it tries to load http://localhost:4173 immediately on
+            // creation — long before the Node server above has finished
+            // starting. Loading it that early just shows WebView2's "can't
+            // reach this page" error, which never retries on its own. So:
+            // wait until the port actually accepts connections, force a
+            // fresh reload (the first attempt already failed and won't
+            // retry itself), *then* show the window.
+            let app_handle = app.handle().clone();
+            std::thread::spawn(move || {
+                let mut ready = false;
+                for _ in 0..150 {
+                    // ~30s max (150 * 200ms) before giving up and showing
+                    // whatever state the window is in — better than a
+                    // window that silently never appears if the server
+                    // fails to start at all.
+                    if TcpStream::connect_timeout(
+                        &"127.0.0.1:4173".parse().unwrap(),
+                        Duration::from_millis(200),
+                    )
+                    .is_ok()
+                    {
+                        ready = true;
+                        break;
+                    }
+                    std::thread::sleep(Duration::from_millis(200));
+                }
+                if !ready {
+                    eprintln!(
+                        "[optiqra] sidecar didn't come up within 30s — showing window anyway"
+                    );
+                }
+                if let Some(window) = app_handle.get_webview_window("main") {
+                    // The window's first (failed) navigation attempt won't
+                    // retry on its own — force it now that the server (or
+                    // our timeout) says it's time to try again.
+                    let _ = window.eval("window.location.reload();");
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            });
 
             Ok(())
         })
