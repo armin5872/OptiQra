@@ -27,6 +27,14 @@ use tauri_plugin_shell::{process::CommandEvent, ShellExt};
 
 fn main() {
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .target(tauri_plugin_log::Target::new(
+                    tauri_plugin_log::TargetKind::LogDir { file_name: None },
+                ))
+                .level(log::LevelFilter::Info)
+                .build(),
+        )
         // Prevents a second OptiQra process from spawning a second sidecar
         // (and a second scheduler) if the user double-clicks the app again.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -86,14 +94,28 @@ fn main() {
 
             // Pipe sidecar stdout/stderr into the Tauri log so scan/schedule
             // activity is visible with `tauri dev` or in a log file in prod.
+            log::info!(
+                "spawning sidecar with OPTIQRA_STANDALONE_DIR={}",
+                standalone_dir.to_string_lossy()
+            );
             tauri::async_runtime::spawn(async move {
                 while let Some(event) = rx.recv().await {
                     match event {
                         CommandEvent::Stdout(line) => {
-                            println!("[optiqra-server] {}", String::from_utf8_lossy(&line));
+                            log::info!("[optiqra-server] {}", String::from_utf8_lossy(&line));
                         }
                         CommandEvent::Stderr(line) => {
-                            eprintln!("[optiqra-server] {}", String::from_utf8_lossy(&line));
+                            log::error!("[optiqra-server] {}", String::from_utf8_lossy(&line));
+                        }
+                        CommandEvent::Error(err) => {
+                            log::error!("[optiqra-server] spawn/process error: {err}");
+                        }
+                        CommandEvent::Terminated(payload) => {
+                            log::error!(
+                                "[optiqra-server] process exited early: code={:?} signal={:?}",
+                                payload.code,
+                                payload.signal
+                            );
                         }
                         _ => {}
                     }
@@ -153,9 +175,7 @@ fn main() {
                     std::thread::sleep(Duration::from_millis(200));
                 }
                 if !ready {
-                    eprintln!(
-                        "[optiqra] sidecar didn't come up within 30s — showing window anyway"
-                    );
+                    log::error!("sidecar didn't come up within 30s — showing window anyway");
                 }
                 if let Some(window) = app_handle.get_webview_window("main") {
                     // The window's first (failed) navigation attempt won't
