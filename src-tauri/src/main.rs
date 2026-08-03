@@ -17,6 +17,7 @@
 mod commands;
 
 use std::net::TcpStream;
+use std::path::PathBuf;
 use std::time::Duration;
 use tauri::{
     menu::{Menu, MenuItem},
@@ -24,6 +25,27 @@ use tauri::{
     Manager, WindowEvent,
 };
 use tauri_plugin_shell::{process::CommandEvent, ShellExt};
+
+/// Strips Windows' `\\?\` extended-length-path prefix, if present.
+///
+/// Rust's path canonicalization (used internally by resource_dir() and
+/// app_data_dir()) adds this prefix automatically on Windows — normally
+/// invisible and harmless. But pkg's bundled Node runtime has its own
+/// realpathSync-based module resolution that doesn't handle it: walking
+/// a `\\?\`-prefixed path up to the drive root eventually calls
+/// `lstat('C:')` (no trailing backslash), which Windows rejects with
+/// EISDIR. Everything else (env vars into normal fs calls, etc.) is fine
+/// with either form, so it's safe to always strip this before handing a
+/// path to the sidecar.
+fn strip_verbatim_prefix(path: PathBuf) -> PathBuf {
+    match path.to_str() {
+        Some(s) => match s.strip_prefix(r"\\?\") {
+            Some(stripped) => PathBuf::from(stripped),
+            None => path,
+        },
+        None => path,
+    }
+}
 
 fn main() {
     tauri::Builder::default()
@@ -65,6 +87,7 @@ fn main() {
                 .path()
                 .app_data_dir()
                 .expect("couldn't resolve app data dir");
+            let data_dir = strip_verbatim_prefix(data_dir);
             std::fs::create_dir_all(&data_dir).ok();
 
             // --- Spawn the Next.js standalone server as a sidecar ---
@@ -77,6 +100,7 @@ fn main() {
                 .resource_dir()
                 .expect("couldn't resolve resource dir")
                 .join("next-standalone");
+            let standalone_dir = strip_verbatim_prefix(standalone_dir);
 
             let shell = app.handle().shell();
             let (mut rx, _child) = shell
