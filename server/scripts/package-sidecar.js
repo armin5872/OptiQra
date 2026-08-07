@@ -16,57 +16,25 @@ const { execFileSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 
-// --- inspector patch -------------------------------------------------------
+// --- inspector fix ----------------------------------------------------------
 //
-// next@16.3.0's dist/server/lib/app-info-log.js has an unconditional,
-// unguarded top-level `require("inspector")` (used to print the "Debugger
-// port:" line in the startup banner). It runs on every standalone server
-// boot, dev or prod. As of 16.3.0 the call is wrapped in Next's own
-// `_interop_require_wildcard` helper, but the literal `require("inspector")`
-// call the regex below targets is unchanged, so this patch still applies
-// cleanly — verified against the real 16.3.0 package.
+// pkg/@yao-pkg-pkg's prebuilt Node binaries have the V8 inspector stripped
+// out to save size, so require("inspector") throws
+// `Error [ERR_INSPECTOR_NOT_AVAILABLE]`. Several Next.js internal files
+// call that unguarded at module-load time (dist/server/lib/app-info-log.js
+// in 16.2.10; dist/server/node-environment-extensions/console-dim.external.js
+// was added in 16.3.0 with the same problem; there may be more in future
+// versions) — whichever one loads first kills the process within ~1s of
+// boot, before it binds the port. Tauri's 30s wait then times out and the
+// webview shows "localhost refused to connect".
 //
-// pkg/@yao-pkg-pkg's prebuilt Node binaries are compiled with the inspector
-// API stripped out to save size, so that require throws
-// `Error [ERR_INSPECTOR_NOT_AVAILABLE]` and kills the process within ~1s of
-// boot — before it ever binds the port. That's exactly the crash in the log
-// you shared: the sidecar dies immediately, Tauri's 30s wait times out, and
-// the webview shows "localhost refused to connect" because nothing is
-// listening.
-//
-// Fix: rewrite that one require into a try/catch that falls back to the
-// same shape next itself expects when no debugger is attached
-// (`{ url: () => undefined }`). Applied to the *copied* standalone folder
-// (standaloneDest below), so it's re-applied on every package run and never
-// touches the source .next/standalone next build produces.
-function patchInspectorRequire(standaloneRoot) {
-	const target = path.join(
-		standaloneRoot,
-		"node_modules",
-		"next",
-		"dist",
-		"server",
-		"lib",
-		"app-info-log.js",
-	);
-	if (!fs.existsSync(target)) {
-		console.warn(`inspector patch: ${target} not found, skipping (next version changed layout?)`);
-		return;
-	}
-	const src = fs.readFileSync(target, "utf8");
-	const patched = src.replace(
-		/require\("inspector"\)/,
-		'(function(){try{return require("inspector")}catch(e){return {url:function(){return undefined}}}})()',
-	);
-	if (patched === src) {
-		console.warn(
-			`inspector patch: pattern not found in ${target} (next version bumped? check app-info-log.js manually)`,
-		);
-		return;
-	}
-	fs.writeFileSync(target, patched);
-	console.log("Patched app-info-log.js: guarded require(\"inspector\") for pkg compatibility.");
-}
+// This used to be handled here by patching app-info-log.js specifically,
+// which broke the moment 16.3.0 added a second, different unguarded call
+// site. The real fix now lives in server/index.ts: it stubs out
+// 'inspector'/'node:inspector' at the Node Module._load level, process-wide,
+// before the standalone server loads — so every call site, present or
+// future, gets a harmless no-op instead of a throw. Nothing to do here
+// anymore; standalone ships as-is.
 
 const ROOT = path.resolve(__dirname, "..", "..");
 const ENTRY = path.join(ROOT, "dist-server", "server", "index.js");
@@ -185,7 +153,6 @@ function main() {
 		const staticSrc = path.join(ROOT, ".next", "static");
 		const staticDest = path.join(standaloneDest, ".next", "static");
 		fs.cpSync(staticSrc, staticDest, { recursive: true });
-		patchInspectorRequire(standaloneDest);
 	} else {
 		console.warn("No .next/standalone found — did next build run with DOCKER_BUILD=1 first?");
 	}

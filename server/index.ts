@@ -9,6 +9,45 @@
 
 import { startSchedulerDaemon } from "./scheduler-daemon";
 
+// pkg's compiled Node binaries strip the V8 inspector, so any
+// require("inspector") / require("node:inspector") throws
+// ERR_INSPECTOR_NOT_AVAILABLE instead of returning a module. Next.js has
+// several internal files that call this unconditionally at module-load
+// time with no try/catch (dist/server/lib/app-info-log.js in 16.2.10,
+// plus dist/server/node-environment-extensions/console-dim.external.js
+// added in 16.3.0 — and likely more added in future versions), each of
+// which crashes the whole sidecar the instant it's required.
+//
+// Patching individual Next dist files (the old approach — see git
+// history) breaks every time Next adds a new call site, which is exactly
+// what happened going from 16.2.10 to 16.3.0. Instead, stub out the
+// 'inspector' / 'node:inspector' built-ins at the Module._load level,
+// process-wide, before the standalone server (or anything it requires)
+// loads. Every call site anywhere in Next — present or future — gets a
+// harmless no-op instead of a throw. Verified against a real pkg-compiled
+// Next 16.3.0 standalone build with zero per-file patching.
+const Module = require("module");
+const inspectorStub = {
+	url: () => undefined,
+	open: () => {},
+	close: () => {},
+	console: {},
+	Session: class Session {
+		connect() {}
+		disconnect() {}
+		post(_method: string, cb?: (err: Error) => void) {
+			if (typeof cb === "function") cb(new Error("Inspector is not available"));
+		}
+	},
+};
+const originalModuleLoad = (Module as any)._load;
+(Module as any)._load = function (request: string, ...rest: unknown[]) {
+	if (request === "inspector" || request === "node:inspector") {
+		return inspectorStub;
+	}
+	return originalModuleLoad.call(this, request, ...rest);
+};
+
 const PORT = Number(process.env.PORT ?? 4173);
 process.env.PORT = String(PORT);
 
