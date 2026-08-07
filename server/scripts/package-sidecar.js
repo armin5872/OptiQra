@@ -18,10 +18,13 @@ const path = require("node:path");
 
 // --- inspector patch -------------------------------------------------------
 //
-// next@16.2.10's dist/server/lib/app-info-log.js has an unconditional,
+// next@16.3.0's dist/server/lib/app-info-log.js has an unconditional,
 // unguarded top-level `require("inspector")` (used to print the "Debugger
 // port:" line in the startup banner). It runs on every standalone server
-// boot, dev or prod.
+// boot, dev or prod. As of 16.3.0 the call is wrapped in Next's own
+// `_interop_require_wildcard` helper, but the literal `require("inspector")`
+// call the regex below targets is unchanged, so this patch still applies
+// cleanly — verified against the real 16.3.0 package.
 //
 // pkg/@yao-pkg-pkg's prebuilt Node binaries are compiled with the inspector
 // API stripped out to save size, so that require throws
