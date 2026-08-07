@@ -75,6 +75,43 @@ const PKG_TARGET_BY_TRIPLE = Object.fromEntries(
 	Object.keys(TARGET_TRIPLES).map((key) => [TARGET_TRIPLES[key], PKG_TARGETS[key]]),
 );
 
+// --- missing aliased-external fix ------------------------------------------
+//
+// @sentry/nextjs's OpenTelemetry auto-instrumentation needs
+// require-in-the-middle / import-in-the-middle to be real, unbundled
+// CommonJS requires (they monkeypatch Node's module system, which doesn't
+// survive being bundled). Turbopack handles this by generating a
+// content-hashed alias directory for each — e.g.
+// `.next/node_modules/require-in-the-middle-2ca7b9c2766f317e`, a symlink to
+// the real `node_modules/require-in-the-middle` — and the server correctly
+// lists it as a required file in its .nft.json trace manifest. But Next's
+// own standalone-output copy step does NOT bring these alias directories
+// into `.next/standalone/node_modules`, so at runtime the instrumentation
+// hook's `require("require-in-the-middle-2ca7b9c2766f317e")` fails with
+// "Cannot find module" — the sidecar binds the port fine (that part's
+// fixed), but every request instrumentation hook throws, which is the
+// "internal server error" behind what used to be "localhost refused to
+// connect". This isn't a pkg-specific bug — it's a gap in Next.js's own
+// standalone tracing for this class of Turbopack-aliased external, so a
+// non-packaged `node server.js` run of the same standalone output would hit
+// it too. Fix: copy whatever Turbopack put in `.next/node_modules` into the
+// standalone copy's `node_modules`, dereferencing symlinks so it survives
+// being moved to a different machine/path (which is exactly what happens
+// when this gets bundled into the installer).
+function copyMissingTracedAliases(root, standaloneRoot) {
+	const aliasSrc = path.join(root, ".next", "node_modules");
+	if (!fs.existsSync(aliasSrc)) return;
+	const aliasDest = path.join(standaloneRoot, "node_modules");
+	fs.mkdirSync(aliasDest, { recursive: true });
+	for (const entry of fs.readdirSync(aliasSrc)) {
+		const from = path.join(aliasSrc, entry);
+		const to = path.join(aliasDest, entry);
+		fs.rmSync(to, { recursive: true, force: true });
+		fs.cpSync(from, to, { recursive: true, dereference: true });
+		console.log(`Copied missing standalone dependency: node_modules/${entry}`);
+	}
+}
+
 function main() {
 	if (!fs.existsSync(ENTRY)) {
 		console.error(`Missing ${ENTRY} — run "npm run desktop:compile" first.`);
@@ -153,6 +190,7 @@ function main() {
 		const staticSrc = path.join(ROOT, ".next", "static");
 		const staticDest = path.join(standaloneDest, ".next", "static");
 		fs.cpSync(staticSrc, staticDest, { recursive: true });
+		copyMissingTracedAliases(ROOT, standaloneDest);
 	} else {
 		console.warn("No .next/standalone found — did next build run with DOCKER_BUILD=1 first?");
 	}
