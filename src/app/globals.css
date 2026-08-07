@@ -4080,6 +4080,47 @@ body {
 	color: var(--accent);
 }
 
+/* Persona potency slider: how hard the selected mood leans in. Only shown
+   when a non-"normal" mood is active — see SettingsPanel + moodPotency.ts. */
+.settings-mood-potency {
+	margin-top: 14px;
+	padding-top: 14px;
+	border-top: 1px solid var(--line);
+}
+.settings-mood-potency-badge {
+	font-family: "IBM Plex Mono", monospace;
+	font-size: 12px;
+	font-weight: 600;
+	padding: 2px 9px;
+	border-radius: 999px;
+	white-space: nowrap;
+}
+.settings-mood-potency input[type="range"] {
+	width: 100%;
+	margin-top: 2px;
+}
+.settings-mood-potency-track {
+	display: flex;
+	justify-content: space-between;
+	margin-top: 6px;
+}
+.settings-mood-potency-tick {
+	font-size: 10.5px;
+	color: var(--ink-soft);
+	opacity: 0.65;
+	transition: opacity 0.15s ease, color 0.15s ease;
+}
+.settings-mood-potency-tick.active {
+	opacity: 1;
+	font-weight: 600;
+}
+.settings-mood-potency-desc {
+	margin: 10px 0 0;
+	font-size: 11.5px;
+	color: var(--ink-soft);
+	line-height: 1.4;
+}
+
 /* Toggle switch */
 .settings-switch {
 	position: relative;

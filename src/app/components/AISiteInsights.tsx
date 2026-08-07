@@ -32,6 +32,9 @@ interface Props {
 	/** From Settings → AI Assistant. The AI's personality/voice — separate
 	 *  from `tone`, which only controls length. Defaults to "normal". */
 	mood?: InsightsMood;
+	/** From Settings → AI Assistant. 1-100, how hard the AI leans into
+	 *  `mood`'s persona. Ignored when mood is "normal". Defaults to 50. */
+	moodPotency?: number;
 	/** Detected tech stack of the scanned site, if known — lets recommendations
 	 *  be phrased for this stack instead of generically. */
 	stack?: { primary: string; summary: string; guidance: string };
@@ -71,6 +74,7 @@ export default function AISiteInsights({
 	autoGenerate,
 	tone,
 	mood,
+	moodPotency,
 	stack,
 }: Props) {
 	const { provider, apiKey, model, isConfigured, hydrated } = useAIProvider();
@@ -100,6 +104,7 @@ export default function AISiteInsights({
 					categories: summarizeCategories(categories),
 					tone,
 					mood,
+					moodPotency,
 					stack,
 				}),
 			});

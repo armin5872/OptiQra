@@ -1161,6 +1161,7 @@ export default function Home() {
 						autoGenerate={settings.ai.autoGenerateInsights}
 						tone={settings.ai.insightsTone}
 					mood={settings.ai.insightsMood}
+						moodPotency={settings.ai.insightsMoodPotency}
 						stack={reportData.stack}
 					/>
 

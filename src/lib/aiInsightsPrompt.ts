@@ -1,5 +1,6 @@
 import type { GenerateInsightsRequest } from "@/lib/aiInsights";
 import type { InsightsMood } from "@/lib/settingsStore";
+import { getMoodPotencyBand } from "@/lib/moodPotency";
 
 const BASE_SYSTEM_PROMPT = `You are a senior SEO & web performance consultant giving a client a spoken-style executive readout of an automated site audit.
 
@@ -50,14 +51,23 @@ export function buildInsightsPrompt(req: GenerateInsightsRequest): {
 	system: string;
 	user: string;
 } {
-	const { siteUrl, mode, pagesScanned, overallScore, categories, tone, mood, stack } = req;
+	const { siteUrl, mode, pagesScanned, overallScore, categories, tone, mood, moodPotency, stack } = req;
 	const stackRule = stack
 		? `- Detected stack: ${stack.summary}. When recommending how to implement a fix, phrase it for this stack specifically (${stack.guidance})`
 		: DEFAULT_STACK_RULE;
+
+	// Potency only has anything to turn up when there's a persona selected —
+	// "normal" mood has no character to intensify, so it's skipped even if a
+	// potency value came through.
+	let moodPart = MOOD_INSTRUCTIONS[mood ?? "normal"];
+	if (mood && mood !== "normal") {
+		moodPart += getMoodPotencyBand(moodPotency ?? 50).promptModifier;
+	}
+
 	const SYSTEM_PROMPT =
 		`${BASE_SYSTEM_PROMPT}\n${stackRule}` +
 		TONE_INSTRUCTIONS[tone ?? "detailed"] +
-		MOOD_INSTRUCTIONS[mood ?? "normal"];
+		moodPart;
 
 	const lines: string[] = [
 		`Site: ${siteUrl}`,

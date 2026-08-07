@@ -31,6 +31,9 @@ export interface GenerateInsightsRequest {
 	/** From Settings → AI Assistant. The AI's personality/voice — separate
 	 *  axis from `tone`, which only controls length. Defaults to "normal". */
 	mood?: InsightsMood;
+	/** From Settings → AI Assistant. 1-100, how hard the AI leans into
+	 *  `mood`'s persona. Ignored when mood is "normal". Defaults to 50. */
+	moodPotency?: number;
 	/** Detected tech stack of the scanned site, if known. */
 	stack?: StackPromptContext;
 }

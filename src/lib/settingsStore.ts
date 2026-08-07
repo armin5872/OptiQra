@@ -82,6 +82,10 @@ export interface OptiqraSettings {
 		/** Separate from insightsTone (which controls length) — this controls
 		 *  the AI's personality/voice. Defaults to "normal". */
 		insightsMood: InsightsMood;
+		/** 1-100, how hard the AI leans into `insightsMood`'s persona. Only
+		 *  meaningful (and only shown in Settings) when insightsMood isn't
+		 *  "normal" — see moodPotency.ts for the band breakdown. Defaults to 50. */
+		insightsMoodPotency: number;
 	};
 	notifications: {
 		enabled: boolean;
@@ -167,6 +171,7 @@ export const DEFAULT_SETTINGS: OptiqraSettings = {
 		autoGenerateInsights: false,
 		insightsTone: "detailed",
 		insightsMood: "normal",
+		insightsMoodPotency: 50,
 	},
 	notifications: {
 		enabled: true,

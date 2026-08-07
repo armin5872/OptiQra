@@ -19,6 +19,7 @@ import {
 	requestNotificationPermission,
 	type NotificationPermissionState,
 } from "@/lib/notifications";
+import { MOOD_POTENCY_BANDS, getMoodPotencyBand } from "@/lib/moodPotency";
 import CustomRulesPanel from "./CustomRulesPanel";
 import PageSpeedSetup from "./PageSpeedSetup";
 import { runCustomJS } from "@/lib/customCode";
@@ -908,6 +909,51 @@ export default function SettingsPanel() {
 														</button>
 													))}
 												</div>
+
+												{settings.ai.insightsMood !== "normal" && (() => {
+													const potency = settings.ai.insightsMoodPotency;
+													const band = getMoodPotencyBand(potency);
+													return (
+														<div className="settings-mood-potency">
+															<div className="settings-slider-head">
+																<strong>Persona potency</strong>
+																<span
+																	className="settings-mood-potency-badge"
+																	style={{
+																		color: band.color,
+																		background: `color-mix(in srgb, ${band.color} 16%, transparent)`,
+																	}}
+																>
+																	{potency} — {band.label}
+																</span>
+															</div>
+															<input
+																type="range"
+																min={1}
+																max={100}
+																step={1}
+																value={potency}
+																onChange={(e) =>
+																	update("ai", { insightsMoodPotency: Number(e.target.value) })
+																}
+																style={{ accentColor: band.color }}
+																aria-label="AI mood potency"
+															/>
+															<div className="settings-mood-potency-track">
+																{MOOD_POTENCY_BANDS.map((b) => (
+																	<span
+																		key={b.id}
+																		className={`settings-mood-potency-tick ${b.id === band.id ? "active" : ""}`}
+																		style={{ color: b.id === band.id ? b.color : undefined }}
+																	>
+																		{b.label}
+																	</span>
+																))}
+															</div>
+															<p className="settings-mood-potency-desc">{band.desc}</p>
+														</div>
+													);
+												})()}
 											</div>
 										</div>
 									</>
