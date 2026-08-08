@@ -8,6 +8,7 @@ import Script from "next/script";
 import { cookies } from "next/headers";
 import PWARegister from "./components/PWARegister";
 import AppearanceEffects from "./components/AppearanceEffects";
+import UpdaterCheck from "./components/UpdaterCheck";
 import SiteFooter from "./components/SiteFooter";
 import { getLanguageInfo, isLanguageCode, DEFAULT_LANGUAGE } from "@/lib/i18n";
 import "./sentry.client";
@@ -204,6 +205,7 @@ export default async function RootLayout({
 				</Script>
 
 				<AppearanceEffects />
+				<UpdaterCheck />
 
 				{children}
 
