@@ -24,7 +24,15 @@ jobs:
             args: ""
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            args: ""
+            # AppImage bundling via linuxdeploy fails intermittently in this
+            # runner environment (`failed to run linuxdeploy`, no useful
+            # stderr surfaced by tauri-bundler even with libfuse2 installed
+            # and APPIMAGE_EXTRACT_AND_RUN set) and was taking down the
+            # entire ubuntu job before it could upload anything — deb/rpm
+            # both build and bundle fine on their own. Restrict this leg to
+            # the formats that actually work; revisit AppImage separately
+            # once there's time to dig into the real linuxdeploy failure.
+            args: "--bundles deb,rpm"
 
     runs-on: ${{ matrix.os }}
 
