@@ -6,7 +6,23 @@ export const metadata: Metadata = {
 		"The OptiQra desktop app: scheduled scans run in the background even after you close the window, and project audits work fully offline.",
 };
 
-const LATEST_RELEASE_URL = "https://github.com/armin5872/optiqra-desktop/releases/latest";
+// OptiQra Desktop ships from this same repo — there is no separate
+// "optiqra-desktop" repo. Release assets are currently attached to
+// untagged releases (CI ran per-platform before the tag/release step was
+// fully wired up), so the direct download links below point straight at
+// those asset URLs rather than a "latest" tag. Once release.yml uploads
+// everything under a single proper tag again, these can go back to
+// `${RELEASES_URL}/latest/download/<asset>`.
+const REPO_URL = "https://github.com/armin5872/OptiQra";
+const RELEASES_URL = `${REPO_URL}/releases`;
+const APP_VERSION = "2.4.15";
+
+const DOWNLOAD_MACOS_ARM = `${REPO_URL}/releases/download/untagged-fd3cc203873d1f552bc4/OptiQra_2.0.0_aarch64.dmg`;
+const DOWNLOAD_MACOS_INTEL = `${REPO_URL}/releases/download/untagged-c8b91046b404f5a940e5/OptiQra_2.0.0_x64.dmg`;
+const DOWNLOAD_WINDOWS_MSI = `${REPO_URL}/releases/download/untagged-c8b91046b404f5a940e5/OptiQra_2.0.0_x64_en-US.msi`;
+const DOWNLOAD_WINDOWS_EXE = `${REPO_URL}/releases/download/untagged-c8b91046b404f5a940e5/OptiQra_2.0.0_x64-setup.exe`;
+const DOWNLOAD_LINUX_DEB = `${REPO_URL}/releases/download/untagged-c8b91046b404f5a940e5/OptiQra_2.0.0_amd64.deb`;
+const DOWNLOAD_LINUX_RPM = `${REPO_URL}/releases/download/untagged-c8b91046b404f5a940e5/OptiQra-2.0.0-1.x86_64.rpm`;
 
 export default function DesktopAppLandingPage() {
 	return (
@@ -54,8 +70,8 @@ export default function DesktopAppLandingPage() {
 							work with zero connection.
 						</p>
 						<div className="cta-row" style={{ marginTop: 32 }}>
-							<a href="#download" className="btn btn-primary">
-								Download for macOS <small>v2.0 · Apple Silicon</small>
+							<a href={DOWNLOAD_MACOS_ARM} className="btn btn-primary">
+								Download for macOS <small>v{APP_VERSION} · Apple Silicon</small>
 							</a>
 							<a href="#capabilities" className="btn btn-ghost">
 								See what changed
@@ -64,7 +80,7 @@ export default function DesktopAppLandingPage() {
 						<div className="platform-row" style={{ marginTop: 22 }}>
 							<span>macOS 12+</span>
 							<span>Windows 10/11</span>
-							<span>Linux (AppImage / .deb)</span>
+							<span>Linux (.deb / .rpm)</span>
 						</div>
 					</div>
 
@@ -225,22 +241,34 @@ export default function DesktopAppLandingPage() {
 						<h2>Get OptiQra on your machine.</h2>
 						<p>Free. Same account as the web app — sign in once, everything syncs.</p>
 						<div className="download-grid">
-							<a href={LATEST_RELEASE_URL} className="os-card">
+							<div className="os-card">
 								<div className="os-name">macOS</div>
 								<div className="os-meta">.dmg · Apple Silicon &amp; Intel</div>
-							</a>
-							<a href={LATEST_RELEASE_URL} className="os-card">
+								<div className="os-links">
+									<a href={DOWNLOAD_MACOS_ARM}>Apple Silicon ↓</a>
+									<a href={DOWNLOAD_MACOS_INTEL}>Intel ↓</a>
+								</div>
+							</div>
+							<div className="os-card">
 								<div className="os-name">Windows</div>
-								<div className="os-meta">.msi · 10 / 11, x64</div>
-							</a>
-							<a href={LATEST_RELEASE_URL} className="os-card">
+								<div className="os-meta">10 / 11, x64</div>
+								<div className="os-links">
+									<a href={DOWNLOAD_WINDOWS_MSI}>.msi ↓</a>
+									<a href={DOWNLOAD_WINDOWS_EXE}>.exe ↓</a>
+								</div>
+							</div>
+							<div className="os-card">
 								<div className="os-name">Linux</div>
-								<div className="os-meta">.AppImage / .deb</div>
-							</a>
+								<div className="os-meta">x64</div>
+								<div className="os-links">
+									<a href={DOWNLOAD_LINUX_DEB}>.deb ↓</a>
+									<a href={DOWNLOAD_LINUX_RPM}>.rpm ↓</a>
+								</div>
+							</div>
 						</div>
 						<div className="download-foot">
-							v2.0.0 · <a href={LATEST_RELEASE_URL.replace("/latest", "")}>release notes ↗</a> ·
-							prefer the browser? <a href="/">use the web app ↗</a>
+							v{APP_VERSION} · <a href={RELEASES_URL}>release notes ↗</a> · prefer the browser?{" "}
+							<a href="/">use the web app ↗</a>
 						</div>
 					</div>
 				</section>
@@ -471,6 +499,9 @@ const CSS = `
   .os-card:hover{border-color:var(--cyan); transform:translateY(-2px);}
   .os-card .os-name{font-weight:600; font-size:15px; margin-bottom:4px;}
   .os-card .os-meta{font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--muted);}
+  .os-links{display:flex; gap:8px; justify-content:center; margin-top:12px;}
+  .os-links a{font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--cyan); border:1px solid var(--line); border-radius:6px; padding:5px 10px; white-space:nowrap;}
+  .os-links a:hover{border-color:var(--cyan); background:rgba(36,200,219,0.08);}
   .download-foot{margin-top:28px; font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--muted);}
   .download-foot a{color:var(--cyan);}
   footer{padding:40px clamp(20px,5vw,64px); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;}
