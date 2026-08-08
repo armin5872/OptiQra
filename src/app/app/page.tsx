@@ -7,22 +7,24 @@ export const metadata: Metadata = {
 };
 
 // OptiQra Desktop ships from this same repo — there is no separate
-// "optiqra-desktop" repo. Release assets are currently attached to
-// untagged releases (CI ran per-platform before the tag/release step was
-// fully wired up), so the direct download links below point straight at
-// those asset URLs rather than a "latest" tag. Once release.yml uploads
-// everything under a single proper tag again, these can go back to
-// `${RELEASES_URL}/latest/download/<asset>`.
+// "optiqra-desktop" repo. As of v2.4.15, release.yml uploads all
+// platform assets under one proper tag (previously they landed as
+// separate untagged/draft releases, which 404'd for anonymous users).
+// Links below use /latest/download/<versioned-filename> — bump
+// APP_VERSION at release time and these stay correct automatically,
+// since every asset filename embeds the version.
 const REPO_URL = "https://github.com/armin5872/OptiQra";
 const RELEASES_URL = `${REPO_URL}/releases`;
 const APP_VERSION = "2.4.15";
+const LATEST_DOWNLOAD = `${REPO_URL}/releases/latest/download`;
 
-const DOWNLOAD_MACOS_ARM = `${REPO_URL}/releases/download/untagged-fd3cc203873d1f552bc4/OptiQra_2.0.0_aarch64.dmg`;
-const DOWNLOAD_MACOS_INTEL = `${REPO_URL}/releases/download/untagged-c8b91046b404f5a940e5/OptiQra_2.0.0_x64.dmg`;
-const DOWNLOAD_WINDOWS_MSI = `${REPO_URL}/releases/download/untagged-c8b91046b404f5a940e5/OptiQra_2.0.0_x64_en-US.msi`;
-const DOWNLOAD_WINDOWS_EXE = `${REPO_URL}/releases/download/untagged-c8b91046b404f5a940e5/OptiQra_2.0.0_x64-setup.exe`;
-const DOWNLOAD_LINUX_DEB = `${REPO_URL}/releases/download/untagged-c8b91046b404f5a940e5/OptiQra_2.0.0_amd64.deb`;
-const DOWNLOAD_LINUX_RPM = `${REPO_URL}/releases/download/untagged-c8b91046b404f5a940e5/OptiQra-2.0.0-1.x86_64.rpm`;
+const DOWNLOAD_MACOS_ARM = `${LATEST_DOWNLOAD}/OptiQra_${APP_VERSION}_aarch64.dmg`;
+const DOWNLOAD_MACOS_INTEL = `${LATEST_DOWNLOAD}/OptiQra_${APP_VERSION}_x64.dmg`;
+const DOWNLOAD_WINDOWS_MSI = `${LATEST_DOWNLOAD}/OptiQra_${APP_VERSION}_x64_en-US.msi`;
+const DOWNLOAD_WINDOWS_EXE = `${LATEST_DOWNLOAD}/OptiQra_${APP_VERSION}_x64-setup.exe`;
+const DOWNLOAD_LINUX_DEB = `${LATEST_DOWNLOAD}/OptiQra_${APP_VERSION}_amd64.deb`;
+const DOWNLOAD_LINUX_RPM = `${LATEST_DOWNLOAD}/OptiQra-${APP_VERSION}-1.x86_64.rpm`;
+
 
 export default function DesktopAppLandingPage() {
 	return (
