@@ -1,6 +1,6 @@
 # OptiQra
 
-**Audit your site for both search engines and AI.** OptiQra crawls your entire website and scores it across SEO, performance, accessibility, security, and conversion signals — plus **GEO** (generative engine optimization) and **AEO** (answer engine optimization). ChatGPT, Claude, Perplexity, and Google's AI Overviews now send meaningful traffic of their own. OptiQra tells you if your site is set up to be crawled, cited, and answered by them — and then fixes it for you.
+**Audit, fix, and verify your website for search engines and AI.** OptiQra crawls your entire website and scores it across SEO, performance, accessibility, security, and conversion signals — plus **GEO** (generative engine optimization) and **AEO** (answer engine optimization). ChatGPT, Claude, Perplexity, and Google's AI Overviews now send meaningful traffic of their own. OptiQra tells you if your site is set up to be crawled, cited, and answered by them — and then fixes it for you.
 
 ![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
