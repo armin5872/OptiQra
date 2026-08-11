@@ -1,6 +1,6 @@
 # OptiQra
 
-**Audit your site for both search engines and AI.** OptiQra crawls your entire website and scores it across SEO, performance, accessibility, security, and conversion signals — plus **GEO** (generative engine optimization) and **AEO** (answer engine optimization). ChatGPT, Claude, Perplexity, and Google's AI Overviews now send meaningful traffic of their own. OptiQra tells you if your site is set up to be crawled, cited, and answered by them — and then fixes it for you.
+**Audit, fix, and verify your website for search engines and AI.** OptiQra crawls your entire website and scores it across SEO, performance, accessibility, security, and conversion signals — plus **GEO** (generative engine optimization) and **AEO** (answer engine optimization). ChatGPT, Claude, Perplexity, and Google's AI Overviews now send meaningful traffic of their own. OptiQra tells you if your site is set up to be crawled, cited, and answered by them — and then fixes it for you.
 
 ![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
@@ -106,10 +106,11 @@ Beyond the standard tree view, OptiQra can render a crawled site as an interacti
 - **Custom code** — inject raw CSS or a one-off JS snippet into the report view itself
 
 ### 📊 Reports & data
-- **Multi-provider AI** — paste an API key (yours to keep) for OpenAI, Anthropic, Google, Groq, OpenRouter, Mistral, DeepSeek, or xAI (Grok)
+- **Multi-provider AI, BYOK or local** — paste an API key (yours to keep) for OpenAI, Anthropic, Google, Groq, OpenRouter, Mistral, DeepSeek, or xAI (Grok) — or, **in OptiQra Desktop, skip the cloud entirely** and point OptiQra at a local model running through [Ollama](https://ollama.com); fixes and insights are generated on your machine, nothing is sent anywhere
 - **Export to PDF, DOCX, XLSX, Markdown, CSV, TSV, TXT, JSON**
 - **13 languages** — the entire UI is translatable (see [Localization](#localization))
 - **Periodic scanning** — schedule re-scans (hourly to yearly), get notifications, auto-compare against previous results
+- **Predictive scan alerts** — once a schedule has a few runs of history, OptiQra fits a trend line across recent scores, projects where the score is headed 2 weeks out, flags issues that have gone unresolved for 3+ scans in a row, and can suggest (never silently apply) a faster or slower check-in frequency based on how volatile a site actually is
 - **PWA + offline** — installable in-browser, past reports visible without internet
 
 ## 🖥️ OptiQra Desktop
@@ -128,7 +129,8 @@ OptiQra also ships as a native desktop app, built with **Tauri 2** (Rust shell +
 |---|---|---|
 | Scheduled scans | Only while a tab/PWA is open | Run from a background daemon — the window can be fully closed |
 | Project (codebase) audits | Needs a network round-trip | Fully offline — the audit engine runs on your machine |
-| Live-site crawling & AI fixes | Needs a network round-trip | Still needs a network round-trip (crawling a live site or calling an AI provider inherently does) |
+| Live-site crawling & AI fixes | Needs a network round-trip | Live-site crawling still needs a round-trip; AI fixes can run **fully local** (see below) |
+| AI-generated fixes | Cloud only — bring your own API key (BYOK) | **BYOK *or* local** — bring your own key, or point at a local Ollama model with no key and no network call at all |
 | Notifications | Browser Notification API | Real OS notifications, even with no window visible |
 | Scores/ruleset | Same engine | Identical engine — no separate desktop ruleset to drift out of sync |
 
@@ -138,6 +140,8 @@ OptiQra also ships as a native desktop app, built with **Tauri 2** (Rust shell +
 - A scheduler daemon inside the sidecar mirrors the same due/compare/notify logic the browser's `scheduler.ts` uses, so a schedule behaves identically whether a tab or the daemon catches it — it just reads/writes a local file store instead of IndexedDB, and notifies through the OS instead of the browser.
 - The browser UI's schedule/scan stores and the daemon's file store are kept in sync automatically: creating or editing a schedule mirrors into the daemon's store, and any scan the daemon ran while the window was closed appears in *Recent Scans* the next time you open the app.
 - Single-instance locking, autostart, and an in-app updater (checked against GitHub Releases) are included.
+
+**AI fixes: BYOK or fully local.** OptiQra Desktop supports **local AI models alongside BYOK**, not instead of it. In *AI provider* setup, pick any of the cloud providers and paste your own API key as usual — or pick **"Local model (Ollama)"**: no key field, just the URL of a local [Ollama](https://ollama.com) server (defaults to `http://127.0.0.1:11434`) and a model you've already pulled (`ollama pull llama3.1:8b`). Requests then go straight from the desktop app's local server to your local Ollama instance — nothing leaves the machine, and it keeps working with no internet connection at all. This only works in the desktop app: the hosted web version runs its API routes on a remote server that has no way to reach `localhost` on your machine.
 
 **Platforms:** macOS 12+ (Apple Silicon & Intel), Windows 10/11 (x64), Linux (AppImage / `.deb`).
 
@@ -300,13 +304,18 @@ The UI is fully translatable and currently ships with 13 languages: English, Spa
 
 ## AI-powered fixes and insights
 
-If you paste in an API key for one of the supported providers (OpenAI, Anthropic, Google, Groq, OpenRouter, Mistral, DeepSeek, or xAI), OptiQra can:
+OptiQra supports two ways to power AI fixes and insights — **bring-your-own-key (BYOK) cloud providers, or a local model** — and the desktop app supports both side by side, not one or the other:
+
+- **BYOK (cloud):** paste in an API key for OpenAI, Anthropic, Google, Groq, OpenRouter, Mistral, DeepSeek, or xAI. The key is sent straight to the provider you chose to make each request — OptiQra's own server never sees or stores it.
+- **Local model (OptiQra Desktop only):** pick "Local model (Ollama)" in AI provider setup, point it at a local [Ollama](https://ollama.com) server, and requests never leave your machine — no key, no internet connection required. See [OptiQra Desktop](#-optiqra-desktop) above for details.
+
+With either one configured, OptiQra can:
 
 - Generate and apply a suggested fix for any individual issue in a report
 - Run a deeper "Full AI Fix" pass on files the deterministic/batched passes couldn't resolve
 - Generate a site-wide AI insights summary that reasons across every category and page, in a mood/persona and potency you choose
 
-Keys are entered per-session in the browser (or stored locally in the desktop app) and sent straight to the provider you chose to make the request — OptiQra's own server never sees or stores them.
+Keys (or, for a local model, the server URL) are entered per-session in the browser, or stored locally in the desktop app.
 
 ## PWA and offline support
 
@@ -391,7 +400,8 @@ Outbound scan requests are guarded against SSRF, and API keys for AI providers a
 - [x] In-app auto-update via GitHub Releases
 - [ ] Signed/notarized builds on all three platforms
 - [ ] 24/7 local keywords database creation (a keyword database that is specialized for your website)
-- [ ] Local AI support
+- [x] Local AI support (Ollama, alongside BYOK — see [AI-powered fixes and insights](#ai-powered-fixes-and-insights))
+- [x] Predictive scan alerts — trend projection + recurring-issue detection on scheduled scans
 
 ### v2.x
 - [x] Multi-language UI (13 languages)

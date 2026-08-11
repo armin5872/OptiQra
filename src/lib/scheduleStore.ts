@@ -30,6 +30,13 @@ export type ScheduleRunResult = {
 	resolvedIssueCount?: number;
 	ok: boolean;
 	error?: string;
+	/** Predictive-scan fields — populated once at least 3 prior scans exist
+	 *  for this URL/mode. See src/lib/scanTrends.ts. */
+	trendDirection?: "up" | "down" | "flat";
+	predictedScore14d?: number;
+	chronicIssueCount?: number;
+	suggestedFrequency?: ScanFrequency;
+	suggestedFrequencyReason?: string;
 };
 
 export type ScanSchedule = {
@@ -46,6 +53,11 @@ export type ScanSchedule = {
 	lastRunAt?: number;
 	lastScanId?: string;
 	lastResult?: ScheduleRunResult;
+	/** Opt-in: send a separate heads-up notification when the score trend
+	 *  is declining and projected to cross a concerning threshold, or when
+	 *  the same issue has now shown up unresolved for 3+ scans in a row —
+	 *  instead of waiting for a bad "scan finished" summary after the fact. */
+	predictiveAlerts?: boolean;
 };
 
 interface ScheduleDB extends DBSchema {

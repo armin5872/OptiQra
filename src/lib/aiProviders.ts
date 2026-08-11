@@ -120,6 +120,50 @@ async function* streamAnthropic({ apiKey, model, system, user }: StreamArgs) {
 	}
 }
 
+// Ollama's own API defaults to http://127.0.0.1:11434. Rather than adding a
+// separate "base URL" field/storage slot, the local-model provider reuses
+// the existing apiKey slot to hold this URL (see AIProviderConfig.localOnly)
+// — for "ollama" it's never actually a secret.
+const DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434";
+
+function ollamaChatUrl(rawBaseUrl: string): string {
+	const base = (rawBaseUrl || DEFAULT_OLLAMA_URL).trim().replace(/\/+$/, "");
+	return `${base}/v1/chat/completions`;
+}
+
+async function* streamOllama({ apiKey, model, system, user }: StreamArgs) {
+	// Ollama serves an OpenAI-compatible /v1/chat/completions endpoint, so
+	// this mirrors streamOpenAICompatible() but talks to a local server and
+	// never sends an Authorization header (Ollama doesn't check one).
+	const res = await fetchWithRetry(ollamaChatUrl(apiKey), {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			model,
+			stream: true,
+			messages: [
+				{ role: "system", content: system },
+				{ role: "user", content: user },
+			],
+		}),
+	});
+
+	if (!res.ok || !res.body) {
+		throw new Error(`Ollama error ${res.status}: ${await safeText(res)}`);
+	}
+
+	for await (const line of readSSE(res.body)) {
+		if (line === "[DONE]") continue;
+		try {
+			const json = JSON.parse(line);
+			const delta = json?.choices?.[0]?.delta?.content;
+			if (delta) yield delta as string;
+		} catch {
+			// ignore malformed keep-alive lines
+		}
+	}
+}
+
 async function* streamGoogle({ apiKey, model, system, user }: StreamArgs) {
 	const res = await fetchWithRetry(
 		`https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`,
@@ -154,6 +198,8 @@ export function streamFix(provider: AIProviderId, args: StreamArgs) {
 			return streamAnthropic(args);
 		case "google":
 			return streamGoogle(args);
+		case "ollama":
+			return streamOllama(args);
 		case "openai":
 		case "groq":
 		case "openrouter":
@@ -184,6 +230,29 @@ export async function testProviderKey(
 	model: string,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
 	try {
+		if (provider === "ollama") {
+			// No auth to check — just confirm the local server is up and the
+			// requested model has actually been pulled, since "server
+			// unreachable" and "model not pulled yet" need different fixes.
+			const base = (apiKey || DEFAULT_OLLAMA_URL).trim().replace(/\/+$/, "");
+			let res: Response;
+			try {
+				res = await fetch(`${base}/api/tags`, { method: "GET" });
+			} catch {
+				return {
+					ok: false,
+					message: `Can't reach Ollama at ${base}. Is it installed and running? (This only works inside OptiQra Desktop.)`,
+				};
+			}
+			if (!res.ok) return { ok: false, message: await summarizeError(res) };
+			const json = (await res.json()) as { models?: { name: string }[] };
+			const have = (json.models ?? []).some((m) => m.name === model || m.name.startsWith(`${model}:`) || m.name.split(":")[0] === model.split(":")[0]);
+			if (!have) {
+				return { ok: false, message: `Ollama is running, but "${model}" isn't pulled yet. Run: ollama pull ${model}` };
+			}
+			return { ok: true };
+		}
+
 		if (provider === "anthropic") {
 			const res = await fetch("https://api.anthropic.com/v1/messages", {
 				method: "POST",
@@ -242,6 +311,7 @@ const AI_PROVIDER_LABEL: Record<AIProviderId, string> = {
 	mistral: "Mistral",
 	deepseek: "DeepSeek",
 	xai: "xAI",
+	ollama: "Ollama (local)",
 };
 
 async function safeText(res: Response) {

@@ -27,6 +27,7 @@ import {
 } from "./store/scheduleFileStore";
 import { getAllScans, saveScan } from "./store/scanFileStore";
 import { compareScans, summarizeComparison } from "../src/lib/scanCompare";
+import { computeScoreTrend, findChronicIssues, suggestFrequency, type TrendPoint } from "../src/lib/scanTrends";
 import { getErrorMessage } from "../src/lib/errorUtils";
 import { readNDJSONStream } from "../src/lib/ndjsonStream";
 
@@ -151,6 +152,14 @@ async function runSchedule(port: number, schedule: ScanSchedule) {
 			? priorScans.find((s) => s.url === schedule.url && s.mode === schedule.mode)
 			: undefined;
 
+		// All prior scans for this exact url+mode, oldest first — used for
+		// trend/predictive analysis below. Independent of compareWithPrevious
+		// (that toggle is about the per-run diff summary; trend/chronic-issue
+		// detection is its own opt-in via schedule.predictiveAlerts).
+		const sameTarget = priorScans
+			.filter((s) => s.url === schedule.url && s.mode === schedule.mode)
+			.sort((a, b) => a.createdAt - b.createdAt);
+
 		const data = await performScan(port, schedule.url, schedule.mode, schedule.maxPages);
 		const overallScore = overallFromCategories(data.categories);
 
@@ -177,16 +186,70 @@ async function runSchedule(port: number, schedule: ScanSchedule) {
 			};
 		}
 
+		// --- Predictive scan: trend + recurring-issue detection ---
+		// Runs regardless of predictiveAlerts (it's cheap, pure in-memory
+		// math over data we already have) — the toggle only controls
+		// whether it also fires a separate heads-up notification below.
+		// Trend fields still get stored either way so the UI can show a
+		// "trending down" badge even for schedules that don't want alerts.
+		const trendHistory: TrendPoint[] = [
+			...sameTarget.map((s) => ({ at: s.createdAt, overallScore: s.overallScore })),
+			{ at: stored.createdAt, overallScore },
+		];
+		const trend = computeScoreTrend(trendHistory);
+
+		const recentReportsNewestFirst = [data, ...sameTarget.slice(-5).reverse().map((s) => s.data)] as Record<
+			string,
+			Category
+		>[];
+		const chronicIssues = findChronicIssues(recentReportsNewestFirst);
+
+		const predictiveFields: Partial<ScheduleRunResult> = trend
+			? {
+					trendDirection: trend.direction,
+					predictedScore14d: trend.predicted14d,
+					chronicIssueCount: chronicIssues.length,
+				}
+			: {};
+		const freqSuggestion = suggestFrequency(schedule.frequency, trend);
+		if (freqSuggestion) {
+			predictiveFields.suggestedFrequency = freqSuggestion.suggestion;
+			predictiveFields.suggestedFrequencyReason = freqSuggestion.reason;
+		}
+
 		const now = Date.now();
 		await updateSchedule(schedule.id, {
 			lastRunAt: now,
 			nextRunAt: computeNextRun(schedule.frequency, now),
 			lastScanId: stored.id,
-			lastResult: { ranAt: now, scanId: stored.id, overallScore, ok: true, ...comparisonFields },
+			lastResult: { ranAt: now, scanId: stored.id, overallScore, ok: true, ...comparisonFields, ...predictiveFields },
 		});
 
 		if (schedule.notify) {
 			notify(`Scan finished: ${schedule.url}`, summary);
+		}
+
+		// A second, distinct notification for the thing a plain "scan
+		// finished" summary won't say on its own: not "here's what changed
+		// this run" but "here's where this is headed if nothing changes."
+		// Kept separate rather than merged into `summary` so it doesn't fire
+		// (or get read) every single run — only when there's actually
+		// something worth a heads-up.
+		if (schedule.notify && schedule.predictiveAlerts && trend) {
+			const droppingBelow60 = trend.direction === "down" && trend.predicted14d < 60 && overallScore >= 60;
+			const chronicWorthFlagging = chronicIssues.some((c) => c.severity === "critical" || c.severity === "high");
+			if (droppingBelow60) {
+				notify(
+					`Heads up: ${schedule.url} is trending down`,
+					`Projected around ${trend.predicted14d}/100 within two weeks if this keeps up.`,
+				);
+			} else if (chronicWorthFlagging) {
+				const worst = chronicIssues.find((c) => c.severity === "critical" || c.severity === "high")!;
+				notify(
+					`Recurring issue on ${schedule.url}`,
+					`"${worst.title}" has now shown up unresolved in ${worst.streak} scans in a row.`,
+				);
+			}
 		}
 	} catch (err: unknown) {
 		const now = Date.now();

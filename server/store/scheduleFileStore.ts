@@ -31,6 +31,11 @@ export type ScheduleRunResult = {
 	resolvedIssueCount?: number;
 	ok: boolean;
 	error?: string;
+	trendDirection?: "up" | "down" | "flat";
+	predictedScore14d?: number;
+	chronicIssueCount?: number;
+	suggestedFrequency?: ScanFrequency;
+	suggestedFrequencyReason?: string;
 };
 
 export type ScanSchedule = {
@@ -47,6 +52,7 @@ export type ScanSchedule = {
 	lastRunAt?: number;
 	lastScanId?: string;
 	lastResult?: ScheduleRunResult;
+	predictiveAlerts?: boolean;
 };
 
 function dataDir(): string {

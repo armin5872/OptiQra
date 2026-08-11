@@ -26,6 +26,7 @@ import {
 	type ScheduleRunResult,
 } from "@/lib/scheduleStore";
 import { compareScans, summarizeComparison } from "@/lib/scanCompare";
+import { computeScoreTrend, findChronicIssues, suggestFrequency, type TrendPoint } from "@/lib/scanTrends";
 import { showScanNotification } from "@/lib/notifications";
 import type { Category } from "@/lib/reportAggregate";
 import { getErrorMessage } from "@/lib/errorUtils";
@@ -152,6 +153,9 @@ async function runSchedule(schedule: ScanSchedule) {
 		const previous = schedule.compareWithPrevious
 			? priorScans.find((s) => s.url === schedule.url && s.mode === schedule.mode)
 			: undefined;
+		const sameTarget = priorScans
+			.filter((s) => s.url === schedule.url && s.mode === schedule.mode)
+			.sort((a, b) => a.createdAt - b.createdAt);
 
 		const data = await performScan(schedule.url, schedule.mode, schedule.maxPages);
 		const overallScore = overallFromCategories(data.categories);
@@ -186,6 +190,32 @@ async function runSchedule(schedule: ScanSchedule) {
 			};
 		}
 
+		// --- Predictive scan: trend + recurring-issue detection ---
+		// See server/scheduler-daemon.ts for the identical desktop-side
+		// version of this block — kept parallel on purpose.
+		const trendHistory: TrendPoint[] = [
+			...sameTarget.map((s) => ({ at: s.createdAt, overallScore: s.overallScore })),
+			{ at: stored.createdAt, overallScore },
+		];
+		const trend = computeScoreTrend(trendHistory);
+		const recentReportsNewestFirst = [data, ...sameTarget.slice(-5).reverse().map((s) => s.data)] as Record<
+			string,
+			Category
+		>[];
+		const chronicIssues = findChronicIssues(recentReportsNewestFirst);
+		const predictiveFields: Partial<ScheduleRunResult> = trend
+			? {
+					trendDirection: trend.direction,
+					predictedScore14d: trend.predicted14d,
+					chronicIssueCount: chronicIssues.length,
+				}
+			: {};
+		const freqSuggestion = suggestFrequency(schedule.frequency, trend);
+		if (freqSuggestion) {
+			predictiveFields.suggestedFrequency = freqSuggestion.suggestion;
+			predictiveFields.suggestedFrequencyReason = freqSuggestion.reason;
+		}
+
 		const now = Date.now();
 		await updateSchedule(schedule.id, {
 			lastRunAt: now,
@@ -197,6 +227,7 @@ async function runSchedule(schedule: ScanSchedule) {
 				overallScore,
 				ok: true,
 				...comparisonFields,
+				...predictiveFields,
 			},
 		});
 
@@ -206,6 +237,25 @@ async function runSchedule(schedule: ScanSchedule) {
 				summary,
 				schedule.url,
 			);
+		}
+
+		if (schedule.notify && schedule.predictiveAlerts && trend) {
+			const droppingBelow60 = trend.direction === "down" && trend.predicted14d < 60 && overallScore >= 60;
+			const chronicWorthFlagging = chronicIssues.some((c) => c.severity === "critical" || c.severity === "high");
+			if (droppingBelow60) {
+				await showScanNotification(
+					`Heads up: ${schedule.url} is trending down`,
+					`Projected around ${trend.predicted14d}/100 within two weeks if this keeps up.`,
+					schedule.url,
+				);
+			} else if (chronicWorthFlagging) {
+				const worst = chronicIssues.find((c) => c.severity === "critical" || c.severity === "high")!;
+				await showScanNotification(
+					`Recurring issue on ${schedule.url}`,
+					`"${worst.title}" has now shown up unresolved in ${worst.streak} scans in a row.`,
+					schedule.url,
+				);
+			}
 		}
 	} catch (err: unknown) {
 		const now = Date.now();

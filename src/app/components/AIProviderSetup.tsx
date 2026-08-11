@@ -20,7 +20,10 @@ export default function AIProviderSetup() {
 
 	const config = AI_PROVIDERS[selected];
 	const effectiveModel = useCustomModel ? customModel.trim() : selectedModel;
-	const canSave = key.trim().length > 8 && effectiveModel.length > 0;
+	// Local providers store a server URL in the same slot instead of a secret,
+	// so the ">8 chars, looks like a key" check doesn't apply — just require
+	// something non-empty (the field is pre-filled with a sane default anyway).
+	const canSave = config.localOnly ? key.trim().length > 0 && effectiveModel.length > 0 : key.trim().length > 8 && effectiveModel.length > 0;
 
 	const handleProviderChange = (id: AIProviderId) => {
 		setSelected(id);
@@ -28,6 +31,9 @@ export default function AIProviderSetup() {
 		setUseCustomModel(false);
 		setCustomModel("");
 		setTest({ status: "idle" });
+		if (AI_PROVIDERS[id].localOnly && !key.trim()) {
+			setKey("http://127.0.0.1:11434");
+		}
 	};
 
 	const handleTest = async () => {
@@ -139,26 +145,37 @@ export default function AIProviderSetup() {
 			</div>
 
 			<div className="ai-setup-row">
-				<label htmlFor="ai-key-input">API key</label>
+				<label htmlFor="ai-key-input">{config.localOnly ? "Ollama server URL" : "API key"}</label>
 				<input
 					id="ai-key-input"
-					type="password"
+					type={config.localOnly ? "text" : "password"}
 					value={key}
 					onChange={(e) => {
 						setKey(e.target.value);
 						setTest({ status: "idle" });
 					}}
-					placeholder={config.keyPrefix ? `${config.keyPrefix}...` : "paste key…"}
+					placeholder={config.localOnly ? "http://127.0.0.1:11434" : config.keyPrefix ? `${config.keyPrefix}...` : "paste key…"}
 					autoComplete="off"
 				/>
 			</div>
-			<p className="ai-setup-hint">
-				Saved in this browser only (IndexedDB), so you won&apos;t need to re-enter it next time. Sent directly
-				to {config.label} per request — never saved on our servers.{" "}
-				<a href={config.keyUrl} target="_blank" rel="noreferrer">
-					Get a {config.label} key ↗
-				</a>
-			</p>
+			{config.localOnly ? (
+				<p className="ai-setup-hint">
+					Nothing leaves this device — requests go straight from OptiQra Desktop to your local Ollama
+					server. Only reachable inside the desktop app; the hosted web version has no way to reach
+					`localhost` on your machine.{" "}
+					<a href={config.keyUrl} target="_blank" rel="noreferrer">
+						Install Ollama ↗
+					</a>
+				</p>
+			) : (
+				<p className="ai-setup-hint">
+					Saved in this browser only (IndexedDB), so you won&apos;t need to re-enter it next time. Sent directly
+					to {config.label} per request — never saved on our servers.{" "}
+					<a href={config.keyUrl} target="_blank" rel="noreferrer">
+						Get a {config.label} key ↗
+					</a>
+				</p>
+			)}
 
 			<div className="ai-setup-actions">
 				<button type="button" className="link-btn" disabled={!canSave || test.status === "testing"} onClick={handleTest}>

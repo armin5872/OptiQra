@@ -9,7 +9,8 @@ export type AIProviderId =
 	| "openrouter"
 	| "mistral"
 	| "deepseek"
-	| "xai";
+	| "xai"
+	| "ollama";
 
 export interface AIProviderConfig {
 	id: AIProviderId;
@@ -23,6 +24,14 @@ export interface AIProviderConfig {
 	keyUrl: string;
 	/** Providers with huge/rotating catalogs (OpenRouter) also accept a free-typed model id. */
 	allowCustomModel?: boolean;
+	/**
+	 * Local, self-hosted providers (Ollama) don't use a cloud API key at all.
+	 * When true, the setup UI swaps the "API key" field for a server URL
+	 * field and skips key-format validation. The value is still stored in
+	 * the same `apiKeys` slot for simplicity — for these providers it holds
+	 * the base URL (e.g. "http://127.0.0.1:11434"), not a secret.
+	 */
+	localOnly?: boolean;
 }
 
 // Model names drift fast — verify against each provider's docs before shipping.
@@ -102,6 +111,17 @@ export const AI_PROVIDERS: Record<AIProviderId, AIProviderConfig> = {
 		defaultModel: "grok-4.5",
 		models: ["grok-4.5"],
 		keyUrl: "https://console.x.ai",
+	},
+	ollama: {
+		id: "ollama",
+		label: "Local model (Ollama)",
+		keyPrefix: "",
+		defaultModel: "llama3.1:8b",
+		models: ["llama3.1:8b", "llama3.2:3b", "qwen2.5:14b", "mistral:7b", "deepseek-r1:8b", "gemma2:9b"],
+		hint: "Runs entirely on your machine via Ollama — no API key, no data leaves this device. Requires OptiQra Desktop and a running Ollama server with the model already pulled (`ollama pull llama3.1:8b`).",
+		keyUrl: "https://ollama.com/download",
+		allowCustomModel: true,
+		localOnly: true,
 	},
 };
 

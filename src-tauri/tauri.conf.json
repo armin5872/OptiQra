@@ -44,7 +44,21 @@
     "resources": {
       "binaries/.next/standalone": "next-standalone"
     },
-    "createUpdaterArtifacts": true
+    "createUpdaterArtifacts": true,
+    "publisher": "OptiQra",
+    "homepage": "https://optiqra.app",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["English"],
+        "displayLanguageSelector": false,
+        "installerIcon": "icons/icon.ico",
+        "headerImage": "installer/nsis-header.bmp",
+        "sidebarImage": "installer/nsis-sidebar.bmp",
+        "license": "../LICENSE",
+        "startMenuFolder": "OptiQra"
+      }
+    }
   },
   "plugins": {
     "updater": {

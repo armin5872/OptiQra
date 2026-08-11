@@ -41,6 +41,7 @@ export default function ScheduleManager({ url, mode, maxPages }: Props) {
 	const [frequency, setFrequency] = useState<ScanFrequency>("weekly");
 	const [compareWithPrevious, setCompareWithPrevious] = useState(true);
 	const [notify, setNotify] = useState(true);
+	const [predictiveAlerts, setPredictiveAlerts] = useState(true);
 	const [saving, setSaving] = useState(false);
 	const [formError, setFormError] = useState("");
 
@@ -124,6 +125,7 @@ export default function ScheduleManager({ url, mode, maxPages }: Props) {
 				frequency,
 				compareWithPrevious,
 				notify,
+				predictiveAlerts,
 				enabled: true,
 				createdAt: now,
 				nextRunAt: computeNextRun(frequency, now),
@@ -153,6 +155,33 @@ export default function ScheduleManager({ url, mode, maxPages }: Props) {
 		await updateSchedule(schedule.id, { nextRunAt: Date.now() });
 		refresh();
 		runDueSchedules().catch(() => {});
+	};
+
+	const applySuggestedFrequency = async (schedule: ScanSchedule) => {
+		const suggested = schedule.lastResult?.suggestedFrequency;
+		if (!suggested) return;
+		await updateSchedule(schedule.id, {
+			frequency: suggested,
+			nextRunAt: computeNextRun(suggested, Date.now()),
+		});
+		refresh();
+	};
+
+	const trendBadge = (schedule: ScanSchedule) => {
+		const r = schedule.lastResult;
+		if (!r || !r.ok || !r.trendDirection) return null;
+		const arrow = r.trendDirection === "up" ? "↗" : r.trendDirection === "down" ? "↘" : "→";
+		const tone =
+			r.trendDirection === "down" ? "schedule-badge-bad" : r.trendDirection === "up" ? "schedule-badge-good" : "schedule-badge-neutral";
+		return (
+			<span
+				className={`schedule-badge ${tone}`}
+				title={`Projected ~${r.predictedScore14d}/100 in two weeks if this trend holds`}
+			>
+				{arrow} trend · ~{r.predictedScore14d}/100 in 14d
+				{r.chronicIssueCount ? ` · ${r.chronicIssueCount} recurring issue${r.chronicIssueCount === 1 ? "" : "s"}` : ""}
+			</span>
+		);
 	};
 
 	const frequencyLabel = (f: ScanFrequency) =>
@@ -269,6 +298,16 @@ export default function ScheduleManager({ url, mode, maxPages }: Props) {
 							Notify me when a scan finishes
 						</label>
 
+						<label className="schedule-checkbox-row">
+							<input
+								type="checkbox"
+								checked={predictiveAlerts}
+								onChange={(e) => setPredictiveAlerts(e.target.checked)}
+							/>
+							Predictive alerts — heads-up notification if the score trend is
+							declining or an issue keeps recurring, separate from the per-run summary
+						</label>
+
 						{notify && permission === "denied" && (
 							<p className="schedule-note schedule-note-warn">
 								Notifications are blocked in this browser — enable them in your browser's site
@@ -313,7 +352,18 @@ export default function ScheduleManager({ url, mode, maxPages }: Props) {
 													`next: ${new Date(s.nextRunAt).toLocaleString()}`
 												:	"paused"}
 											</span>
-											<div className="schedule-item-result">{resultBadge(s)}</div>
+											<div className="schedule-item-result">
+											{resultBadge(s)}
+											{trendBadge(s)}
+										</div>
+										{s.lastResult?.suggestedFrequency && (
+											<p className="schedule-note schedule-note-suggestion">
+												{s.lastResult.suggestedFrequencyReason}{" "}
+												<button type="button" className="link-btn" onClick={() => applySuggestedFrequency(s)}>
+													Switch to {frequencyLabel(s.lastResult.suggestedFrequency)}
+												</button>
+											</p>
+										)}
 										</div>
 										<div className="schedule-item-actions">
 											<button type="button" onClick={() => runNow(s)} title="Run now">

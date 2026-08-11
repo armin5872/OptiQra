@@ -1562,6 +1562,12 @@ h1 {
 .schedule-note-error {
 	color: var(--critical);
 }
+.schedule-note-suggestion {
+	background: color-mix(in srgb, var(--accent, #6d5ef8) 10%, transparent);
+	border-radius: 6px;
+	padding: 6px 8px;
+	margin-top: 4px;
+}
 .schedule-enable-notif {
 	align-self: flex-start;
 	border: 1px solid var(--accent);
