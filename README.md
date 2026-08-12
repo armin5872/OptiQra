@@ -10,7 +10,7 @@
 ![License](https://img.shields.io/badge/License-MIT-green)
 [![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?logo=vercel)](https://optiqra.vercel.app/)
 
-**[Live demo](https://optiqra.vercel.app)** · Free, no signup, no account · Also available as a [native desktop app](https://github.com/armin5872/OptiQra/releases/tag/v2.4.15) for background scans and fully offline project audits
+**[Live demo](https://optiqra.vercel.app)** · Free, no signup, no account · Also available as a [native desktop app](https://github.com/armin5872/OptiQra/releases/tag/v2.5.0) for background scans and fully offline project audits
 
 <!-- SLOT: hero screenshot / product shot — main scan report view -->
 ![OptiQra](optiqra.webp)
@@ -22,7 +22,7 @@
 
 - [Core audits](#core-audits)
 - [Beyond audits: fixes, not just findings](#beyond-audits-fixes-not-just-findings)
-- [OptiQra Desktop](https://github.com/armin5872/OptiQra/releases/tag/v2.4.15)
+- [OptiQra Desktop](https://github.com/armin5872/OptiQra/releases/tag/v2.5.0)
 - [How it works](#how-it-works)
 - [How OptiQra compares](#how-optiqra-compares)
 - [Tech stack](#-tech-stack)
@@ -296,7 +296,7 @@ Click **⏱ Schedule this scan** on a report (or **⏱ Scheduled scans** in the 
 
 **In the web app:** schedules and history live entirely in the browser's IndexedDB (`src/lib/scheduleStore.ts`). A background checker (`src/lib/scheduler.ts`) runs while any tab of the app is open (or installed as a PWA) and checks every minute for schedules that are due. There's a best-effort attempt to register the [Periodic Background Sync API](https://developer.chrome.com/docs/capabilities/periodic-background-sync) on browsers/installs that support it, but that API has no guaranteed interval and isn't available in most browsers — treat it as a bonus, not a guarantee.
 
-**In the desktop app:** a background daemon inside the packaged sidecar checks schedules independently of whether the window is open — see [OptiQra Desktop](https://github.com/armin5872/OptiQra/releases/tag/v2.4.15) above. This is the actual "runs even when nothing is open" answer; the web app's Periodic Background Sync attempt can't guarantee that on its own.
+**In the desktop app:** a background daemon inside the packaged sidecar checks schedules independently of whether the window is open — see [OptiQra Desktop](https://github.com/armin5872/OptiQra/releases/tag/v2.5.0) above. This is the actual "runs even when nothing is open" answer; the web app's Periodic Background Sync attempt can't guarantee that on its own.
 
 ## Localization
 
@@ -319,7 +319,7 @@ Keys (or, for a local model, the server URL) are entered per-session in the brow
 
 ## PWA and offline support
 
-OptiQra is installable as a Progressive Web App. Completed scans and schedules are saved locally in IndexedDB, so past reports remain viewable offline and survive reloads; a lightweight pointer to your recent scan history is also kept in a capped cookie for fast, synchronous access. For audits that need to work *fully* offline, including project/codebase uploads, see [OptiQra Desktop](https://github.com/armin5872/OptiQra/releases/tag/v2.4.15).
+OptiQra is installable as a Progressive Web App. Completed scans and schedules are saved locally in IndexedDB, so past reports remain viewable offline and survive reloads; a lightweight pointer to your recent scan history is also kept in a capped cookie for fast, synchronous access. For audits that need to work *fully* offline, including project/codebase uploads, see [OptiQra Desktop](https://github.com/armin5872/OptiQra/releases/tag/v2.5.0).
 
 ## API
 
