@@ -8,12 +8,14 @@ interface StreamArgs {
 	user: string;
 }
 
-// Base URLs for every provider that speaks the OpenAI chat/completions dialect.
-// Anthropic and Google have their own shapes and are handled separately below.
-const OPENAI_COMPATIBLE_BASE_URL: Record<
-	Exclude<AIProviderId, "anthropic" | "google">,
-	string
-> = {
+// Providers that speak the plain OpenAI chat/completions dialect against a
+// fixed cloud base URL. Anthropic and Google have their own request shapes,
+// and Ollama (also OpenAI-compatible in wire format) hits a user-configured
+// *local* URL instead of one of these fixed ones — all three are handled in
+// their own dedicated stream*/testProviderKey branches, not through this map.
+type OpenAICompatibleProviderId = Exclude<AIProviderId, "anthropic" | "google" | "ollama">;
+
+const OPENAI_COMPATIBLE_BASE_URL: Record<OpenAICompatibleProviderId, string> = {
 	openai: "https://api.openai.com/v1/chat/completions",
 	groq: "https://api.groq.com/openai/v1/chat/completions",
 	openrouter: "https://openrouter.ai/api/v1/chat/completions",
@@ -52,7 +54,7 @@ async function fetchWithRetry(url: string, init: RequestInit, attempts = 2): Pro
 }
 
 async function* streamOpenAICompatible(provider: AIProviderId, { apiKey, model, system, user }: StreamArgs) {
-	const url = OPENAI_COMPATIBLE_BASE_URL[provider as Exclude<AIProviderId, "anthropic" | "google">];
+	const url = OPENAI_COMPATIBLE_BASE_URL[provider as OpenAICompatibleProviderId];
 
 	const res = await fetchWithRetry(url, {
 		method: "POST",
@@ -283,7 +285,7 @@ export async function testProviderKey(
 			return { ok: true };
 		}
 
-		const url = OPENAI_COMPATIBLE_BASE_URL[provider as Exclude<AIProviderId, "anthropic" | "google">];
+		const url = OPENAI_COMPATIBLE_BASE_URL[provider as OpenAICompatibleProviderId];
 		const res = await fetch(url, {
 			method: "POST",
 			headers: {

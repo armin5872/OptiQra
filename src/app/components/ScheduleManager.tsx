@@ -157,12 +157,13 @@ export default function ScheduleManager({ url, mode, maxPages }: Props) {
 		runDueSchedules().catch(() => {});
 	};
 
-	const applySuggestedFrequency = async (schedule: ScanSchedule) => {
+	const handleApplySuggestedFrequency = async (schedule: ScanSchedule) => {
 		const suggested = schedule.lastResult?.suggestedFrequency;
 		if (!suggested) return;
+		const now = Date.now();
 		await updateSchedule(schedule.id, {
 			frequency: suggested,
-			nextRunAt: computeNextRun(suggested, Date.now()),
+			nextRunAt: computeNextRun(suggested, now),
 		});
 		refresh();
 	};
@@ -359,7 +360,7 @@ export default function ScheduleManager({ url, mode, maxPages }: Props) {
 										{s.lastResult?.suggestedFrequency && (
 											<p className="schedule-note schedule-note-suggestion">
 												{s.lastResult.suggestedFrequencyReason}{" "}
-												<button type="button" className="link-btn" onClick={() => applySuggestedFrequency(s)}>
+												<button type="button" className="link-btn" onClick={() => handleApplySuggestedFrequency(s)}>
 													Switch to {frequencyLabel(s.lastResult.suggestedFrequency)}
 												</button>
 											</p>
