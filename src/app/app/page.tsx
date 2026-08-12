@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 // since every asset filename embeds the version.
 const REPO_URL = "https://github.com/armin5872/OptiQra";
 const RELEASES_URL = `${REPO_URL}/releases`;
-const APP_VERSION = "2.4.15";
+const APP_VERSION = "2.5.1";
 const LATEST_DOWNLOAD = `${REPO_URL}/releases/latest/download`;
 
 const DOWNLOAD_MACOS_ARM = `${LATEST_DOWNLOAD}/OptiQra_${APP_VERSION}_aarch64.dmg`;
