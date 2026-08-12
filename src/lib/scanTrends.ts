@@ -19,7 +19,7 @@
 // Node/pkg server build (see scheduler-daemon.ts's own note about the same
 // tradeoff for its Category type). Keep this list in sync with
 // scheduleStore.ts's ScanFrequency if it ever changes.
-export type ScanFrequency = "hourly" | "daily" | "weekly" | "monthly" | "yearly";
+export type ScanFrequency = "hourly" | "daily" | "weekly" | "monthly" | "yearly" | "custom";
 
 export type TrendPoint = { at: number; overallScore: number };
 

@@ -18,7 +18,8 @@ export type ScanFrequency =
 	| "daily"
 	| "weekly"
 	| "monthly"
-	| "yearly";
+	| "yearly"
+	| "custom";
 
 export type ScheduleRunResult = {
 	ranAt: number;
@@ -58,6 +59,28 @@ export type ScanSchedule = {
 	 *  the same issue has now shown up unresolved for 3+ scans in a row —
 	 *  instead of waiting for a bad "scan finished" summary after the fact. */
 	predictiveAlerts?: boolean;
+
+	// --- Custom scheduling (all optional — omitting them keeps the
+	// original "N <unit> after the last run" behavior for hourly/daily/
+	// weekly/monthly/yearly, so existing schedules aren't affected). ---
+
+	/** Only used when frequency === "custom": run every N minutes, where N
+	 *  is this value converted from whatever unit the UI collected it in
+	 *  (minutes/hours/days/weeks) — see CUSTOM_INTERVAL_MIN_MINUTES for the
+	 *  floor. */
+	customIntervalMinutes?: number;
+	/** Local 24h clock time ("HH:MM") to anchor daily/weekly/monthly/yearly
+	 *  (and day+ "custom") runs to, e.g. "run at 03:00" instead of "run 24h
+	 *  after whenever the last run happened to fire" — avoids the small
+	 *  drift that causes a "daily" scan to slowly creep later and later if
+	 *  a run is ever a few minutes late. Ignored for "hourly" and for
+	 *  "custom" intervals under a day. */
+	timeOfDay?: string;
+	/** Only meaningful for "weekly" (or a "custom" interval of 7+ days):
+	 *  specific days to run on, 0=Sunday..6=Saturday. When set, this
+	 *  replaces "same weekday the schedule was created on" with an
+	 *  explicit, possibly multi-day, list — e.g. "Mon + Thu". */
+	daysOfWeek?: number[];
 };
 
 interface ScheduleDB extends DBSchema {

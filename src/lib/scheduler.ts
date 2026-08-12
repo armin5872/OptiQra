@@ -38,17 +38,110 @@ export const FREQUENCY_OPTIONS: { id: ScanFrequency; label: string }[] = [
 	{ id: "weekly", label: "Weekly" },
 	{ id: "monthly", label: "Monthly" },
 	{ id: "yearly", label: "Yearly" },
+	{ id: "custom", label: "Custom…" },
 ];
+
+export const CUSTOM_INTERVAL_UNITS = [
+	{ id: "minutes", label: "Minutes", minutes: 1 },
+	{ id: "hours", label: "Hours", minutes: 60 },
+	{ id: "days", label: "Days", minutes: 60 * 24 },
+	{ id: "weeks", label: "Weeks", minutes: 60 * 24 * 7 },
+] as const;
+
+export const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+// Floor for a "custom" interval so a mistyped "every 1 minute" schedule
+// can't be created — this hits a live site on every run, so there's a
+// real floor, not just a UI nicety. 5 minutes is still fast enough to be
+// meaningfully more granular than "hourly".
+export const CUSTOM_INTERVAL_MIN_MINUTES = 5;
 
 const CHECK_INTERVAL_MS = 60 * 1000; // how often the foreground checker looks for due schedules
 
-/** Calendar-aware "next run" — hourly/daily/weekly are fixed durations,
- * monthly/yearly walk the calendar so e.g. "run on the 31st" doesn't drift. */
-export function computeNextRun(frequency: ScanFrequency, from = Date.now()): number {
+/** Just the fields computeNextRun() actually needs — accepting this shape
+ *  (rather than a full ScanSchedule) keeps it usable both for a schedule
+ *  that already exists and for the "preview next run" calculation while
+ *  someone is still filling out the create form. */
+export interface RecurrenceInput {
+	frequency: ScanFrequency;
+	customIntervalMinutes?: number;
+	timeOfDay?: string;
+	daysOfWeek?: number[];
+}
+
+function withTimeOfDay(date: Date, timeOfDay: string): Date {
+	const [h, m] = timeOfDay.split(":").map((n) => parseInt(n, 10));
+	const d = new Date(date);
+	if (!Number.isNaN(h) && !Number.isNaN(m)) d.setHours(h, m, 0, 0);
+	return d;
+}
+
+/** Walks forward day-by-day from `from` (at `timeOfDay`, stepping by
+ *  `stepDays` when no specific weekdays are pinned) until it lands on a
+ *  moment that's both in the future and — if `daysOfWeek` is set — on one
+ *  of the allowed weekdays. Used for "daily/weekly/monthly at a specific
+ *  clock time" and for day+ "custom" intervals that also specify a time. */
+function nextAnchoredRun(from: Date, timeOfDay: string, stepDays: number, daysOfWeek?: number[]): number {
+	let candidate = withTimeOfDay(from, timeOfDay);
+
+	if (daysOfWeek && daysOfWeek.length > 0) {
+		for (let i = 0; i < 8; i++) {
+			if (candidate.getTime() > from.getTime() && daysOfWeek.includes(candidate.getDay())) {
+				return candidate.getTime();
+			}
+			candidate = withTimeOfDay(new Date(candidate.getTime() + 24 * 60 * 60 * 1000), timeOfDay);
+		}
+		return candidate.getTime(); // unreachable in practice (8 days always covers a full week)
+	}
+
+	if (candidate.getTime() <= from.getTime()) {
+		candidate = new Date(candidate.getTime() + stepDays * 24 * 60 * 60 * 1000);
+	}
+	return candidate.getTime();
+}
+
+/** Calendar-aware "next run". hourly/daily/weekly are fixed durations by
+ * default; monthly/yearly walk the calendar so e.g. "run on the 31st"
+ * doesn't drift. Accepting either a bare ScanFrequency (legacy call sites,
+ * and the "elapsed time since last run" behavior) or a full
+ * RecurrenceInput (to honor a specific time-of-day and/or days-of-week,
+ * and to support the "custom" interval frequency) keeps every existing
+ * caller working unchanged. */
+export function computeNextRun(input: ScanFrequency | RecurrenceInput, from = Date.now()): number {
+	const opts: RecurrenceInput = typeof input === "string" ? { frequency: input } : input;
+	const { frequency, timeOfDay, daysOfWeek, customIntervalMinutes } = opts;
 	const d = new Date(from);
+
+	if (frequency === "custom") {
+		const minutes = Math.max(CUSTOM_INTERVAL_MIN_MINUTES, customIntervalMinutes ?? 60);
+		// A day+ custom interval with a clock time set behaves like
+		// "daily/weekly at HH:MM" (anchored, no drift) instead of pure
+		// elapsed-time — matches how the built-in daily/weekly options work
+		// once a time-of-day is set.
+		if (timeOfDay && minutes >= 24 * 60) {
+			return nextAnchoredRun(d, timeOfDay, Math.round(minutes / (24 * 60)), daysOfWeek);
+		}
+		return from + minutes * 60 * 1000;
+	}
+
+	if (frequency === "hourly") return from + 60 * 60 * 1000; // a clock-time anchor doesn't make sense at hourly granularity
+
+	if (timeOfDay && (frequency === "daily" || frequency === "weekly")) {
+		return nextAnchoredRun(d, timeOfDay, frequency === "weekly" ? 7 : 1, daysOfWeek);
+	}
+	if (timeOfDay && frequency === "monthly") {
+		const next = withTimeOfDay(d, timeOfDay);
+		if (next.getTime() <= from) next.setMonth(next.getMonth() + 1);
+		return next.getTime();
+	}
+	if (timeOfDay && frequency === "yearly") {
+		const next = withTimeOfDay(d, timeOfDay);
+		if (next.getTime() <= from) next.setFullYear(next.getFullYear() + 1);
+		return next.getTime();
+	}
+
+	// No time-of-day set — original relative/calendar-walk behavior.
 	switch (frequency) {
-		case "hourly":
-			return from + 60 * 60 * 1000;
 		case "daily":
 			return from + 24 * 60 * 60 * 1000;
 		case "weekly":
@@ -219,7 +312,7 @@ async function runSchedule(schedule: ScanSchedule) {
 		const now = Date.now();
 		await updateSchedule(schedule.id, {
 			lastRunAt: now,
-			nextRunAt: computeNextRun(schedule.frequency, now),
+			nextRunAt: computeNextRun(schedule, now),
 			lastScanId: stored.id,
 			lastResult: {
 				ranAt: now,
@@ -261,7 +354,7 @@ async function runSchedule(schedule: ScanSchedule) {
 		const now = Date.now();
 		await updateSchedule(schedule.id, {
 			lastRunAt: now,
-			nextRunAt: computeNextRun(schedule.frequency, now),
+			nextRunAt: computeNextRun(schedule, now),
 			lastResult: {
 				ranAt: now,
 				scanId: schedule.lastScanId ?? "",

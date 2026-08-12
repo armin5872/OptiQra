@@ -1550,6 +1550,63 @@ h1 {
 .schedule-checkbox-row input {
 	flex: none;
 }
+.schedule-custom-interval-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 13px;
+	color: var(--ink);
+}
+.schedule-custom-interval-row select {
+	flex: 1;
+	padding: 7px 8px;
+	border-radius: 7px;
+	border: 1px solid var(--line);
+	background: var(--surface);
+	color: var(--ink);
+	font-size: 13px;
+}
+.schedule-custom-interval-value {
+	width: 64px;
+	padding: 7px 8px;
+	border-radius: 7px;
+	border: 1px solid var(--line);
+	background: var(--surface);
+	color: var(--ink);
+	font-size: 13px;
+}
+.schedule-weekday-picker {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+.schedule-weekday-picker button {
+	padding: 5px 9px;
+	border-radius: 6px;
+	border: 1px solid var(--line);
+	background: var(--surface);
+	color: var(--ink-soft);
+	font-size: 12px;
+	cursor: pointer;
+}
+.schedule-weekday-picker button.active {
+	background: var(--accent, #6d5ef8);
+	border-color: var(--accent, #6d5ef8);
+	color: #fff;
+}
+.schedule-weekday-picker .schedule-note {
+	flex-basis: 100%;
+	margin-top: 2px;
+}
+.schedule-time-input {
+	margin-left: auto;
+	padding: 5px 8px;
+	border-radius: 6px;
+	border: 1px solid var(--line);
+	background: var(--surface);
+	color: var(--ink);
+	font-size: 13px;
+}
 .schedule-note {
 	font-size: 12px;
 	color: var(--ink-soft);

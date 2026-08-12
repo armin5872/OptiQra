@@ -19,7 +19,7 @@ import os from "node:os";
  * shapes in sync if either changes.
  */
 
-export type ScanFrequency = "hourly" | "daily" | "weekly" | "monthly" | "yearly";
+export type ScanFrequency = "hourly" | "daily" | "weekly" | "monthly" | "yearly" | "custom";
 
 export type ScheduleRunResult = {
 	ranAt: number;
@@ -53,6 +53,9 @@ export type ScanSchedule = {
 	lastScanId?: string;
 	lastResult?: ScheduleRunResult;
 	predictiveAlerts?: boolean;
+	customIntervalMinutes?: number;
+	timeOfDay?: string;
+	daysOfWeek?: number[];
 };
 
 function dataDir(): string {

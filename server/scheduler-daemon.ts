@@ -57,15 +57,66 @@ type ScanStreamEvent =
 	| { type: "aborted" }
 	| { type: "error"; message?: string };
 
-// Duplicated from scheduler.ts (calendar-aware next-run math) rather than
+// Duplicated from scheduler.ts (calendar-aware next-run math, now
+// including custom-interval/time-of-day/days-of-week support) rather than
 // imported, since that file also pulls in idb-backed scheduleStore.ts at
 // module scope — importing it here would drag a browser-only dependency
-// into the Node/pkg build. Keep in sync if the frequency options change.
-function computeNextRun(frequency: ScanSchedule["frequency"], from = Date.now()): number {
+// into the Node/pkg build. Keep in sync if this logic changes.
+function withTimeOfDay(date: Date, timeOfDay: string): Date {
+	const [h, m] = timeOfDay.split(":").map((n) => parseInt(n, 10));
+	const d = new Date(date);
+	if (!Number.isNaN(h) && !Number.isNaN(m)) d.setHours(h, m, 0, 0);
+	return d;
+}
+
+function nextAnchoredRun(from: Date, timeOfDay: string, stepDays: number, daysOfWeek?: number[]): number {
+	let candidate = withTimeOfDay(from, timeOfDay);
+	if (daysOfWeek && daysOfWeek.length > 0) {
+		for (let i = 0; i < 8; i++) {
+			if (candidate.getTime() > from.getTime() && daysOfWeek.includes(candidate.getDay())) {
+				return candidate.getTime();
+			}
+			candidate = withTimeOfDay(new Date(candidate.getTime() + 24 * 60 * 60 * 1000), timeOfDay);
+		}
+		return candidate.getTime();
+	}
+	if (candidate.getTime() <= from.getTime()) {
+		candidate = new Date(candidate.getTime() + stepDays * 24 * 60 * 60 * 1000);
+	}
+	return candidate.getTime();
+}
+
+const CUSTOM_INTERVAL_MIN_MINUTES = 5;
+
+function computeNextRun(schedule: Pick<ScanSchedule, "frequency" | "customIntervalMinutes" | "timeOfDay" | "daysOfWeek">, from = Date.now()): number {
+	const { frequency, timeOfDay, daysOfWeek, customIntervalMinutes } = schedule;
 	const d = new Date(from);
+
+	if (frequency === "custom") {
+		const minutes = Math.max(CUSTOM_INTERVAL_MIN_MINUTES, customIntervalMinutes ?? 60);
+		if (timeOfDay && minutes >= 24 * 60) {
+			return nextAnchoredRun(d, timeOfDay, Math.round(minutes / (24 * 60)), daysOfWeek);
+		}
+		return from + minutes * 60 * 1000;
+	}
+
+	if (frequency === "hourly") return from + 60 * 60 * 1000;
+
+	if (timeOfDay && (frequency === "daily" || frequency === "weekly")) {
+		return nextAnchoredRun(d, timeOfDay, frequency === "weekly" ? 7 : 1, daysOfWeek);
+	}
+	if (timeOfDay && frequency === "monthly") {
+		const next = withTimeOfDay(d, timeOfDay);
+		if (next.getTime() <= from) next.setMonth(next.getMonth() + 1);
+		return next.getTime();
+	}
+	if (timeOfDay && frequency === "yearly") {
+		const next = withTimeOfDay(d, timeOfDay);
+		if (next.getTime() <= from) next.setFullYear(next.getFullYear() + 1);
+		return next.getTime();
+	}
+
 	switch (frequency) {
-		case "hourly":
-			return from + 60 * 60 * 1000;
 		case "daily":
 			return from + 24 * 60 * 60 * 1000;
 		case "weekly":
@@ -220,7 +271,7 @@ async function runSchedule(port: number, schedule: ScanSchedule) {
 		const now = Date.now();
 		await updateSchedule(schedule.id, {
 			lastRunAt: now,
-			nextRunAt: computeNextRun(schedule.frequency, now),
+			nextRunAt: computeNextRun(schedule, now),
 			lastScanId: stored.id,
 			lastResult: { ranAt: now, scanId: stored.id, overallScore, ok: true, ...comparisonFields, ...predictiveFields },
 		});
@@ -255,7 +306,7 @@ async function runSchedule(port: number, schedule: ScanSchedule) {
 		const now = Date.now();
 		await updateSchedule(schedule.id, {
 			lastRunAt: now,
-			nextRunAt: computeNextRun(schedule.frequency, now),
+			nextRunAt: computeNextRun(schedule, now),
 			lastResult: {
 				ranAt: now,
 				scanId: schedule.lastScanId ?? "",

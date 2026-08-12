@@ -11,6 +11,9 @@ import {
 } from "@/lib/scheduleStore";
 import {
 	FREQUENCY_OPTIONS,
+	CUSTOM_INTERVAL_UNITS,
+	WEEKDAY_LABELS,
+	CUSTOM_INTERVAL_MIN_MINUTES,
 	computeNextRun,
 	startScheduler,
 	runDueSchedules,
@@ -39,6 +42,11 @@ export default function ScheduleManager({ url, mode, maxPages }: Props) {
 	const [targetUrl, setTargetUrl] = useState(url ?? "");
 	const [targetMode, setTargetMode] = useState<"single" | "site">(mode ?? "single");
 	const [frequency, setFrequency] = useState<ScanFrequency>("weekly");
+	const [customValue, setCustomValue] = useState(6);
+	const [customUnit, setCustomUnit] = useState<(typeof CUSTOM_INTERVAL_UNITS)[number]["id"]>("hours");
+	const [useTimeOfDay, setUseTimeOfDay] = useState(false);
+	const [timeOfDay, setTimeOfDay] = useState("09:00");
+	const [selectedDays, setSelectedDays] = useState<number[]>([]);
 	const [compareWithPrevious, setCompareWithPrevious] = useState(true);
 	const [notify, setNotify] = useState(true);
 	const [predictiveAlerts, setPredictiveAlerts] = useState(true);
@@ -49,6 +57,18 @@ export default function ScheduleManager({ url, mode, maxPages }: Props) {
 		setTargetUrl(url ?? "");
 		setTargetMode(mode ?? "single");
 	}, [url, mode]);
+
+	const showsTimeOfDay =
+		frequency === "daily" ||
+		frequency === "weekly" ||
+		frequency === "monthly" ||
+		frequency === "yearly" ||
+		(frequency === "custom" && (customUnit === "days" || customUnit === "weeks"));
+	const showsDaysOfWeek = frequency === "weekly" || (frequency === "custom" && customUnit === "weeks");
+
+	const toggleDay = (day: number) => {
+		setSelectedDays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort()));
+	};
 
 	const refresh = () => {
 		getAllSchedules()
@@ -114,21 +134,41 @@ export default function ScheduleManager({ url, mode, maxPages }: Props) {
 			setFormError("Enter a URL to schedule.");
 			return;
 		}
+		if (frequency === "custom" && (!customValue || customValue < 1)) {
+			setFormError("Enter a custom interval greater than 0.");
+			return;
+		}
 		setSaving(true);
 		try {
 			const now = Date.now();
+			const unitMinutes = CUSTOM_INTERVAL_UNITS.find((u) => u.id === customUnit)?.minutes ?? 60;
+			const customIntervalMinutes =
+				frequency === "custom"
+					? Math.max(CUSTOM_INTERVAL_MIN_MINUTES, Math.round(customValue * unitMinutes))
+					: undefined;
 			const schedule: ScanSchedule = {
 				id: crypto.randomUUID(),
 				url: formattedUrl,
 				mode: targetMode,
 				maxPages: targetMode === "site" ? maxPages ?? 50 : undefined,
 				frequency,
+				customIntervalMinutes,
+				timeOfDay: showsTimeOfDay && useTimeOfDay ? timeOfDay : undefined,
+				daysOfWeek: showsDaysOfWeek && selectedDays.length > 0 ? selectedDays : undefined,
 				compareWithPrevious,
 				notify,
 				predictiveAlerts,
 				enabled: true,
 				createdAt: now,
-				nextRunAt: computeNextRun(frequency, now),
+				nextRunAt: computeNextRun(
+					{
+						frequency,
+						customIntervalMinutes,
+						timeOfDay: showsTimeOfDay && useTimeOfDay ? timeOfDay : undefined,
+						daysOfWeek: showsDaysOfWeek && selectedDays.length > 0 ? selectedDays : undefined,
+					},
+					now,
+				),
 			};
 			await saveSchedule(schedule);
 			if (notify && permission === "default") await enableNotifications();
@@ -187,6 +227,27 @@ export default function ScheduleManager({ url, mode, maxPages }: Props) {
 
 	const frequencyLabel = (f: ScanFrequency) =>
 		FREQUENCY_OPTIONS.find((o) => o.id === f)?.label ?? f;
+
+	/** Human-readable cadence for a saved schedule — e.g. "Every 6 hours",
+	 *  "Weekly, Mon + Thu at 09:00", "Monthly at 03:00". Falls back to the
+	 *  plain frequency label when no custom interval/time/days were set. */
+	const describeSchedule = (s: ScanSchedule) => {
+		let base: string;
+		if (s.frequency === "custom" && s.customIntervalMinutes) {
+			const m = s.customIntervalMinutes;
+			if (m % (60 * 24 * 7) === 0 && m >= 60 * 24 * 7) base = `Every ${m / (60 * 24 * 7)} week${m / (60 * 24 * 7) === 1 ? "" : "s"}`;
+			else if (m % (60 * 24) === 0 && m >= 60 * 24) base = `Every ${m / (60 * 24)} day${m / (60 * 24) === 1 ? "" : "s"}`;
+			else if (m % 60 === 0) base = `Every ${m / 60} hour${m / 60 === 1 ? "" : "s"}`;
+			else base = `Every ${m} min`;
+		} else {
+			base = frequencyLabel(s.frequency);
+		}
+		if (s.daysOfWeek && s.daysOfWeek.length > 0) {
+			base += ` (${s.daysOfWeek.map((d) => WEEKDAY_LABELS[d]).join(", ")})`;
+		}
+		if (s.timeOfDay) base += ` at ${s.timeOfDay}`;
+		return base;
+	};
 
 	const resultBadge = (schedule: ScanSchedule) => {
 		const r = schedule.lastResult;
@@ -281,6 +342,71 @@ export default function ScheduleManager({ url, mode, maxPages }: Props) {
 							))}
 						</select>
 
+						{frequency === "custom" && (
+							<div className="schedule-custom-interval-row">
+								<span>Every</span>
+								<input
+									type="number"
+									min={customUnit === "minutes" ? CUSTOM_INTERVAL_MIN_MINUTES : 1}
+									value={customValue}
+									onChange={(e) => setCustomValue(Math.max(1, parseInt(e.target.value, 10) || 1))}
+									className="schedule-custom-interval-value"
+									aria-label="Custom interval amount"
+								/>
+								<select
+									value={customUnit}
+									onChange={(e) => setCustomUnit(e.target.value as typeof customUnit)}
+									aria-label="Custom interval unit"
+								>
+									{CUSTOM_INTERVAL_UNITS.map((u) => (
+										<option key={u.id} value={u.id}>
+											{u.label}
+										</option>
+									))}
+								</select>
+							</div>
+						)}
+
+						{showsDaysOfWeek && (
+							<div className="schedule-weekday-picker" role="group" aria-label="Days to run on">
+								{WEEKDAY_LABELS.map((label, i) => (
+									<button
+										type="button"
+										key={label}
+										className={selectedDays.includes(i) ? "active" : ""}
+										onClick={() => toggleDay(i)}
+									>
+										{label}
+									</button>
+								))}
+								<p className="schedule-note">
+									{selectedDays.length === 0
+										? "No specific days picked — runs on the same weekday it was created."
+										: `Runs on: ${selectedDays.map((d) => WEEKDAY_LABELS[d]).join(", ")}.`}
+								</p>
+							</div>
+						)}
+
+						{showsTimeOfDay && (
+							<label className="schedule-checkbox-row">
+								<input
+									type="checkbox"
+									checked={useTimeOfDay}
+									onChange={(e) => setUseTimeOfDay(e.target.checked)}
+								/>
+								Run at a specific time
+								{useTimeOfDay && (
+									<input
+										type="time"
+										value={timeOfDay}
+										onChange={(e) => setTimeOfDay(e.target.value)}
+										className="schedule-time-input"
+										aria-label="Time of day to run"
+									/>
+								)}
+							</label>
+						)}
+
 						<label className="schedule-checkbox-row">
 							<input
 								type="checkbox"
@@ -347,24 +473,24 @@ export default function ScheduleManager({ url, mode, maxPages }: Props) {
 										<div className="schedule-item-main">
 											<span className="schedule-item-url">{s.url}</span>
 											<span className="schedule-item-meta">
-												{s.mode === "site" ? "Whole site" : "Single page"} · {frequencyLabel(s.frequency)}
+												{s.mode === "site" ? "Whole site" : "Single page"} · {describeSchedule(s)}
 												{" · "}
 												{s.enabled ?
 													`next: ${new Date(s.nextRunAt).toLocaleString()}`
 												:	"paused"}
 											</span>
 											<div className="schedule-item-result">
-											{resultBadge(s)}
-											{trendBadge(s)}
-										</div>
-										{s.lastResult?.suggestedFrequency && (
-											<p className="schedule-note schedule-note-suggestion">
-												{s.lastResult.suggestedFrequencyReason}{" "}
-												<button type="button" className="link-btn" onClick={() => handleApplySuggestedFrequency(s)}>
-													Switch to {frequencyLabel(s.lastResult.suggestedFrequency)}
-												</button>
-											</p>
-										)}
+												{resultBadge(s)}
+												{trendBadge(s)}
+											</div>
+											{s.lastResult?.suggestedFrequency && (
+												<p className="schedule-note schedule-note-suggestion">
+													{s.lastResult.suggestedFrequencyReason}{" "}
+													<button type="button" className="link-btn" onClick={() => handleApplySuggestedFrequency(s)}>
+														Switch to {frequencyLabel(s.lastResult.suggestedFrequency)}
+													</button>
+												</p>
+											)}
 										</div>
 										<div className="schedule-item-actions">
 											<button type="button" onClick={() => runNow(s)} title="Run now">
