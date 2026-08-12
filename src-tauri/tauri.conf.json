@@ -47,6 +47,7 @@
     "createUpdaterArtifacts": true,
     "publisher": "OptiQra",
     "homepage": "https://optiqra.app",
+    "licenseFile": "../LICENSE",
     "windows": {
       "nsis": {
         "installMode": "currentUser",
@@ -55,7 +56,6 @@
         "installerIcon": "icons/icon.ico",
         "headerImage": "installer/nsis-header.bmp",
         "sidebarImage": "installer/nsis-sidebar.bmp",
-        "license": "../LICENSE",
         "startMenuFolder": "OptiQra"
       }
     }
