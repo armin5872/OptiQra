@@ -1,5 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import { DEFAULT_LANGUAGE, isLanguageCode, type LanguageCode } from "./i18n/languages";
+import { reportStorageError, clearStorageFailure } from "./storageHealth";
 
 /**
  * All user-facing customization for OptiQra lives here: appearance, scan
@@ -361,8 +362,10 @@ export async function getSettings(): Promise<OptiqraSettings> {
 	try {
 		const db = await getDB();
 		const stored = await db.get(STORE_NAME, SETTINGS_KEY);
+		clearStorageFailure();
 		return mergeWithDefaults(stored);
-	} catch {
+	} catch (err) {
+		reportStorageError("settings:load", err);
 		return DEFAULT_SETTINGS;
 	}
 }
@@ -372,9 +375,13 @@ export async function saveSettings(settings: OptiqraSettings): Promise<OptiqraSe
 	try {
 		const db = await getDB();
 		await db.put(STORE_NAME, merged, SETTINGS_KEY);
-	} catch {
-		// IndexedDB unavailable (private mode, etc.) — the cookie mirror below
-		// still keeps appearance settings working for this session.
+		clearStorageFailure();
+	} catch (err) {
+		// IndexedDB unavailable (private mode, quota exceeded, etc.) — the
+		// cookie mirror below still keeps appearance settings working for
+		// this session, but the change won't survive a reload. Surface it
+		// instead of pretending it worked.
+		reportStorageError("settings:save", err);
 	}
 	setMirrorCookie(merged);
 	return merged;

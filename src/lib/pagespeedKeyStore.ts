@@ -1,5 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import type { PageSpeedStrategy } from "@/lib/pagespeed";
+import { reportStorageError, clearStorageFailure } from "@/lib/storageHealth";
 
 /**
  * Persists the user's PageSpeed Insights API key and strategy choice across
@@ -53,10 +54,12 @@ export async function getPageSpeedState(): Promise<PageSpeedStoredState> {
 	try {
 		const db = await getDB();
 		const stored = await db.get(STORE_NAME, STATE_KEY);
+		clearStorageFailure();
 		if (!stored) return EMPTY_STATE;
 		const strategy: PageSpeedStrategy = stored.strategy === "desktop" ? "desktop" : "mobile";
 		return { apiKey: stored.apiKey ?? "", strategy };
-	} catch {
+	} catch (err) {
+		reportStorageError("pagespeed-key:load", err);
 		return EMPTY_STATE;
 	}
 }
@@ -65,8 +68,11 @@ export async function savePageSpeedState(state: PageSpeedStoredState): Promise<v
 	try {
 		const db = await getDB();
 		await db.put(STORE_NAME, state, STATE_KEY);
-	} catch {
-		// IndexedDB unavailable (private mode, etc.) — key just won't persist
-		// across reloads this session; the in-memory React state still works.
+		clearStorageFailure();
+	} catch (err) {
+		// IndexedDB unavailable (private mode, quota exceeded, etc.) — key
+		// just won't persist across reloads this session; the in-memory
+		// React state still works.
+		reportStorageError("pagespeed-key:save", err);
 	}
 }

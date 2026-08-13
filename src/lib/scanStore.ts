@@ -1,5 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import { isDesktop, listDesktopScans, readDesktopScan } from "@/lib/desktopBridge";
+import { reportStorageError, clearStorageFailure } from "@/lib/storageHealth";
 
 /**
  * Persists full scan reports in IndexedDB so past scans survive reloads,
@@ -80,11 +81,13 @@ async function mergeDesktopScansOnce(db: IDBPDatabase<ScanDB>) {
 	}
 }
 
-/** Save (or overwrite) a full scan report. Returns the stored record. */
+/** Save (or overwrite) a full scan report. Returns the stored record.
+ *  Throws on failure (see storageHealth.ts) — callers already wrap this in
+ *  try/catch (page.tsx's persistScan), so it's reported both to the console
+ *  and to the shared storage-health tracker before propagating. */
 export async function saveScan(
 	scan: Omit<StoredScan, "id" | "createdAt"> & { id?: string; createdAt?: number },
 ): Promise<StoredScan> {
-	const db = await getDB();
 	const record: StoredScan = {
 		id: scan.id ?? crypto.randomUUID(),
 		createdAt: scan.createdAt ?? Date.now(),
@@ -93,16 +96,29 @@ export async function saveScan(
 		overallScore: scan.overallScore,
 		data: scan.data,
 	};
-	await db.put(STORE_NAME, record);
-	return record;
+	try {
+		const db = await getDB();
+		await db.put(STORE_NAME, record);
+		clearStorageFailure();
+		return record;
+	} catch (err) {
+		reportStorageError("scans:save", err);
+		throw err;
+	}
 }
 
 /** All stored scans, newest first. */
 export async function getAllScans(): Promise<StoredScan[]> {
-	const db = await getDB();
-	await mergeDesktopScansOnce(db);
-	const all = await db.getAllFromIndex(STORE_NAME, "by-createdAt");
-	return all.reverse();
+	try {
+		const db = await getDB();
+		await mergeDesktopScansOnce(db);
+		const all = await db.getAllFromIndex(STORE_NAME, "by-createdAt");
+		clearStorageFailure();
+		return all.reverse();
+	} catch (err) {
+		reportStorageError("scans:load", err);
+		throw err;
+	}
 }
 
 /** Most recent N scans (default 10) — cheap for a "recent scans" list. */

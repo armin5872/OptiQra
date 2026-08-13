@@ -1,4 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
+import { reportStorageError, clearStorageFailure } from "@/lib/storageHealth";
 
 /**
  * User-authored "custom rules" — small JS snippets that post-process a
@@ -79,8 +80,10 @@ export async function getAllRules(): Promise<CustomRule[]> {
 	try {
 		const db = await getDB();
 		const all = await db.getAllFromIndex(STORE_NAME, "by-createdAt");
+		clearStorageFailure();
 		return all.reverse();
-	} catch {
+	} catch (err) {
+		reportStorageError("custom-rules:load", err);
 		return [];
 	}
 }
@@ -88,23 +91,35 @@ export async function getAllRules(): Promise<CustomRule[]> {
 export async function saveRule(
 	rule: Omit<CustomRule, "id" | "createdAt" | "updatedAt"> & { id?: string },
 ): Promise<CustomRule> {
-	const db = await getDB();
-	const existing = rule.id ? await db.get(STORE_NAME, rule.id) : undefined;
-	const now = Date.now();
-	const record: CustomRule = {
-		id: rule.id ?? crypto.randomUUID(),
-		name: rule.name,
-		description: rule.description,
-		code: rule.code,
-		enabled: rule.enabled,
-		createdAt: existing?.createdAt ?? now,
-		updatedAt: now,
-	};
-	await db.put(STORE_NAME, record);
-	return record;
+	try {
+		const db = await getDB();
+		const existing = rule.id ? await db.get(STORE_NAME, rule.id) : undefined;
+		const now = Date.now();
+		const record: CustomRule = {
+			id: rule.id ?? crypto.randomUUID(),
+			name: rule.name,
+			description: rule.description,
+			code: rule.code,
+			enabled: rule.enabled,
+			createdAt: existing?.createdAt ?? now,
+			updatedAt: now,
+		};
+		await db.put(STORE_NAME, record);
+		clearStorageFailure();
+		return record;
+	} catch (err) {
+		reportStorageError("custom-rules:save", err);
+		throw err;
+	}
 }
 
 export async function deleteRule(id: string): Promise<void> {
-	const db = await getDB();
-	await db.delete(STORE_NAME, id);
+	try {
+		const db = await getDB();
+		await db.delete(STORE_NAME, id);
+		clearStorageFailure();
+	} catch (err) {
+		reportStorageError("custom-rules:delete", err);
+		throw err;
+	}
 }

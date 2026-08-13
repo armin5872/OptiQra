@@ -1,5 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import type { AIProviderId } from "@/lib/aiFix";
+import { reportStorageError, clearStorageFailure } from "@/lib/storageHealth";
 
 /**
  * Persists the user's chosen AI provider, API key(s), and per-provider model
@@ -57,9 +58,11 @@ export async function getAIProviderState(): Promise<AIProviderStoredState> {
 	try {
 		const db = await getDB();
 		const stored = await db.get(STORE_NAME, STATE_KEY);
+		clearStorageFailure();
 		if (!stored) return EMPTY_STATE;
 		return { provider: stored.provider ?? null, apiKeys: stored.apiKeys ?? {}, models: stored.models ?? {} };
-	} catch {
+	} catch (err) {
+		reportStorageError("ai-provider:load", err);
 		return EMPTY_STATE;
 	}
 }
@@ -68,9 +71,12 @@ export async function saveAIProviderState(state: AIProviderStoredState): Promise
 	try {
 		const db = await getDB();
 		await db.put(STORE_NAME, state, STATE_KEY);
-	} catch {
-		// IndexedDB unavailable (private mode, etc.) — key just won't persist
-		// across reloads this session; the in-memory React state still works.
+		clearStorageFailure();
+	} catch (err) {
+		// IndexedDB unavailable (private mode, quota exceeded, etc.) — the API
+		// key just won't persist across reloads this session. Surface it
+		// instead of pretending it saved.
+		reportStorageError("ai-provider:save", err);
 	}
 }
 

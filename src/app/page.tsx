@@ -19,6 +19,7 @@ import AIEngineTest from "./components/AIEngineTest";
 import CoreWebVitalsPanel from "./components/CoreWebVitalsPanel";
 import ReportDownload from "./components/ReportDownload";
 import PostScanDesktopCTA from "./components/PostScanDesktopCTA";
+import StorageWarningBanner from "./components/StorageWarningBanner";
 import GithubStarToast from "./components/GithubStarToast";
 import GithubMark from "./components/icons/GithubMark";
 import { REPO_URL } from "@/lib/githubContribute";
@@ -633,6 +634,8 @@ export default function Home() {
 					<SettingsPanel />
 				</div>
 			</header>
+
+			<StorageWarningBanner />
 
 			{viewState === "hero" && (
 				<section className="hero">

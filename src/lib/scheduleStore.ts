@@ -1,5 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import { syncScheduleToDesktop, deleteScheduleFromDesktop } from "@/lib/desktopBridge";
+import { reportStorageError, clearStorageFailure } from "@/lib/storageHealth";
 
 /**
  * Persists periodic-scan schedules in IndexedDB (same pattern as
@@ -80,8 +81,14 @@ function getDB() {
 }
 
 export async function saveSchedule(schedule: ScanSchedule): Promise<ScanSchedule> {
-	const db = await getDB();
-	await db.put(STORE_NAME, schedule);
+	try {
+		const db = await getDB();
+		await db.put(STORE_NAME, schedule);
+		clearStorageFailure();
+	} catch (err) {
+		reportStorageError("schedules:save", err);
+		throw err;
+	}
 	// Best-effort mirror into the file store the desktop sidecar's
 	// scheduler daemon reads — see src/lib/desktopBridge.ts. No-op on web.
 	syncScheduleToDesktop(schedule);
@@ -89,9 +96,15 @@ export async function saveSchedule(schedule: ScanSchedule): Promise<ScanSchedule
 }
 
 export async function getAllSchedules(): Promise<ScanSchedule[]> {
-	const db = await getDB();
-	const all = await db.getAllFromIndex(STORE_NAME, "by-nextRunAt");
-	return all;
+	try {
+		const db = await getDB();
+		const all = await db.getAllFromIndex(STORE_NAME, "by-nextRunAt");
+		clearStorageFailure();
+		return all;
+	} catch (err) {
+		reportStorageError("schedules:load", err);
+		throw err;
+	}
 }
 
 export async function getSchedule(id: string): Promise<ScanSchedule | undefined> {
