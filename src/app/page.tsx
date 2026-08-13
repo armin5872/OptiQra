@@ -19,6 +19,9 @@ import AIEngineTest from "./components/AIEngineTest";
 import CoreWebVitalsPanel from "./components/CoreWebVitalsPanel";
 import ReportDownload from "./components/ReportDownload";
 import PostScanDesktopCTA from "./components/PostScanDesktopCTA";
+import GithubStarToast from "./components/GithubStarToast";
+import GithubMark from "./components/icons/GithubMark";
+import { REPO_URL } from "@/lib/githubContribute";
 import SiteCloneViewer from "./components/SiteCloneViewer";
 import ProjectUploadPanel from "./components/ProjectUploadPanel";
 import ScheduleManager from "./components/ScheduleManager";
@@ -615,6 +618,17 @@ export default function Home() {
 					OptiQra
 				</div>
 				<div className="header-actions">
+					<a
+						href={REPO_URL}
+						target="_blank"
+						rel="noreferrer"
+						className="github-header-btn"
+						aria-label="Star OptiQra on GitHub"
+						title="Star OptiQra on GitHub"
+					>
+						<GithubMark size={15} />
+						<span>GitHub</span>
+					</a>
 					<ScheduleManager />
 					<SettingsPanel />
 				</div>
@@ -1151,6 +1165,7 @@ export default function Home() {
 					</div>
 
 					<PostScanDesktopCTA />
+					<GithubStarToast />
 
 					<AISiteInsights
 						siteUrl={reportData.url}

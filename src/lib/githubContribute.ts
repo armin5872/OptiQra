@@ -23,6 +23,11 @@ const REPO_OWNER = "armin5872";
 const REPO_NAME = "OptiQra";
 const REPO_BRANCH = "main";
 
+/** Plain link to the repo itself — for the header's GitHub button and the
+ *  post-scan "give us a star" toast, as opposed to the prefilled contribute
+ *  URLs below. */
+export const REPO_URL = `https://github.com/${REPO_OWNER}/${REPO_NAME}`;
+
 function slugify(name: string): string {
 	const slug = name
 		.toLowerCase()
