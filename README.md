@@ -1,322 +1,855 @@
+
+
+
 # OptiQra
 
-**Audit, fix, and verify your website for search engines and AI.** OptiQra crawls your entire website and scores it across SEO, performance, accessibility, security, and conversion signals — plus **GEO** (generative engine optimization) and **AEO** (answer engine optimization). ChatGPT, Claude, Perplexity, and Google's AI Overviews now send meaningful traffic of their own. OptiQra tells you if your site is set up to be crawled, cited, and answered by them — and then fixes it for you.
+![OptiQra Logo](optiqra.webp)
 
-![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
-![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
-![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)
-![Tauri](https://img.shields.io/badge/Desktop-Tauri%202-24C8DB?logo=tauri)
-![Version](https://img.shields.io/badge/version-2.4.15-blue)
-![License](https://img.shields.io/badge/License-MIT-green)
-[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?logo=vercel)](https://optiqra.vercel.app/)
+**An open-source AI website optimizer that actually fixes what it finds.**
 
-**[Live demo](https://optiqra.vercel.app)** · Free, no signup, no account · Also available as a [native desktop app](https://github.com/armin5872/OptiQra/releases/tag/v2.4.15) for background scans and fully offline project audits
+OptiQra crawls your website or project, finds problems across **SEO, AEO, GEO, performance, accessibility, security, and technical quality**, explains what matters, shows you where the problems are, and can **actually fix them**.
 
-<!-- SLOT: hero screenshot / product shot — main scan report view -->
-![OptiQra](optiqra.webp)
+Instead of:
 
-<!-- SLOT: showcase.gif — full walkthrough gif (crawl → report → AI fix) -->
-![OptiQra walkthrough](showcase.gif)
+> Audit → 200 problems → good luck
 
-## Contents
+OptiQra is built around:
 
-- [Core audits](#core-audits)
-- [Beyond audits: fixes, not just findings](#beyond-audits-fixes-not-just-findings)
-- [OptiQra Desktop](https://github.com/armin5872/OptiQra/releases/tag/v2.4.15)
-- [How it works](#how-it-works)
-- [How OptiQra compares](#how-optiqra-compares)
-- [Tech stack](#-tech-stack)
-- [Quick start](#-quick-start)
-- [Building the desktop app](#building-the-desktop-app)
-- [Docker](#docker)
-- [Periodic scans](#periodic-scans)
-- [Localization](#localization)
-- [API](#api)
-- [Project structure](#project-structure)
-- [Security](#security)
-- [Roadmap](#-roadmap)
-- [Contributing](#-contributing)
+> **Crawl → Understand → Fix → Verify → Monitor**
 
-## Core audits
+---
 
-### 🔍 Site crawling & indexing
-- Crawls entire sites through sitemaps and internal links (configurable page cap)
-- Detects duplicate and near-duplicate content (repeated titles, byte-identical pages, thin/templated content)
-- Analyzes links (broken links, internal/external, redirect chains)
-- Scans images (missing alt text, lazy loading, responsive `srcset`/`<picture>` usage)
-- **JS-rendered content detection** — runs a page's own JavaScript in a sandboxed environment to see the post-hydration DOM, the same way a JS-executing crawler like Googlebot would, instead of guessing from raw HTML alone
+## 🚀 Live / Download / Source
 
-### 🎯 SEO essentials
-- Meta tags (title, description, canonical, Open Graph, Twitter cards)
-- Structured data (JSON-LD, schema.org validation)
-- robots.txt and sitemap analysis, with one-click generation of a starter sitemap/robots.txt when either is missing
-- Internal linking patterns and anchor text quality
-- **PageSpeed Insights integration** for real Core Web Vitals data
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-optiqra.vercel.app-00C7B7?style=for-the-badge&logo=vercel)](https://optiqra.vercel.app/)
+[![GitHub Repo](https://img.shields.io/badge/GitHub-Source-181717?style=for-the-badge&logo=github)](https://github.com/armin5872/OptiQra)
+[![Download](https://img.shields.io/badge/Desktop-Download-blue?style=for-the-badge&logo=github)](https://github.com/armin5872/OptiQra/releases/latest)
+[![Issues](https://img.shields.io/badge/Report%20Bug-Issues-red?style=for-the-badge&logo=github)](https://github.com/armin5872/OptiQra/issues)
 
-### 🤖 Generative Engine Optimization (GEO)
-- **Entity grounding** — checks for authoritative `sameAs` links (Wikipedia, Wikidata, Crunchbase, LinkedIn, GitHub) that help AI models cite and disambiguate your content
-- **Client-side rendering detection** — flags content hidden behind client-side JavaScript that generative crawlers (GPTBot, ClaudeBot) can't see
-- **Citation-friendliness** — analyzes whether pages are structured to be easily quoted and attributed in AI answers
-- **llms.txt generator** — drafts a starter `llms.txt` for your site from an AI provider of your choice
+---
 
-### 🤖 Answer Engine Optimization (AEO)
-- **Crawler access** — checks whether AI answer-engine crawlers (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, etc.) are allowed or blocked by robots.txt
-- **Answer-liftable content** — detects whether key content is structured to be extracted directly into answers, Q&A format, and featured snippets
-- **Q&A structuring** — validates whether content is formatted to answer common questions about your domain
+## 🧠 See it in action
 
-### ⚡ Performance
-- HTML/response performance characteristics
-- Optional PageSpeed Insights scoring for lab + field data
+![OptiQra Showcase](showcase.gif)
 
-### ♿ Accessibility
-- Missing alt text, labels, and ARIA attributes
-- Color contrast problems
-- Keyboard navigation and semantic HTML issues
+OptiQra isn't designed to leave you with a giant checklist of things you need to fix yourself.
 
-### 🔐 Security
-- Security headers (HSTS, CSP, X-Frame-Options, etc.)
-- Conversion signals and trust badges
-- Tech-stack fingerprinting (CMS, framework, e-commerce platform, page builder, server/language) so fixes can be written for *your* actual stack
+It is designed to close the loop:
 
-## Beyond audits: fixes, not just findings
+**Find the problem → understand it → fix it → inspect the result.**
 
-<!-- SLOT: screenshot/gif — auto-fix diff / "before → after" view -->
 
-OptiQra doesn't stop at a scored report. It can fix what it finds:
+**[Try OptiQra](https://optiqra.vercel.app/)** · **Free · No signup · No account required**
 
-- **Deterministic auto-fix** — mechanical issues (a missing tag, a bad attribute, content that already exists elsewhere on the page) are fixed directly, no AI involved, 100% reproducible
-- **AI-authored fixes** — content that needs actual writing (titles, meta descriptions, alt text, form labels, CTA copy) is batched into a single AI call using your own API key
-- **Full AI Fix** — an opt-in, deeper pass that hands the model an entire file plus its detected issues and asks for the whole file back, fixed, for anything the deterministic and batched passes couldn't resolve
-- **Framework-aware fixes** for HTML, JSX/TSX, Vue, Nuxt, Angular, Svelte, and Astro — not just generic markup edits
-- **Project (codebase) audits** — upload a `.zip` of your actual project instead of only scanning a live URL, and get the same scored SEO/performance/accessibility categories, plus config-file-level fixes (headers, compression, sitemap/robots.txt) that a live-URL scan can never make since it can't see your source
-- **Integrity-checked** — every text-splicing fix pass is verified against structural invariants afterward; if anything looks off, the change is discarded rather than shipped
-- **A visual "highlighted clone"** of any scanned page, annotated element-by-element with the exact issues found, rendered in an iframe instead of only listed in a table
-- **Propose upstream** — turn a custom rule or settings preset you built into a real GitHub pull request against this repo, via GitHub's own "create file" flow — no token, no server in the middle
+**[Download Desktop](https://github.com/armin5872/OptiQra/releases/latest)** · **[View source](https://github.com/armin5872/OptiQra)** · **[Report a bug](https://github.com/armin5872/OptiQra/issues)**
 
-### 🌌 3D / Galaxy crawl visualization
 
-<!-- SLOT: screenshot or gif — 3D and Galaxy crawl tree views -->
 
-Beyond the standard tree view, OptiQra can render a crawled site as an interactive 3D structure or an animated "galaxy" of pages (Three.js), letting you spot structural and performance patterns across hundreds of pages at a glance.
+## Why OptiQra?
 
-### 🎭 AI insights, moods, and custom rules
-- **Site-wide AI insights** — a strategic summary reasoning across every category and page
-- **AI moods & potency** — pick the persona the AI writes fixes/insights in, and how strongly it leans into that persona
-- **Custom rules** — small, client-side JS snippets you author to post-process a finished scan and surface additional findings specific to your site
-- **Custom code** — inject raw CSS or a one-off JS snippet into the report view itself
+Most website auditing tools are very good at answering:
 
-### 📊 Reports & data
-- **Multi-provider AI** — paste an API key (yours to keep) for OpenAI, Anthropic, Google, Groq, OpenRouter, Mistral, DeepSeek, or xAI (Grok)
-- **Export to PDF, DOCX, XLSX, Markdown, CSV, TSV, TXT, JSON**
-- **13 languages** — the entire UI is translatable (see [Localization](#localization))
-- **Periodic scanning** — schedule re-scans (hourly to yearly), get notifications, auto-compare against previous results
-- **PWA + offline** — installable in-browser, past reports visible without internet
+> **"What's wrong?"**
 
-## 🖥️ OptiQra Desktop
+OptiQra is built to answer the next questions too:
 
-<!-- SLOT: screenshot — desktop app main window -->
-<!-- SLOT: screenshot — system tray / "sits in the tray" state -->
-<!-- SLOT: gif — closing the window, tray icon staying alive, notification firing -->
+> **"Why is it wrong?"**
 
-OptiQra also ships as a native desktop app, built with **Tauri 2** (Rust shell + the same Next.js engine as the web app, running locally). It exists to solve one specific limitation of the browser version:
+> **"Where exactly is it happening?"**
 
-> A browser-based scheduler only fires while a tab is open. The desktop app fires schedules from a background process that keeps running after you close the window.
+> **"How should I fix it?"**
 
-**What's actually different, not just wrapped:**
+> **"Can you fix it for me?"**
 
-| | Web app | Desktop app |
-|---|---|---|
-| Scheduled scans | Only while a tab/PWA is open | Run from a background daemon — the window can be fully closed |
-| Project (codebase) audits | Needs a network round-trip | Fully offline — the audit engine runs on your machine |
-| Live-site crawling & AI fixes | Needs a network round-trip | Still needs a network round-trip (crawling a live site or calling an AI provider inherently does) |
-| Notifications | Browser Notification API | Real OS notifications, even with no window visible |
-| Scores/ruleset | Same engine | Identical engine — no separate desktop ruleset to drift out of sync |
+> **"Did the fix actually work?"**
 
-**How it works under the hood:**
-- The Rust shell spawns the same Next.js app (built `output: "standalone"` and packaged as a single executable) as a background **sidecar** process, and points the window's webview at it — it does not reimplement the crawler/audit/fix engine in Rust.
-- Closing the window **hides** it instead of quitting; only the tray menu's "Quit" actually stops the sidecar (and therefore the scheduler).
-- A scheduler daemon inside the sidecar mirrors the same due/compare/notify logic the browser's `scheduler.ts` uses, so a schedule behaves identically whether a tab or the daemon catches it — it just reads/writes a local file store instead of IndexedDB, and notifies through the OS instead of the browser.
-- The browser UI's schedule/scan stores and the daemon's file store are kept in sync automatically: creating or editing a schedule mirrors into the daemon's store, and any scan the daemon ran while the window was closed appears in *Recent Scans* the next time you open the app.
-- Single-instance locking, autostart, and an in-app updater (checked against GitHub Releases) are included.
+You can scan a live URL, upload a project/codebase, inspect the discovered issues directly on the page, apply deterministic or AI-assisted fixes, and continue monitoring the site over time.
 
-**Platforms:** macOS 12+ (Apple Silicon & Intel), Windows 10/11 (x64), Linux (AppImage / `.deb`).
+### The core workflow
 
-Download the latest build from the [releases page](https://github.com/armin5872/OptiQra/releases/latest), or see [Building the desktop app](#building-the-desktop-app) to build it yourself.
+```text
+        ┌─────────┐
+        │  Crawl  │
+        └────┬────┘
+             ↓
+        ┌───────────┐
+        │  Analyze  │
+        └─────┬─────┘
+              ↓
+        ┌────────────┐
+        │ Understand │
+        └──────┬─────┘
+               ↓
+        ┌─────────┐
+        │   Fix   │
+        └────┬────┘
+             ↓
+        ┌──────────┐
+        │  Verify  │
+        └────┬─────┘
+             ↓
+        ┌───────────┐
+        │  Monitor  │
+        └───────────┘
+```
 
-## How it works
+---
 
-1. **Paste a URL** (or upload a project `.zip`) — any website, any size
-2. **OptiQra crawls it** — follows internal links, scans every page (or every file, in project mode)
-3. **See results in seconds** — visual/3D/galaxy tree of all crawled pages, scores by category, detailed issue list
-4. **Apply fixes** — deterministic fixes apply automatically; content-authoring fixes use your chosen AI provider
-5. **Get AI insights** — (optional) a site-wide strategic summary reasoning across all categories and pages
+# What can OptiQra analyze?
 
-Everything runs in your browser (or, with the desktop app, entirely on your machine). No server sees your data unless you're scanning a live URL. No account needed.
+OptiQra currently contains **150+ analysis rules** spanning traditional search, AI visibility, accessibility, performance, security, and technical website quality.
 
-## How OptiQra compares
+## 🔍 Website crawling
 
-| Feature | OptiQra | Lighthouse | SEMrush | Ahrefs |
-|---|---|---|---|---|
-| **Full-site crawl** | ✅ Free | ❌ Single page | ✅ Paid | ✅ Paid |
-| **GEO/AEO audits** | ✅ Yes | ❌ No | ❌ No | ❌ No |
-| **AI-generated & applied fixes** | ✅ Yes (your API key) | ❌ No | ❌ No | ❌ No |
-| **Codebase / project audits** | ✅ Yes, offline in desktop app | ❌ No | ❌ No | ❌ No |
-| **Background scheduled scans** | ✅ Yes (desktop app) | ❌ No | ✅ Paid | ✅ Paid |
-| **No signup required** | ✅ Yes | ✅ Yes | ❌ No | ❌ No |
-| **Runs in browser / offline** | ✅ Yes | ✅ Yes | ❌ No | ❌ No |
-| **Free forever** | ✅ Yes | ✅ Yes | ❌ No | ❌ No |
-| **Open source** | ✅ Yes | ✅ Yes | ❌ No | ❌ No |
+* Full-site crawling through internal links and sitemaps
+* Configurable page limits
+* Configurable crawl concurrency
+* Optional JavaScript rendering
+* Internal and external link analysis
+* Redirect-chain detection
+* Broken-link detection
+* Duplicate and near-duplicate content detection
+* Image analysis
+* Crawl visualization
+* Live crawl-tree updates
+* 2D crawl tree
+* Interactive 3D crawl tree
+* Galaxy-style crawl visualization
+* Configurable link-hop depth
 
-**OptiQra's edge:** free full-site crawls, AI-native audits (GEO/AEO), fixes that actually apply (not just suggestions), and a desktop app for offline project audits and background scheduling — all with no account and no subscription.
+OptiQra is designed to work with modern JavaScript-heavy websites rather than relying only on raw HTML.
 
-## Why this matters
+---
 
-SEO isn't just about Google anymore. **ChatGPT, Claude, Perplexity, and Gemini now generate answers that cite (or don't cite) your site.** But most auditing tools haven't caught up — they still measure you against Googlebot alone.
+## 🎯 SEO
 
-OptiQra fills that gap. It tells you:
-- Whether your content is *visible* to AI crawlers (or hidden behind client-side JS)
-- Whether AI models can *cite* you credibly (via entity grounding)
-- Whether your content is *liftable* into direct answers
-- Whether you've *allowed or blocked* AI crawlers in robots.txt
+OptiQra checks the foundations of technical and on-page SEO, including:
 
-…and then, unlike a pure auditing tool, it can go fix what it finds.
+* Page titles
+* Meta descriptions
+* Canonicals
+* Open Graph
+* Twitter/X cards
+* Structured data
+* JSON-LD
+* Schema.org
+* robots.txt
+* XML sitemaps
+* Internal linking
+* Anchor text
+* Duplicate content
+* Thin content
+* Image optimization
+* Crawlability
+* HTTP behavior
+* HTTP/2
+* HTTP/3
 
-## 📚 Tech stack
+Missing `robots.txt` or sitemaps can also be addressed with generated starter files.
 
-**Web app**
-- Next.js 16, React 19, TypeScript 5
-- Cheerio + jsdom for HTML parsing and sandboxed JS-rendered-page audits
-- `idb` (IndexedDB) for local scan history, schedules, custom rules, and AI provider keys — backed by a custom PWA service worker for offline support and periodic-sync scans
-- Three.js for the 3D / Galaxy crawl tree
-- `jspdf`, `docx`, and `xlsx` for report exports; `jszip` for project-upload/unzip handling
-- Sentry for error monitoring, Playwright for end-to-end testing
-- ESLint and Next.js linting configuration
+---
 
-**Desktop app**
-- Tauri 2 (Rust) shell — tray icon, single-instance lock, autostart, updater
-- The same Next.js app, built standalone and packaged as a sidecar binary via `@yao-pkg/pkg`
-- A Node-based scheduler daemon (`server/`) mirroring the browser scheduler's logic, using `node-notifier` for real OS notifications
+## 🤖 GEO — Generative Engine Optimization
 
-## 🚀 Quick start
+Search is no longer limited to ten blue links.
 
-### Prerequisites
+AI systems increasingly discover, summarize, cite, and recommend information from websites.
 
-- Node.js 22 or newer
-- npm
+OptiQra analyzes factors that can affect how your site is exposed to generative systems, including:
 
-### Local development (web app)
+* AI crawler accessibility
+* Client-side rendering problems
+* Content visibility
+* Entity grounding
+* `sameAs` relationships
+* Citation-friendliness
+* Answer-oriented content structure
+* AI visibility signals
+* `llms.txt` detection
+* AI-assisted `llms.txt` generation
+
+The goal isn't to promise that an AI model will cite you.
+
+The goal is to identify technical and content conditions that can make your site easier—or harder—for AI systems to discover, understand, and use.
+
+---
+
+## 💬 AEO — Answer Engine Optimization
+
+OptiQra checks whether your content is structured to answer questions clearly.
+
+It analyzes things such as:
+
+* AI crawler access
+* GPTBot / ClaudeBot / PerplexityBot and related crawler rules
+* Question-and-answer structures
+* Answer-liftable content
+* Heading structure
+* Direct-answer opportunities
+* Content that may be hidden behind client-side rendering
+* Robots.txt rules affecting AI crawlers
+
+---
+
+## ⚡ Performance
+
+OptiQra analyzes performance-related signals and can integrate with **Google PageSpeed Insights** for additional Core Web Vitals and performance data.
+
+You can inspect:
+
+* Performance characteristics
+* Core Web Vitals
+* PageSpeed data
+* Slow or problematic resources
+* Performance-related issues discovered during crawling
+
+---
+
+## ♿ Accessibility
+
+Accessibility checks include:
+
+* Missing image alt text
+* Missing labels
+* ARIA issues
+* Semantic HTML problems
+* Keyboard-navigation issues
+* Contrast problems
+* Form accessibility
+* Other accessibility signals detected during analysis
+
+---
+
+## 🔐 Security & trust
+
+OptiQra can identify security and trust-related issues including:
+
+* HSTS
+* CSP
+* X-Frame-Options
+* Other security headers
+* Missing or weak trust signals
+* Conversion-related signals
+* Technology-stack information
+
+OptiQra also fingerprints the site's technology stack so fixes can be tailored to the project rather than blindly modifying generic HTML.
+
+---
+
+# The part that makes OptiQra different
+
+## 🛠️ It can actually fix the problems
+
+An audit is only useful if something happens afterward.
+
+OptiQra supports several levels of fixing.
+
+### Deterministic Auto Fix
+
+Mechanical problems can be fixed directly without AI.
+
+Examples include:
+
+* Missing tags
+* Incorrect attributes
+* Existing content that needs to be inserted
+* Structured markup changes
+* Other deterministic transformations
+
+These fixes are reproducible and don't require an AI provider.
+
+### AI-generated fixes
+
+For issues that require actual writing or contextual reasoning, OptiQra can use your chosen AI provider to generate fixes.
+
+Examples include:
+
+* Page titles
+* Meta descriptions
+* Alt text
+* Form labels
+* CTA copy
+* Other content-level improvements
+
+You provide the API key. OptiQra sends the request directly to the provider.
+
+### Full AI Fix
+
+For more complicated problems, **Full AI Fix** can give the model an entire file together with its detected issues and ask it to return the corrected file.
+
+This is intentionally opt-in because broad AI rewriting is fundamentally different from deterministic transformations.
+
+### Framework-aware fixes
+
+Fixes can work with project formats including:
+
+* HTML
+* JSX / TSX
+* Vue
+* Nuxt
+* Angular
+* Svelte
+* Astro
+
+### Integrity checking
+
+OptiQra validates text-splicing fix operations against structural invariants.
+
+If a transformation looks unsafe or invalid, the change can be discarded instead of being silently shipped.
+
+---
+
+# 👀 See the problems on the actual website
+
+Audit tables are useful.
+
+Seeing the actual problem is better.
+
+OptiQra can generate a **highlighted clone** of a scanned page and annotate the discovered issues directly on the relevant elements.
+
+Instead of:
+
+> `Missing alt attribute — /products/widget`
+
+you can inspect the actual page and see the element associated with the problem.
+
+This connects the abstract audit result to the thing you actually need to change.
+
+---
+
+# 📁 Audit your actual project
+
+OptiQra isn't limited to live URLs.
+
+You can upload a project `.zip` and audit the actual codebase.
+
+Project audits can inspect:
+
+* HTML
+* JSX / TSX
+* Vue
+* Nuxt
+* Angular
+* Svelte
+* Astro
+* Configuration files
+* Headers
+* Compression configuration
+* Sitemap/robots configuration
+* Other project-level signals
+
+This also means OptiQra can fix things that a remote URL crawler fundamentally cannot see.
+
+### URL audit
+
+```text
+Website
+   ↓
+Crawl
+   ↓
+Analyze live pages
+   ↓
+Report
+   ↓
+Fix
+```
+
+### Project audit
+
+```text
+Project ZIP
+   ↓
+Inspect source
+   ↓
+Analyze files + configuration
+   ↓
+Report
+   ↓
+Fix files
+   ↓
+Download corrected project
+```
+
+---
+
+# 🌌 Understand your site visually
+
+OptiQra doesn't only produce tables.
+
+It can visualize the structure of a crawled website.
+
+### 2D crawl tree
+
+The default visualization shows the hierarchy of your site's pages and links.
+
+### 3D crawl tree
+
+Explore the crawl structure as an interactive three-dimensional graph.
+
+### Galaxy mode
+
+A more experimental visualization turns the site's pages into an animated galaxy-like structure.
+
+These aren't intended to replace the report—they make large site structures easier to explore and understand.
+
+---
+
+# 🧠 AI insights
+
+OptiQra can generate a site-wide AI analysis that reasons across the findings from the entire scan.
+
+Instead of asking an AI model about one isolated issue at a time, the insights system can look at the broader report and identify patterns and priorities.
+
+You can configure:
+
+* AI provider
+* Model
+* API key
+* Response detail
+* AI persona
+* Persona potency
+
+Supported providers include:
+
+* OpenAI
+* Anthropic
+* Google
+* Groq
+* OpenRouter
+* Mistral
+* DeepSeek
+* xAI
+
+Your API key is provided by you and is not sent to OptiQra's own server for storage.
+
+---
+
+# 🎭 AI moods & potency
+
+AI insights and fixes can use configurable personas.
+
+Available personas include:
+
+* Normal
+* Professional
+* Friendly
+* Energetic
+* Sarcastic
+* Full Dev Mode
+* No Dev Friendly
+* Quirky
+* Experimental
+
+The **1–100 potency slider** controls how strongly the selected personality affects the response.
+
+So you can have anything from a restrained professional explanation to a much more exaggerated personality.
+
+The technical findings remain the same—the persona changes how they are communicated.
+
+---
+
+# 📊 Reports & exports
+
+OptiQra keeps scan results locally and can compare scans over time.
+
+Reports can be exported to:
+
+* PDF
+* DOCX
+* XLSX
+* Markdown
+* CSV
+* TSV
+* TXT
+* JSON
+
+You can also compare periodic scans to identify:
+
+* New issues
+* Resolved issues
+* Score changes
+* Changes over time
+
+---
+
+# ⏱️ Continuous / scheduled scanning
+
+OptiQra can periodically re-scan websites.
+
+Schedules can run:
+
+* Hourly
+* Daily
+* Weekly
+* Monthly
+* Yearly
+
+Each scan can:
+
+1. Crawl the site
+2. Generate a new report
+3. Compare it with previous results
+4. Identify new/resolved issues
+5. Notify you about the result
+
+The web application can perform scheduled checks while it is running.
+
+The desktop application goes further.
+
+---
+
+# 🖥️ OptiQra Desktop
+
+OptiQra also ships as a native desktop application built with **Tauri 2**.
+
+The desktop application exists for capabilities that are difficult or impossible to guarantee from a browser tab.
+
+### Web vs Desktop
+
+|                         | Web                     | Desktop                 |
+| ----------------------- | ----------------------- | ----------------------- |
+| Full-site crawling      | ✅                       | ✅                       |
+| Project/codebase audits | ✅                       | ✅                       |
+| Offline project audits  | Limited                 | ✅                       |
+| Scheduled scans         | While app/PWA is active | Background process      |
+| OS notifications        | Browser notifications   | Native OS notifications |
+| Scan history            | Local                   | Local                   |
+| Same audit engine       | ✅                       | ✅                       |
+| AI-powered fixes        | ✅                       | ✅                       |
+| Live-site crawling      | Requires network        | Requires network        |
+
+The desktop application uses the same core application and audit engine rather than maintaining a completely separate implementation.
+
+### Background operation
+
+Closing the desktop window does not necessarily stop OptiQra.
+
+The application can remain running in the system tray, allowing scheduled scans to continue in the background.
+
+### Desktop features
+
+* Native Tauri 2 shell
+* System tray
+* Background scheduler
+* Native notifications
+* Single-instance locking
+* Autostart
+* Automatic updates
+* Offline project/codebase audits
+* Local scan history
+* Cross-platform installers
+
+### Supported platforms
+
+* **Windows 10/11 — x64**
+* **macOS 12+ — Apple Silicon & Intel**
+* **Linux — AppImage / ****`.deb`**
+
+**[Download the latest release →](https://github.com/armin5872/OptiQra/releases/latest)**
+
+---
+
+# 🔒 Privacy by architecture
+
+OptiQra is designed to keep as much processing as possible on the user's side.
+
+For local project audits:
+
+> **Your source code does not need to be uploaded to an OptiQra cloud backend.**
+
+For AI functionality:
+
+> **You choose the AI provider and provide your own API key.**
+
+For live-site scanning:
+
+> OptiQra obviously has to access the URL you ask it to scan.
+
+There is no mandatory account or subscription required to use the application.
+
+AI provider keys are not persisted on OptiQra's own backend.
+
+---
+
+# 🧩 Custom rules & custom code
+
+OptiQra isn't limited to the built-in audit rules.
+
+You can create custom client-side rules that process scan results and surface findings specific to your website.
+
+You can also inject custom CSS or JavaScript into the report view for specialized workflows.
+
+Custom rules can even be proposed upstream to the OptiQra project through GitHub's own file/PR workflow.
+
+---
+
+# 🔌 CI/CD & developer workflows
+
+OptiQra can be integrated into development workflows rather than being used only after deployment.
+
+The project includes CI/CD support and is designed to make website quality checks part of the development lifecycle.
+
+The broader goal is simple:
+
+> **Website optimization shouldn't have to be a manual event you remember to perform once every few months.**
+
+---
+
+# 🌍 13 languages
+
+OptiQra currently supports **13 languages**, including:
+
+* English
+* Spanish
+* French
+* German
+* Chinese
+* Russian
+* Dutch
+* Persian
+* Korean
+* Japanese
+* Italian
+* Arabic
+* Hindi
+* and additional supported translations
+
+The UI also supports right-to-left layouts for languages such as Persian and Arabic.
+
+Translations live in:
+
+```text
+src/lib/i18n/
+```
+
+---
+
+# 🔬 How OptiQra works
+
+At a high level:
+
+### 1. Give it a website or project
+
+Paste a URL or upload a project archive.
+
+### 2. Crawl it
+
+OptiQra discovers pages and analyzes the site structure.
+
+### 3. Analyze it
+
+The analysis engine evaluates the site across multiple categories and rules.
+
+### 4. Understand the findings
+
+You get scores, individual issues, explanations, visualizations, and optional AI insights.
+
+### 5. Fix it
+
+Apply deterministic fixes, AI-generated fixes, or Full AI Fix.
+
+### 6. Verify it
+
+Inspect the modified result and compare it against the original findings.
+
+### 7. Monitor it
+
+Schedule future scans and compare changes over time.
+
+---
+
+# 🆚 How is OptiQra different?
+
+OptiQra isn't trying to be a smaller copy of an enterprise SEO platform.
+
+It takes a different approach.
+
+|                              | OptiQra   | Traditional audit / SEO platforms |
+| ---------------------------- | --------- | --------------------------------- |
+| Open source                  | ✅         | Usually ❌                         |
+| Free core product            | ✅         | Varies                            |
+| No account required          | ✅         | Often ❌                           |
+| Full-site crawling           | ✅         | Varies                            |
+| SEO analysis                 | ✅         | ✅                                 |
+| AEO analysis                 | ✅         | Varies                            |
+| GEO / AI visibility analysis | ✅         | Varies                            |
+| AI-generated fixes           | ✅         | Varies                            |
+| Automatically applies fixes  | ✅         | Usually limited                   |
+| Project/codebase audits      | ✅         | Usually limited                   |
+| Offline project auditing     | ✅ Desktop | Usually ❌                         |
+| Background local scheduling  | ✅ Desktop | Usually cloud-based               |
+| Local scan history           | ✅         | Varies                            |
+| 3D crawl visualization       | ✅         | Rare                              |
+| Open-source codebase         | ✅         | Usually ❌                         |
+
+The important difference isn't:
+
+> **"OptiQra has more checkboxes."**
+
+It's:
+
+> **"OptiQra tries to close the loop between discovering a problem and actually fixing it."**
+
+---
+
+# 🔐 Security
+
+OptiQra includes protections for outbound URL analysis, including SSRF defenses and private/loopback/link-local address restrictions.
+
+AI provider keys are not stored server-side by OptiQra.
+
+For security issues, please see [SECURITY.md](SECURITY.md) rather than opening a public issue.
+
+---
+
+# 🛠️ Tech stack
+
+## Web
+
+* Next.js 16
+* React 19
+* TypeScript 5
+* Cheerio
+* jsdom
+* IndexedDB
+* Three.js
+* PWA/service-worker infrastructure
+* Playwright
+* Sentry
+* jsPDF
+* DOCX generation
+* XLSX generation
+* JSZip
+
+## Desktop
+
+* Tauri 2
+* Rust
+* Next.js standalone output
+* Node.js scheduler sidecar
+* `@yao-pkg/pkg`
+* `node-notifier`
+
+The desktop application uses the same application and audit engine as the web experience rather than maintaining a separate ruleset.
+
+---
+
+# 🚀 Quick start
+
+## Requirements
+
+* Node.js 22+
+* npm
+
+## Run locally
 
 ```bash
+git clone https://github.com/armin5872/OptiQra.git
+cd OptiQra
+
 npm install
 npm run dev
 ```
 
-Open http://localhost:3000 in your browser.
+Then open:
 
-### Environment variables
-
-The app runs its built-in audits without any configuration. AI-powered fixes and insights use a provider API key you enter in the UI rather than an environment variable, so nothing needs to be set for those either.
-
-Everything below is optional and only matters if you want error monitoring locally. Create a `.env.local` in the project root (it's gitignored) and set any of:
-
-| Variable | Purpose |
-|---|---|
-| `NODE_ENV` | `development` / `production` — set automatically by `next dev` / `next start` |
-| `NEXT_TELEMETRY_DISABLED` | Set to `1` to opt out of Next.js telemetry |
-| `PORT` | Dev server port (defaults to `3000`) |
-| `NEXT_PUBLIC_SENTRY_DSN` / `SENTRY_DSN` | Sentry DSN — leave unset and Sentry no-ops entirely |
-| `SENTRY_ORG` / `SENTRY_PROJECT` | Your Sentry project, for source map uploads |
-| `SENTRY_AUTH_TOKEN` | Only needed in CI/production builds, to upload source maps |
-
-Never commit real values for these — `.env.local` is in `.gitignore` for exactly that reason.
-
-### Available scripts
-
-```bash
-npm run dev            # Start the development server
-npm run build          # Create a production build
-npm run start           # Start the production server
-npm run lint            # Run ESLint
-npm run type-check      # Run the TypeScript compiler in check-only mode
-npm test                # Run the Playwright e2e suite (alias: npm run test:e2e)
-npm run test:e2e:ui     # Run the e2e suite in Playwright's UI mode
-npm run test:e2e:report # Show the last Playwright HTML report
-
-# Desktop app (see below)
-npm run desktop:dev     # Run the Next.js dev server + Tauri dev shell together
-npm run desktop:build   # Full production build: Next standalone -> sidecar -> Tauri installers
+```text
+http://localhost:3000
 ```
 
-## Building the desktop app
+No database is required for the built-in audit engine.
 
-The desktop app is not a separate copy of the frontend — it's this same repo, run by a Tauri shell instead of a Node server.
+AI-powered functionality uses an API key configured through the UI.
 
-**Local development** (no packaging, fastest loop):
+---
+
+## Available scripts
 
 ```bash
-next dev -p 4173   # in one terminal — the Tauri window's devUrl points at :4173
-tauri dev           # in another
+npm run dev
+npm run build
+npm run start
+npm run lint
+npm run type-check
+
+npm test
+npm run test:e2e:ui
+npm run test:e2e:report
 ```
 
-The background scheduler daemon only runs in the *packaged* sidecar, not in `next dev` — for local testing of scheduling logic, point `OPTIQRA_DATA_DIR` at a scratch directory and write a schedule by hand into `schedules.json` with a past `nextRunAt`.
+Desktop:
 
-**Full production build** (produces installers for the current OS):
+```bash
+npm run desktop:dev
+npm run desktop:build
+```
+
+---
+
+# 🖥️ Building the desktop application
+
+The desktop application is built from the same repository.
+
+A production build performs roughly the following:
+
+```text
+Next.js production build
+        ↓
+Standalone application
+        ↓
+Compile scheduler daemon
+        ↓
+Package sidecar
+        ↓
+Tauri build
+        ↓
+Platform installer
+```
+
+Run:
 
 ```bash
 npm run desktop:build
 ```
 
-This runs, in order:
-1. `DOCKER_BUILD=1 next build` — produces `.next/standalone`
-2. `desktop:compile` — compiles the scheduler daemon (`server/`) with `tsc`
-3. `desktop:package` — bundles the compiled daemon + standalone Next build into a single sidecar binary via `@yao-pkg/pkg`
-4. `tauri build` — builds the Rust shell, embeds the sidecar, produces platform installers
+Cross-platform releases should be built natively for the target operating system.
 
-Cross-platform builds need to run natively per OS (macOS/Windows/Linux) in CI — see `.github/workflows/release.yml` and `server/README.md` for the full breakdown of the sidecar packaging and the IndexedDB ↔ file-store sync between the browser UI and the daemon.
+See:
 
-## Docker
+* `.github/workflows/release.yml`
+* `server/README.md`
+
+for the complete desktop build architecture.
+
+---
+
+# 🐳 Docker
 
 ```bash
 docker compose up --build
 ```
 
-The app will be available at http://localhost:3000. A `docker-compose.dev.yml` and `Dockerfile.dev` are also included for a hot-reloading development container.
+The application will be available at:
 
-## Periodic scans
+```text
+http://localhost:3000
+```
 
-Click **⏱ Schedule this scan** on a report (or **⏱ Scheduled scans** in the header to manage all of them) to have OptiQra re-scan a URL on a recurring cadence — hourly, daily, weekly, monthly, or yearly. Each run:
+Development Docker configuration is also included.
 
-- Saves a new report to scan history, same as a manual scan.
-- Optionally compares the new report against the most recent previous scan of that URL — score change, new issues, resolved issues.
-- Optionally fires a notification with a one-line summary once it finishes.
+---
 
-**In the web app:** schedules and history live entirely in the browser's IndexedDB (`src/lib/scheduleStore.ts`). A background checker (`src/lib/scheduler.ts`) runs while any tab of the app is open (or installed as a PWA) and checks every minute for schedules that are due. There's a best-effort attempt to register the [Periodic Background Sync API](https://developer.chrome.com/docs/capabilities/periodic-background-sync) on browsers/installs that support it, but that API has no guaranteed interval and isn't available in most browsers — treat it as a bonus, not a guarantee.
+# 🔌 API
 
-**In the desktop app:** a background daemon inside the packaged sidecar checks schedules independently of whether the window is open — see [OptiQra Desktop](https://github.com/armin5872/OptiQra/releases/tag/v2.4.15) above. This is the actual "runs even when nothing is open" answer; the web app's Periodic Background Sync attempt can't guarantee that on its own.
+OptiQra exposes internal API routes used by the application.
 
-## Localization
+Important endpoints include:
 
-The UI is fully translatable and currently ships with 13 languages: English, Spanish, French, German, Chinese, Russian, Dutch, Persian, Korean, Japanese, Italian, Arabic, and Hindi (including right-to-left layout for Persian and Arabic). See `src/lib/i18n/`.
+### Analyze
 
-## AI-powered fixes and insights
-
-If you paste in an API key for one of the supported providers (OpenAI, Anthropic, Google, Groq, OpenRouter, Mistral, DeepSeek, or xAI), OptiQra can:
-
-- Generate and apply a suggested fix for any individual issue in a report
-- Run a deeper "Full AI Fix" pass on files the deterministic/batched passes couldn't resolve
-- Generate a site-wide AI insights summary that reasons across every category and page, in a mood/persona and potency you choose
-
-Keys are entered per-session in the browser (or stored locally in the desktop app) and sent straight to the provider you chose to make the request — OptiQra's own server never sees or stores them.
-
-## PWA and offline support
-
-OptiQra is installable as a Progressive Web App. Completed scans and schedules are saved locally in IndexedDB, so past reports remain viewable offline and survive reloads; a lightweight pointer to your recent scan history is also kept in a capped cookie for fast, synchronous access. For audits that need to work *fully* offline, including project/codebase uploads, see [OptiQra Desktop](https://github.com/armin5872/OptiQra/releases/tag/v2.4.15).
-
-## API
-
-### `POST /api/analyze`
-
-Send a JSON body containing a URL:
+```http
+POST /api/analyze
+```
 
 ```json
 {
@@ -324,110 +857,215 @@ Send a JSON body containing a URL:
 }
 ```
 
-Returns a report with categories such as SEO, GEO/AEO, performance, accessibility, security, and conversions, along with issue details and scores. Outbound requests are validated against SSRF (blocked private/loopback/link-local IP ranges, including DNS rebinding checks) before being fetched — see `src/lib/urlSafety.ts`.
+### Stop crawl
 
-### `POST /api/analyze/stop`
-Cancels an in-progress crawl.
+```http
+POST /api/analyze/stop
+```
 
-### `POST /api/clone`
-Builds an annotated "highlighted clone" of a scanned page for the issue-overlay view.
+### Highlighted clone
 
-### `POST /api/auto-fix`
-Runs the deterministic + AI-assisted auto-fix engine against a single scanned page.
+```http
+POST /api/clone
+```
 
-### `POST /api/auto-fix-project`
-Runs project-wide audit/fix over an uploaded codebase archive (streams NDJSON progress). Also powers the offline project-audit path in the desktop app.
+### Auto Fix
 
-### `POST /api/ai-fix`
-Generates an AI-written fix for a single issue, given a provider, API key, and issue details.
+```http
+POST /api/auto-fix
+```
 
-### `POST /api/ai-insights`
-Generates a site-wide AI insights summary across a full report.
+### Project audit/fix
 
-### `POST /api/ai-test` / `POST /api/ai-engine-test`
-Verifies that a given provider/API key/model combination is reachable and working.
+```http
+POST /api/auto-fix-project
+```
 
-### `POST /api/generate-llms-txt`
-Drafts a starter `llms.txt` for a site using an AI provider of your choice.
+### Individual AI fix
 
-### `POST /api/pagespeed`
-Fetches Google PageSpeed Insights data for a URL.
+```http
+POST /api/ai-fix
+```
 
-### `GET /api/health`
-Health check used by the desktop sidecar to know when the local server is ready.
+### AI insights
 
-## Project structure
+```http
+POST /api/ai-insights
+```
 
-- `src/app/page.tsx`: the main diagnostic UI
-- `src/app/app/page.tsx`: the desktop app landing/download page
-- `src/app/api/analyze/route.ts`: the analysis orchestration endpoint
-- `src/app/api/auto-fix`, `auto-fix-project`, `ai-fix`, `ai-insights`, `ai-test`, `ai-engine-test`, `generate-llms-txt`, `pagespeed`, `clone`: fix/AI/utility endpoints
-- `src/lib`: audit modules — crawler, SEO, GEO, AEO, structured data, performance, accessibility (via HTML audit), security headers, links, images, duplicate content, and tech-stack detection
-- `src/lib/autoFixEngine.ts`, `jsxAutoFix.ts`, `projectFixEngine.ts`, `fullAiFixEngine.ts`, `fixIntegrityGuard.ts`: the deterministic + AI fix engines and their safety checks
-- `src/lib/aiFix.ts`, `aiProviders.ts`, `aiInsights.ts`, `moodPotency.ts`: multi-provider AI fix/insights generation, moods, and potency
-- `src/lib/projectAudit.ts`: rolls project-upload fix results into the same scored category report a live-URL scan produces
-- `src/lib/customRulesStore.ts`, `customCode.ts`: user-authored client-side rules and custom CSS/JS
-- `src/lib/reportExport`: PDF, DOCX, XLSX, Markdown, CSV, TSV, TXT, and JSON report exporters, built on a shared format-agnostic report model
-- `src/lib/scanStore.ts`, `scanCookies.ts`: local (IndexedDB + cookie) scan history
-- `src/lib/scheduler.ts`, `scheduleStore.ts`, `scanCompare.ts`, `notifications.ts`: periodic re-scan engine (see [Periodic scans](#periodic-scans))
-- `src/lib/urlSafety.ts`: SSRF protection for outbound crawl/analyze requests
-- `src/lib/desktopBridge.ts`: gates desktop-only behavior on the Tauri runtime, no-ops on the web
-- `src/lib/i18n/`: translations and language metadata
-- `worker/index.ts`: custom service worker logic (periodic sync, notification clicks) layered on top of next-pwa
-- `src-tauri/`: the Rust desktop shell — window, tray, sidecar spawning, single-instance lock, updater
-- `server/`: the desktop sidecar's entrypoint, scheduler daemon, and file-backed stores (see `server/README.md`)
+### AI provider test
 
-## Security
+```http
+POST /api/ai-test
+POST /api/ai-engine-test
+```
 
-Outbound scan requests are guarded against SSRF, and API keys for AI providers are never persisted server-side. See [SECURITY.md](SECURITY.md) for the full policy and how to report a vulnerability.
+### `llms.txt` generation
 
-## 🌱 Roadmap
+```http
+POST /api/generate-llms-txt
+```
 
-### Desktop (current focus)
-- [x] Tauri 2 desktop shell (macOS, Windows, Linux)
-- [x] Background scheduler daemon, independent of the app window
-- [x] Offline project/codebase audits
-- [x] IndexedDB ↔ local file-store sync for schedules and scans
-- [x] In-app auto-update via GitHub Releases
-- [ ] Signed/notarized builds on all three platforms
-- [ ] 24/7 local keywords database creation (a keyword database that is specialized for your website)
-- [ ] Local AI support
+### PageSpeed
 
-### v2.x
-- [x] Multi-language UI (13 languages)
-- [x] Sentry error monitoring, Playwright e2e tests
-- [x] SSRF hardening
-- [x] PageSpeed Insights integration
-- [x] Framework-aware auto-fix (HTML, JSX/TSX, Vue, Nuxt, Angular, Svelte, Astro)
-- [x] Project (codebase) upload audits, scored the same way as a URL scan
-- [x] Full AI Fix (whole-file AI rewrite pass)
-- [x] AI moods & potency for insights/fixes
-- [x] 3D and Galaxy crawl-tree visualization
-- [x] llms.txt generator
-- [x] Custom rules and custom code
-- [x] "Propose upstream" — draft a PR for a custom rule via GitHub's own UI
-- [ ] Competitor comparison
-- [ ] GitHub pull request fixes (auto-generated, not just custom-rule proposals)
+```http
+POST /api/pagespeed
+```
 
-### v1.x
-- [x] AI website review, AI-generated and applied fixes
-- [x] Multi-provider AI support (OpenAI, Anthropic, Google, Groq, OpenRouter, Mistral, DeepSeek, xAI)
-- [x] GEO / AEO audits
-- [x] PWA / offline support
-- [x] Report export (PDF, DOCX, XLSX, Markdown, CSV, TSV, TXT, JSON)
-- [x] Historical scan tracking, periodic scans with change detection and notifications
-- [x] Whole-site crawler, duplicate content detection, crawl visualization
+### Health
 
-## 💡 Vision
+```http
+GET /api/health
+```
 
-OptiQra aims to grow from a single-page auditing tool into a complete AI-powered website optimization platform — capable of crawling entire websites and codebases, identifying issues across both traditional search and generative-engine visibility, prioritizing improvements, applying fixes, running unattended in the background and be constantly evolving and growing, just becoming better and better in the background — whether that background is a browser tab or a native process on your own machine.
+Outbound URL requests are validated against SSRF protections before crawling.
 
-## 🤝 Contributing
+---
 
-Contributions are welcome. Pick up an open issue, start on the next item on the roadmap, or add something you think would make the app better. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup notes. If you make changes, please keep the audit output shape consistent and verify the app still builds locally.
+# 📁 Project structure
 
-## License
+```text
+src/
+├── app/
+│   ├── api/
+│   └── ...
+├── lib/
+│   ├── crawler
+│   ├── analyzers
+│   ├── auto-fix
+│   ├── AI
+│   ├── scheduling
+│   ├── reporting
+│   ├── localization
+│   └── ...
+│
+src-tauri/
+└── Tauri desktop shell
 
-[MIT](LICENSE) © ArminNX
+server/
+└── desktop scheduler sidecar
 
-## Made by ArminNX and the community
+worker/
+└── service worker
+```
+
+Some of the most important areas include:
+
+* `src/lib/` — crawling and analysis engine
+* `src/lib/autoFixEngine.ts` — deterministic fixes
+* `src/lib/fullAiFixEngine.ts` — Full AI Fix
+* `src/lib/fixIntegrityGuard.ts` — fix validation
+* `src/lib/projectAudit.ts` — project/codebase auditing
+* `src/lib/scheduler.ts` — browser scheduling
+* `server/` — desktop background scheduler
+* `src-tauri/` — native desktop shell
+* `src/lib/i18n/` — localization
+
+---
+
+# 🗺️ Roadmap
+
+OptiQra already has a large feature surface, so the roadmap is intentionally focused on improving the existing platform rather than adding features indiscriminately.
+
+## Current
+
+* [x] Tauri 2 desktop application
+* [x] Background scheduler
+* [x] Offline project/codebase audits
+* [x] Desktop notifications
+* [x] Scan history
+* [x] Automatic updates
+* [x] Multi-platform desktop releases
+* [x] 150+ analysis rules
+* [x] AI-assisted fixes
+* [x] Full AI Fix
+* [x] Framework-aware fixes
+* [x] GEO/AEO analysis
+* [x] 3D / Galaxy crawl visualization
+* [x] Project auditing
+* [x] Periodic scans
+* [x] Scan comparison
+* [x] Report exports
+* [x] Custom rules
+* [x] Custom code
+* [x] CI/CD integration
+
+## In development / planned
+
+* [ ] Signed and notarized builds across platforms
+* [ ] Competitor comparison and intelligence
+* [ ] GitHub pull-request-based fixes
+* [ ] Expanded website history and change intelligence
+* [ ] Additional developer integrations
+* [ ] Further crawler and analyzer improvements
+
+The roadmap may change as real-world usage and contributor feedback reveal what is most valuable.
+
+---
+
+# 💡 Vision
+
+OptiQra started as a website auditing project.
+
+The long-term goal is much larger:
+
+> **Make website optimization continuous instead of something you do once in a while.**
+
+A website should not need to wait for someone to remember:
+
+> "I should probably run an SEO audit."
+
+It should be possible to continuously:
+
+* Understand the site's structure
+* Detect regressions
+* Find new problems
+* Track changes
+* Analyze search visibility
+* Analyze AI visibility
+* Prioritize improvements
+* Apply fixes
+* Verify the result
+* Monitor the site over time
+
+The eventual direction is a persistent **website intelligence system**—one that knows the history and structure of a particular site instead of treating every scan as an isolated report.
+
+---
+
+# 🤝 Contributing
+
+Contributions are welcome.
+
+You can:
+
+* Fix an existing issue
+* Improve an analyzer
+* Add a new rule
+* Improve the crawler
+* Improve the UI
+* Add translations
+* Improve desktop functionality
+* Improve documentation
+* Add integrations
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development and contribution guidelines.
+
+If you're adding or modifying audit rules, please keep the report structure consistent and verify that the project still builds and passes its test suite.
+
+---
+
+# 📄 License
+
+OptiQra is released under the [MIT License](LICENSE).
+
+© ArminNX
+
+---
+
+## Built by ArminNX and the open-source community
+
+If OptiQra is useful to you, consider **[starring the repository](https://github.com/armin5872/OptiQra)**.
+
+It helps the project get discovered by other developers and makes it easier to attract contributors.
+
+**[⭐ Star OptiQra on GitHub](https://github.com/armin5872/OptiQra)**** · ****[🚀 Try it](https://optiqra.vercel.app/)**** · ****[⬇️ Download Desktop](https://github.com/armin5872/OptiQra/releases/latest)**
