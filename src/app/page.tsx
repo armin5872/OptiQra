@@ -18,6 +18,8 @@ import AISiteInsights from "./components/AISiteInsights";
 import AIEngineTest from "./components/AIEngineTest";
 import CoreWebVitalsPanel from "./components/CoreWebVitalsPanel";
 import ReportDownload from "./components/ReportDownload";
+import ShareReport from "./components/ShareReport";
+import GetBadge from "./components/GetBadge";
 import PostScanDesktopCTA from "./components/PostScanDesktopCTA";
 import StorageWarningBanner from "./components/StorageWarningBanner";
 import GithubStarToast from "./components/GithubStarToast";
@@ -545,15 +547,6 @@ export default function Home() {
 		}
 	};
 
-	const fixAll = () => {
-		if (!reportData) return;
-		const newData = { ...reportData };
-		Object.keys(newData.categories).forEach((key) => {
-			newData.categories[key].issues.forEach((iss) => (iss.resolved = true));
-		});
-		setReportData(newData);
-	};
-
 	const computeOverall = () => {
 		if (!reportData) return 0;
 		const keys = Object.keys(reportData.categories);
@@ -570,12 +563,6 @@ export default function Home() {
 		return `progress-${bucket}`;
 	};
 	const overall = computeOverall();
-	const allResolved =
-		reportData ?
-			Object.values(reportData.categories).every((c) =>
-				c.issues.every((i) => i.resolved),
-			)
-		:	false;
 
 	// Settings → Analyzer lets people hide category cards they don't care
 	// about. This only affects what's displayed — the overall score above is
@@ -1137,13 +1124,8 @@ export default function Home() {
 								mode={reportData.mode ?? scanMode}
 								maxPages={resolvedMaxPages}
 							/>
-							<button
-								className="fix-all"
-								onClick={fixAll}
-								disabled={allResolved}
-							>
-								Mark everything resolved
-							</button>
+							<ShareReport siteUrl={reportData.url} overallScore={overall} />
+							<GetBadge />
 						</div>
 					</div>
 

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="176" height="36" viewBox="0 0 176 36" role="img" aria-label="SEO by OptiQra">
+	<title>SEO by OptiQra</title>
+	<defs>
+		<linearGradient id="oq-badge-grad" x1="0" y1="0" x2="1" y2="1">
+			<stop offset="0%" stop-color="#6505ff" />
+			<stop offset="100%" stop-color="#8a3bff" />
+		</linearGradient>
+	</defs>
+	<rect x="0.5" y="0.5" width="175" height="35" rx="8" fill="#12211c" stroke="#2a3a34" />
+	<circle cx="18" cy="18" r="10" fill="url(#oq-badge-grad)" />
+	<path
+		d="M13.6 18a4.4 4.4 0 1 1 8.8 0 4.4 4.4 0 0 1-8.8 0Z"
+		fill="none"
+		stroke="#ffffff"
+		stroke-width="1.6"
+	/>
+	<path d="M20.4 20.4 23 23" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round" />
+	<text x="34" y="15" font-family="IBM Plex Sans, Arial, sans-serif" font-size="9.5" font-weight="600" fill="#9aa6a0" letter-spacing="0.3">
+		SEO BY
+	</text>
+	<text x="34" y="27" font-family="IBM Plex Sans, Arial, sans-serif" font-size="13" font-weight="700" fill="#ffffff">
+		OptiQra
+	</text>
+</svg>
