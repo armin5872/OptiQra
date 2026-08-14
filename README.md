@@ -97,7 +97,7 @@ You can scan a live URL, upload a project/codebase, inspect the discovered issue
 
 # What can OptiQra analyze?
 
-OptiQra currently contains **150+ analysis rules** spanning traditional search, AI visibility, accessibility, performance, security, and technical website quality.
+OptiQra currently contains **180+ analysis rules** spanning traditional search, AI visibility, accessibility, performance, security, and technical website quality. If you want to go a bit more detail into these rules I suggest you read the [wiki](https://github.com/armin5872/OptiQra/wiki)
 
 ## 🔍 Website crawling
 
