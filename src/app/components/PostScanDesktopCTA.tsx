@@ -11,7 +11,7 @@ const DISMISS_KEY = "optiqra-post-scan-cta-dismissed";
  * of the session (sessionStorage) rather than forever, and hides itself
  * automatically inside the desktop app (isDesktop()).
  *
- * Same CSS-var-based styling as DesktopAppBanner.tsx — see that file's
+ * Same CSS-var-based styling as PlatformsBanner.tsx — see that file's
  * comment for why this doesn't use Tailwind.
  */
 export default function PostScanDesktopCTA() {

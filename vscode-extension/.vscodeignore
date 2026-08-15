@@ -1,0 +1,12 @@
+src/**
+media/crawltree/main.ts
+node_modules/**
+!node_modules/three/**
+out/**
+*.ts
+!dist/**/*.js
+tsconfig.json
+esbuild.js
+.gitignore
+**/*.map
+.git/**

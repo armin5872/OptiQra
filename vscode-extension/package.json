@@ -1,0 +1,487 @@
+{
+  "name": "optiqra-vscode",
+  "displayName": "OptiQra \u2014 SEO, GEO & AEO Engineer",
+  "description": "Offline SEO/GEO/AEO/accessibility/security auditing with live in-editor diagnostics, one-click fixes (automated or AI/BYOK via OPCA), a 2D/3D crawl-tree visualizer, and a dashboard \u2014 all running locally. Like OptiQra? Star us on GitHub: https://github.com/armin5872/OptiQra",
+  "version": "0.1.0",
+  "publisher": "ArminRomero",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/armin5872/OptiQra"
+  },
+  "homepage": "https://github.com/armin5872/OptiQra",
+  "bugs": {
+    "url": "https://github.com/armin5872/OptiQra/issues"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Linters",
+    "Programming Languages",
+    "Machine Learning",
+    "Visualization",
+    "Chat"
+  ],
+  "keywords": [
+    "seo",
+    "geo",
+    "aeo",
+    "generative engine optimization",
+    "answer engine optimization",
+    "llm seo",
+    "ai seo",
+    "chatgpt seo",
+    "seo audit",
+    "seo checker",
+    "seo linter",
+    "seo analyzer",
+    "accessibility",
+    "a11y",
+    "wcag",
+    "web accessibility",
+    "performance audit",
+    "core web vitals",
+    "lighthouse alternative",
+    "structured data",
+    "schema.org",
+    "json-ld",
+    "json ld validator",
+    "robots.txt",
+    "sitemap",
+    "crawlability",
+    "indexing",
+    "meta tags",
+    "open graph",
+    "canonical tags",
+    "alt text checker",
+    "broken links",
+    "duplicate content",
+    "security headers",
+    "content security policy",
+    "llms.txt",
+    "ai crawlers",
+    "gptbot",
+    "perplexity bot",
+    "optiqra",
+    "opca",
+    "ai coding agent",
+    "seo agent",
+    "copilot for seo",
+    "website audit",
+    "site audit",
+    "technical seo",
+    "on-page seo",
+    "react seo",
+    "next.js seo",
+    "vue seo",
+    "html linter",
+    "conversion rate optimization",
+    "cro",
+    "meta description",
+    "title tag",
+    "heading structure",
+    "canonical url",
+    "noindex",
+    "nofollow",
+    "seo extension",
+    "seo tool",
+    "website checker"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "icon": "resources/icon.png",
+  "scripts": {
+    "vscode:prepublish": "node esbuild.js --production",
+    "build": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "package": "npx @vscode/vsce package --no-dependencies"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "optiqra.openDashboard",
+        "title": "Open Dashboard",
+        "category": "OptiQra",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "optiqra.openCrawlTree",
+        "title": "Open Crawl Tree (2D/3D)",
+        "category": "OptiQra",
+        "icon": "$(type-hierarchy-sub)"
+      },
+      {
+        "command": "optiqra.openChat",
+        "title": "Ask OPCA (Coding Agent)",
+        "category": "OptiQra",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "optiqra.openWiki",
+        "title": "Open Wiki",
+        "category": "OptiQra",
+        "icon": "$(book)"
+      },
+      {
+        "command": "optiqra.runFullScan",
+        "title": "Run Full Scan",
+        "category": "OptiQra",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "optiqra.fixCurrentFile",
+        "title": "Fix Current File",
+        "category": "OptiQra",
+        "icon": "$(wrench)"
+      },
+      {
+        "command": "optiqra.fixIssueAtCursor",
+        "title": "Fix Issue at Cursor",
+        "category": "OptiQra"
+      },
+      {
+        "command": "optiqra.askOpcaAboutIssue",
+        "title": "Ask OPCA About This",
+        "category": "OptiQra"
+      },
+      {
+        "command": "optiqra.setApiKey",
+        "title": "Set AI API Key (BYOK)",
+        "category": "OptiQra",
+        "icon": "$(key)"
+      },
+      {
+        "command": "optiqra.clearApiKey",
+        "title": "Clear AI API Key",
+        "category": "OptiQra"
+      },
+      {
+        "command": "optiqra.toggleAutoApprove",
+        "title": "Toggle Auto-Approve Fixes",
+        "category": "OptiQra"
+      },
+      {
+        "command": "optiqra.syncWiki",
+        "title": "Sync Wiki",
+        "category": "OptiQra",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "optiqra.openSettings",
+        "title": "Settings",
+        "category": "OptiQra",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "optiqra.starOnGitHub",
+        "title": "\u2605 Star OptiQra on GitHub",
+        "category": "OptiQra",
+        "icon": "$(github)"
+      }
+    ],
+    "menus": {
+      "commandPalette": [],
+      "editor/context": [
+        {
+          "command": "optiqra.fixCurrentFile",
+          "group": "optiqra",
+          "when": "editorLangId =~ /html|javascript|javascriptreact|typescript|typescriptreact|vue|svelte|astro|php/"
+        },
+        {
+          "command": "optiqra.askOpcaAboutIssue",
+          "group": "optiqra"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "optiqra.fixCurrentFile",
+          "group": "optiqra"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "optiqra.runFullScan",
+          "when": "view == optiqra.issuesView",
+          "group": "navigation"
+        },
+        {
+          "command": "optiqra.openDashboard",
+          "when": "view == optiqra.actionsView",
+          "group": "navigation"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "optiqra",
+          "title": "OptiQra",
+          "icon": "resources/activitybar-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "optiqra": [
+        {
+          "id": "optiqra.actionsView",
+          "name": "OptiQra"
+        },
+        {
+          "id": "optiqra.issuesView",
+          "name": "Issues"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "optiqra.issuesView",
+        "contents": "No OptiQra issues found yet.\n[Run Full Scan](command:optiqra.runFullScan)\nOpen a file to see live diagnostics, or run a full workspace scan for the dashboard and crawl tree.\n\nLike OptiQra? [Give us a star on GitHub \u2605](https://github.com/armin5872/OptiQra)"
+      }
+    ],
+    "configuration": {
+      "title": "OptiQra",
+      "properties": {
+        "optiqra.categories.seo": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include SEO checks (titles, meta tags, headings, canonical, etc.)."
+        },
+        "optiqra.categories.performance": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include performance checks (image weight, render-blocking resources, caching headers, etc.)."
+        },
+        "optiqra.categories.accessibility": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include accessibility (a11y) checks (alt text, labels, contrast, landmarks, etc.)."
+        },
+        "optiqra.categories.security": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include security checks (headers, target=_blank/noopener, mixed content, hardcoded secrets, etc.)."
+        },
+        "optiqra.categories.conversions": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include conversion-rate checks (CTA clarity, forms, trust signals, etc.)."
+        },
+        "optiqra.categories.bestPractices": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include general best-practice checks (console/debugger statements, missing keys, deprecated APIs, etc.)."
+        },
+        "optiqra.categories.geo": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include GEO (Generative Engine Optimization) checks \u2014 how well content is structured for AI answer engines to cite."
+        },
+        "optiqra.categories.aeo": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include AEO (Answer Engine Optimization) checks \u2014 FAQ/Q&A structure, direct-answer patterns, llms.txt, AI-crawler access."
+        },
+        "optiqra.categories.structuredData": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include structured data / JSON-LD schema checks."
+        },
+        "optiqra.categories.duplicateContent": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include duplicate-content checks across scanned pages."
+        },
+        "optiqra.diagnostics.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show OptiQra findings as inline diagnostics (squiggly underlines) in the editor."
+        },
+        "optiqra.diagnostics.liveAsYouType": {
+          "type": "boolean",
+          "default": true,
+          "description": "Update diagnostics as you type (debounced), not just on save."
+        },
+        "optiqra.diagnostics.severityMap": {
+          "type": "string",
+          "default": "vscode-default",
+          "enum": [
+            "vscode-default",
+            "all-warning",
+            "all-error"
+          ],
+          "enumDescriptions": [
+            "Map OptiQra severities to Error/Warning/Info as usual.",
+            "Show every finding as a Warning, regardless of severity.",
+            "Show every finding as an Error, regardless of severity."
+          ],
+          "description": "How OptiQra severities map to VS Code diagnostic severities."
+        },
+        "optiqra.diagnostics.minSeverity": {
+          "type": "string",
+          "default": "informational",
+          "enum": [
+            "informational",
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ],
+          "description": "Minimum severity to show as a diagnostic."
+        },
+        "optiqra.fix.autoApprove": {
+          "type": "boolean",
+          "default": false,
+          "description": "Apply fixes immediately without showing a diff for approval first. Off by default \u2014 every change requires your approval unless you turn this on."
+        },
+        "optiqra.fix.preferAI": {
+          "type": "boolean",
+          "default": true,
+          "description": "When an AI provider/key is configured, prefer AI-authored fixes (via OPCA) over leaving AI-only targets unresolved."
+        },
+        "optiqra.fix.showDiffBeforeApply": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a diff view before applying a fix (ignored when auto-approve is on)."
+        },
+        "optiqra.ai.provider": {
+          "type": "string",
+          "default": "none",
+          "enum": [
+            "none",
+            "openai",
+            "anthropic",
+            "google",
+            "groq",
+            "openrouter",
+            "mistral",
+            "deepseek",
+            "xai"
+          ],
+          "description": "AI provider for OPCA and AI-authored fixes (BYOK \u2014 bring your own key via 'OptiQra: Set AI API Key'). Set to 'none' to use automated/deterministic fixes only."
+        },
+        "optiqra.ai.model": {
+          "type": "string",
+          "default": "",
+          "description": "Model name for the selected provider. Leave blank to use OptiQra's default model for that provider."
+        },
+        "optiqra.ai.tone": {
+          "type": "string",
+          "default": "detailed",
+          "enum": [
+            "concise",
+            "detailed"
+          ],
+          "description": "Response length/detail preference for OPCA."
+        },
+        "optiqra.ai.mood": {
+          "type": "string",
+          "default": "normal",
+          "enum": [
+            "normal",
+            "professional",
+            "friendly",
+            "energetic",
+            "quirky",
+            "sarcastic",
+            "fullDev",
+            "nonDev",
+            "experimental"
+          ],
+          "description": "Personality/mood for AI-generated insights and OPCA responses, matching the web app's Insights mood setting."
+        },
+        "optiqra.ai.moodPotency": {
+          "type": "number",
+          "default": 50,
+          "minimum": 0,
+          "maximum": 100,
+          "description": "How strongly the selected mood comes through (0-100)."
+        },
+        "optiqra.scan.include": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**/*.html",
+            "**/*.htm",
+            "**/*.jsx",
+            "**/*.tsx",
+            "**/*.vue",
+            "**/*.svelte",
+            "**/*.astro"
+          ],
+          "description": "Glob patterns for files OptiQra scans."
+        },
+        "optiqra.scan.exclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**/node_modules/**",
+            "**/dist/**",
+            "**/build/**",
+            "**/.next/**",
+            "**/out/**",
+            "**/.git/**",
+            "**/coverage/**"
+          ],
+          "description": "Glob patterns OptiQra never scans."
+        },
+        "optiqra.scan.maxFileSizeKb": {
+          "type": "number",
+          "default": 512,
+          "description": "Skip files larger than this size (KB) during scanning."
+        },
+        "optiqra.reports.defaultExportFormat": {
+          "type": "string",
+          "default": "markdown",
+          "enum": [
+            "pdf",
+            "docx",
+            "markdown",
+            "csv",
+            "tsv",
+            "txt",
+            "json"
+          ],
+          "description": "Default format for exported audit reports."
+        },
+        "optiqra.opca.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable OPCA, OptiQra's coding agent chat panel."
+        },
+        "optiqra.opca.useWikiContext": {
+          "type": "boolean",
+          "default": true,
+          "description": "Ground OPCA's answers in OptiQra's bundled offline wiki (audit-rule reference)."
+        },
+        "optiqra.opca.maxAutoFixesPerRun": {
+          "type": "number",
+          "default": 25,
+          "description": "Safety cap on how many AI-authored fixes OPCA resolves in a single fix run."
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "domhandler": "^5.0.3",
+    "image-size": "^1.1.1",
+    "marked": "^13.0.0",
+    "three": "^0.166.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.9.2",
+    "esbuild": "^0.23.0",
+    "idb": "^8.0.3",
+    "typescript": "^5.5.0"
+  }
+}

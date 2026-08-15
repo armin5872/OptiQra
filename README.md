@@ -7,7 +7,7 @@
 
 **An open-source AI website optimizer that actually fixes what it finds.**
 
-OptiQra crawls your website or project, finds problems across **SEO, AEO, GEO, performance, accessibility, security, and technical quality**, explains what matters, shows you where the problems are, and can **actually fix them**.
+OptiQra crawls your website or project, finds problems across **SEO, AEO, GEO, performance, accessibility, security, and technical quality**, explains what matters, shows you where the problems are, and can **actually fix them**. It's the rare audit tool that closes the loop instead of just handing you a to-do list — and now it goes wherever you build: web, desktop, and directly inside your editor.
 
 Instead of:
 
@@ -24,6 +24,7 @@ OptiQra is built around:
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-optiqra.vercel.app-00C7B7?style=for-the-badge&logo=vercel)](https://optiqra.vercel.app/)
 [![GitHub Repo](https://img.shields.io/badge/GitHub-Source-181717?style=for-the-badge&logo=github)](https://github.com/armin5872/OptiQra)
 [![Download](https://img.shields.io/badge/Desktop-Download-blue?style=for-the-badge&logo=github)](https://github.com/armin5872/OptiQra/releases/latest)
+[![VS Code Extension](https://img.shields.io/badge/VS%20Code-Extension-6366F1?style=for-the-badge&logo=visualstudiocode)](./vscode-extension)
 [![Issues](https://img.shields.io/badge/Report%20Bug-Issues-red?style=for-the-badge&logo=github)](https://github.com/armin5872/OptiQra/issues)
 
 ---
@@ -732,6 +733,15 @@ For security issues, please see [SECURITY.md](SECURITY.md) rather than opening a
 
 The desktop application uses the same application and audit engine as the web experience rather than maintaining a separate ruleset.
 
+## VS Code Extension
+
+* TypeScript
+* esbuild
+* Cheerio (same engine as Web/Desktop — see [`vscode-extension/ARCHITECTURE.md`](./vscode-extension/ARCHITECTURE.md))
+* Three.js (2D/3D Crawl Tree)
+* VS Code Diagnostics / Code Actions / Webview APIs
+* OPCA — BYOK AI coding agent, grounded in the offline-bundled wiki
+
 ---
 
 # 🚀 Quick start
@@ -1069,3 +1079,9 @@ If OptiQra is useful to you, consider **[starring the repository](https://github
 It helps the project get discovered by other developers and makes it easier to attract contributors.
 
 **[⭐ Star OptiQra on GitHub](https://github.com/armin5872/OptiQra)**** · ****[🚀 Try it](https://optiqra.vercel.app/)**** · ****[⬇️ Download Desktop](https://github.com/armin5872/OptiQra/releases/latest)**
+
+## VS Code Extension
+
+OptiQra now lives where you actually write code. A full-featured VS Code extension in [`vscode-extension/`](./vscode-extension) brings offline SEO/GEO/AEO/accessibility/security auditing, live in-editor diagnostics, one-click fixes (automated or via OPCA/BYOK AI, always with your approval), a Dashboard, a 2D/3D Crawl Tree, and an offline Wiki — running entirely inside the editor, no server round-trip required. It imports `src/lib/` directly rather than duplicating it, so it stays in lockstep with the same engine the web and desktop apps run — see [`vscode-extension/ARCHITECTURE.md`](./vscode-extension/ARCHITECTURE.md).
+
+**Like OptiQra? [Give us a star on GitHub ★](https://github.com/armin5872/OptiQra)**
