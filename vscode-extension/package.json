@@ -2,7 +2,7 @@
   "name": "optiqra-vscode",
   "displayName": "OptiQra \u2014 SEO, GEO & AEO Engineer",
   "description": "Offline SEO/GEO/AEO/accessibility/security auditing with live in-editor diagnostics, one-click fixes (automated or AI/BYOK via OPCA), a 2D/3D crawl-tree visualizer, and a dashboard \u2014 all running locally. Like OptiQra? Star us on GitHub: https://github.com/armin5872/OptiQra",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "ArminRomero",
   "license": "MIT",
   "repository": {
@@ -146,6 +146,11 @@
       {
         "command": "optiqra.askOpcaAboutIssue",
         "title": "Ask OPCA About This",
+        "category": "OptiQra"
+      },
+      {
+        "command": "optiqra.askOpca",
+        "title": "Ask OPCA to Do Something…",
         "category": "OptiQra"
       },
       {
@@ -331,6 +336,11 @@
             "critical"
           ],
           "description": "Minimum severity to show as a diagnostic."
+        },
+        "optiqra.diagnostics.showCodeLens": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show inline \"Fix with OPCA\" / \"Ask OPCA\" links above lines with issues, like a Copilot-style suggestion."
         },
         "optiqra.fix.autoApprove": {
           "type": "boolean",

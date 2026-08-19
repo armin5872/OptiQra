@@ -73,24 +73,41 @@ export class CrawlTreePanel {
 			bodyHtml: BODY,
 			scriptUri,
 			extraCsp: `worker-src ${this.panel.webview.cspSource}; connect-src ${this.panel.webview.cspSource};`,
-		});
+		}).replace("</head>", `<style nonce="${nonce}">${CRAWLTREE_STYLES}</style></head>`);
 	}
 }
+
+const CRAWLTREE_STYLES = `
+#legend { display:flex; gap:6px; flex-wrap:wrap; padding:10px 20px; border-bottom:1px solid var(--oq-border); background:var(--oq-bg-elevated); }
+.legend-item {
+  display:flex; align-items:center; gap:6px; font-size:11px; padding:3px 9px; border-radius:999px;
+  background:var(--oq-card); border:1px solid var(--oq-border); color:var(--oq-text-dim); cursor:pointer;
+  transition: all .15s ease; user-select:none;
+}
+.legend-item.active { color:var(--oq-text); border-color:var(--oq-border); }
+.legend-item:not(.active) { opacity:.45; }
+.legend-item:hover { border-color:var(--oq-accent-1); opacity:1; }
+.legend-swatch { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+#three-host canvas { display:block; }
+`;
 
 const BODY = `
 <div class="oq-header">
   <div class="oq-logo"><span class="dot"></span> Crawl Tree</div>
   <div style="display:flex; gap:8px; align-items:center;">
     <span id="stats" style="font-size:12px; color:var(--oq-text-muted); margin-right:8px;"></span>
-    <button class="oq-btn primary" id="btn-2d">2D</button>
-    <button class="oq-btn" id="btn-3d">3D</button>
+    <div style="display:flex; border:1px solid var(--oq-border); border-radius:var(--oq-radius); overflow:hidden;">
+      <button class="oq-btn primary" id="btn-2d" style="border:none; border-radius:0;">◫ 2D</button>
+      <button class="oq-btn" id="btn-3d" style="border:none; border-radius:0; border-left:1px solid var(--oq-border);">◍ 3D</button>
+    </div>
   </div>
 </div>
-<div style="display:flex; height:calc(100vh - 57px);">
+<div id="legend"></div>
+<div style="display:flex; height:calc(100vh - 96px);">
   <div style="flex:1; position:relative; overflow:hidden;">
     <div id="svg-host" style="width:100%; height:100%;"></div>
     <div id="three-host" style="width:100%; height:100%; display:none;"></div>
   </div>
-  <div style="width:280px; border-left:1px solid var(--oq-border); background:var(--oq-bg-elevated);" id="detail"></div>
+  <div style="width:280px; border-left:1px solid var(--oq-border); background:var(--oq-bg-elevated); overflow:auto;" id="detail"></div>
 </div>
 `;

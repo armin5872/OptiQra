@@ -31,6 +31,7 @@ export interface OptiQraExtensionSettings {
 		liveAsYouType: boolean;
 		severityMap: DiagnosticsSeverityMap;
 		minSeverity: "informational" | "low" | "medium" | "high" | "critical";
+		showCodeLens: boolean;
 	};
 	// --- Fix behavior ---
 	fix: {
@@ -88,6 +89,7 @@ export function getSettings(): OptiQraExtensionSettings {
 			liveAsYouType: c.get("diagnostics.liveAsYouType", true),
 			severityMap: c.get("diagnostics.severityMap", "vscode-default"),
 			minSeverity: c.get("diagnostics.minSeverity", "informational"),
+			showCodeLens: c.get("diagnostics.showCodeLens", true),
 		},
 		fix: {
 			autoApprove: c.get("fix.autoApprove", false),

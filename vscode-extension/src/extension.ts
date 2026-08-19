@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { OptiQraDiagnostics } from "./diagnostics/diagnosticsManager";
 import { OptiQraCodeActionProvider, OptiQraHoverProvider } from "./diagnostics/codeActions";
+import { OptiQraCodeLensProvider } from "./diagnostics/codeLensProvider";
 import { IssuesTreeProvider } from "./views/issuesTreeProvider";
 import { ActionsTreeProvider } from "./views/actionsTreeProvider";
 import { OptiQraStatusBar } from "./views/statusBar";
@@ -31,6 +32,12 @@ export function activate(context: vscode.ExtensionContext) {
 	const diagnostics = new OptiQraDiagnostics();
 	const statusBar = new OptiQraStatusBar();
 	const issuesProvider = new IssuesTreeProvider();
+	const codeLensProvider = new OptiQraCodeLensProvider(diagnostics);
+	// The chat panel reads this to report OPCA's live tool activity to the
+	// status bar even when the chat webview isn't the focused/visible one —
+	// the same "the agent is doing something right now" affordance Copilot
+	// gives you outside its own chat window.
+	ChatPanel.onAgentActivity = (label) => statusBar.setAgentActivity(label);
 
 	context.subscriptions.push(
 		diagnostics,
@@ -42,6 +49,7 @@ export function activate(context: vscode.ExtensionContext) {
 			providedCodeActionKinds: OptiQraCodeActionProvider.providedCodeActionKinds,
 		}),
 		vscode.languages.registerHoverProvider(SELECTABLE_LANGUAGES, new OptiQraHoverProvider()),
+		vscode.languages.registerCodeLensProvider(SELECTABLE_LANGUAGES, codeLensProvider),
 	);
 
 	function scheduleDiagnostics(doc: vscode.TextDocument) {
@@ -52,11 +60,15 @@ export function activate(context: vscode.ExtensionContext) {
 		debounceTimer = setTimeout(() => {
 			diagnostics.update(doc);
 			issuesProvider.refresh();
+			codeLensProvider.refresh();
 		}, 400);
 	}
 
 	context.subscriptions.push(
-		vscode.workspace.onDidOpenTextDocument((doc) => diagnostics.update(doc)),
+		vscode.workspace.onDidOpenTextDocument((doc) => {
+			diagnostics.update(doc);
+			codeLensProvider.refresh();
+		}),
 		vscode.workspace.onDidChangeTextDocument((e) => scheduleDiagnostics(e.document)),
 		vscode.workspace.onDidSaveTextDocument((doc) => {
 			diagnostics.update(doc);
@@ -66,6 +78,9 @@ export function activate(context: vscode.ExtensionContext) {
 			if (editor) diagnostics.update(editor.document);
 		}),
 		vscode.languages.onDidChangeDiagnostics(() => issuesProvider.refresh()),
+		vscode.workspace.onDidChangeConfiguration((e) => {
+			if (e.affectsConfiguration("optiqra.diagnostics.showCodeLens")) codeLensProvider.refresh();
+		}),
 	);
 	if (getSettings().diagnostics.enabled) {
 		for (const doc of vscode.workspace.textDocuments) diagnostics.update(doc);
@@ -79,6 +94,15 @@ export function activate(context: vscode.ExtensionContext) {
 	cmd("optiqra.openChat", () => ChatPanel.createOrShow(context));
 	cmd("optiqra.openWiki", () => WikiPanel.createOrShow(context));
 	cmd("optiqra.openSettings", () => vscode.commands.executeCommand("workbench.action.openSettings", "optiqra"));
+
+	// Generic "hand OPCA a task" entry point — used by proactive nudges
+	// (e.g. the dashboard offering to fix issues right after a scan) as well
+	// as anything else that wants to kick off the agent with an arbitrary
+	// prompt rather than one tied to a specific diagnostic.
+	cmd("optiqra.askOpca", async (prompt: string) => {
+		const panel = ChatPanel.createOrShow(context);
+		await panel.askAbout(prompt);
+	});
 
 	cmd("optiqra.setApiKey", async () => {
 		const key = await vscode.window.showInputBox({
