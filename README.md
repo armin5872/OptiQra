@@ -24,7 +24,7 @@ OptiQra is built around:
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-optiqra.vercel.app-00C7B7?style=for-the-badge&logo=vercel)](https://optiqra.vercel.app/)
 [![GitHub Repo](https://img.shields.io/badge/GitHub-Source-181717?style=for-the-badge&logo=github)](https://github.com/armin5872/OptiQra)
 [![Download](https://img.shields.io/badge/Desktop-Download-blue?style=for-the-badge&logo=github)](https://github.com/armin5872/OptiQra/releases/latest)
-[![VS Code Extension](https://img.shields.io/badge/VS%20Code-Extension-6366F1?style=for-the-badge&logo=visualstudiocode)](./vscode-extension)
+[![VS Code Extension](https://img.shields.io/badge/VS%20Code-Extension-6366F1?style=for-the-badge&logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=ArminRomero.optiqra-vscode)
 [![Issues](https://img.shields.io/badge/Report%20Bug-Issues-red?style=for-the-badge&logo=github)](https://github.com/armin5872/OptiQra/issues)
 
 ---
@@ -1082,6 +1082,6 @@ It helps the project get discovered by other developers and makes it easier to a
 
 ## VS Code Extension
 
-OptiQra now lives where you actually write code. A full-featured VS Code extension in [`vscode-extension/`](./vscode-extension) brings offline SEO/GEO/AEO/accessibility/security auditing, live in-editor diagnostics, one-click fixes (automated or via OPCA/BYOK AI, always with your approval), a Dashboard, a 2D/3D Crawl Tree, and an offline Wiki — running entirely inside the editor, no server round-trip required. It imports `src/lib/` directly rather than duplicating it, so it stays in lockstep with the same engine the web and desktop apps run — see [`vscode-extension/ARCHITECTURE.md`](./vscode-extension/ARCHITECTURE.md).
+OptiQra now lives where you actually write code. A full-featured VS Code extension in [`vscode-extension/`](./vscode-extension) brings offline SEO/GEO/AEO/accessibility/security auditing, live in-editor diagnostics, one-click fixes (automated or via OPCA/BYOK AI, always with your approval), a Dashboard, a 2D/3D Crawl Tree, and an offline Wiki — running entirely inside the editor, no server round-trip required. It imports `src/lib/` directly rather than duplicating it, so it stays in lockstep with the same engine the web and desktop apps run — see [`vscode-extension/ARCHITECTURE.md`](./vscode-extension/ARCHITECTURE.md). And you can download it in the [VS code marketplace](https://marketplace.visualstudio.com/items?itemName=ArminRomero.optiqra-vscode)
 
 **Like OptiQra? [Give us a star on GitHub ★](https://github.com/armin5872/OptiQra)**
