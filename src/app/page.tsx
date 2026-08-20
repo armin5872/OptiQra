@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import CrawlTree from "./components/CrawlTree";
 import type { PageNode, Issue } from "./components/CrawlTree";
 import CrawlTree3D from "./components/CrawlTree3D";
@@ -619,6 +620,9 @@ export default function Home() {
 					OptiQra
 				</div>
 				<div className="header-actions">
+					<Link href="/tools" className="tools-header-btn" aria-label="Browse all individual OptiQra tools" title="Browse all individual OptiQra tools">
+						<span>Tools</span>
+					</Link>
 					<a
 						href={REPO_URL}
 						target="_blank"
