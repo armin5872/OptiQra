@@ -18,6 +18,22 @@ import {
 	generateReferrerPolicy,
 	generateSecurityTxt,
 } from "@/lib/toolGenerators";
+import ShareReport from "@/app/components/ShareReport";
+import GetBadge from "@/app/components/GetBadge";
+import { generatorShareCopy, toolBadgeIntro } from "@/lib/shareMessages";
+
+function GeneratorShareBar({ toolName }: { toolName: string }) {
+	return (
+		<div className="tool-share-bar">
+			<ShareReport
+				{...generatorShareCopy({ toolName })}
+				buttonLabel="Share this tool"
+				shareTitle={toolName}
+			/>
+			<GetBadge intro={toolBadgeIntro(toolName)} />
+		</div>
+	);
+}
 
 function OutputBlock({ code, language }: { code: string; language?: string }) {
 	const [copied, setCopied] = useState(false);
@@ -57,25 +73,25 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 export default function GeneratorToolClient({ tool }: { tool: ToolDef }) {
 	switch (tool.generatorKind) {
 		case "meta":
-			return <MetaGenerator />;
+			return <MetaGenerator toolName={tool.shortName} />;
 		case "schema":
-			return <SchemaGenerator />;
+			return <SchemaGenerator toolName={tool.shortName} />;
 		case "robots":
-			return <RobotsGenerator />;
+			return <RobotsGenerator toolName={tool.shortName} />;
 		case "sitemap":
-			return <SitemapGenerator />;
+			return <SitemapGenerator toolName={tool.shortName} />;
 		case "hreflang":
-			return <HreflangGenerator />;
+			return <HreflangGenerator toolName={tool.shortName} />;
 		case "slug":
-			return <SlugGenerator />;
+			return <SlugGenerator toolName={tool.shortName} />;
 		case "security-headers":
-			return <SecurityHeadersGenerator />;
+			return <SecurityHeadersGenerator toolName={tool.shortName} />;
 		default:
 			return null;
 	}
 }
 
-function MetaGenerator() {
+function MetaGenerator({ toolName }: { toolName: string }) {
 	const [title, setTitle] = useState("");
 	const [description, setDescription] = useState("");
 	const [url, setUrl] = useState("");
@@ -127,11 +143,12 @@ function MetaGenerator() {
 			)}
 
 			<OutputBlock code={output} language="html" />
+			{title && <GeneratorShareBar toolName={toolName} />}
 		</div>
 	);
 }
 
-function SchemaGenerator() {
+function SchemaGenerator({ toolName }: { toolName: string }) {
 	const [type, setType] = useState<SchemaType>("Organization");
 	const [fields, setFields] = useState<Record<string, string>>({});
 	const def = SCHEMA_TYPES.find((s) => s.value === type)!;
@@ -166,11 +183,12 @@ function SchemaGenerator() {
 				))}
 			</div>
 			<OutputBlock code={output} language="json-ld" />
+			{Object.values(fields).some((v) => v.trim()) && <GeneratorShareBar toolName={toolName} />}
 		</div>
 	);
 }
 
-function RobotsGenerator() {
+function RobotsGenerator({ toolName }: { toolName: string }) {
 	const [disallow, setDisallow] = useState("/admin\n/cart");
 	const [sitemapUrl, setSitemapUrl] = useState("");
 	const [allowSearchBots, setAllowSearchBots] = useState(true);
@@ -212,11 +230,12 @@ function RobotsGenerator() {
 				))}
 			</div>
 			<OutputBlock code={output} language="robots.txt" />
+			<GeneratorShareBar toolName={toolName} />
 		</div>
 	);
 }
 
-function SitemapGenerator() {
+function SitemapGenerator({ toolName }: { toolName: string }) {
 	const [urls, setUrls] = useState("");
 	const output = generateSitemapXml(urls.split("\n"));
 	return (
@@ -225,11 +244,12 @@ function SitemapGenerator() {
 				<textarea rows={8} value={urls} onChange={(e) => setUrls(e.target.value)} placeholder={"https://example.com/\nhttps://example.com/about\nhttps://example.com/blog"} />
 			</Field>
 			<OutputBlock code={output} language="xml" />
+			{urls.trim() && <GeneratorShareBar toolName={toolName} />}
 		</div>
 	);
 }
 
-function HreflangGenerator() {
+function HreflangGenerator({ toolName }: { toolName: string }) {
 	const [rows, setRows] = useState([{ lang: "en", url: "" }, { lang: "es", url: "" }]);
 	const [includeXDefault, setIncludeXDefault] = useState(true);
 	const output = generateHreflangTags(rows, includeXDefault);
@@ -254,11 +274,12 @@ function HreflangGenerator() {
 				Include x-default
 			</label>
 			<OutputBlock code={output} language="html" />
+			{rows.some((r) => r.url.trim()) && <GeneratorShareBar toolName={toolName} />}
 		</div>
 	);
 }
 
-function SlugGenerator() {
+function SlugGenerator({ toolName }: { toolName: string }) {
 	const [title, setTitle] = useState("");
 	const { slug, warnings } = generateSlug(title);
 	return (
@@ -274,11 +295,12 @@ function SlugGenerator() {
 				</ul>
 			)}
 			<OutputBlock code={slug} language="slug" />
+			{title.trim() && <GeneratorShareBar toolName={toolName} />}
 		</div>
 	);
 }
 
-function SecurityHeadersGenerator() {
+function SecurityHeadersGenerator({ toolName }: { toolName: string }) {
 	const [scriptSrc, setScriptSrc] = useState("");
 	const [imageSrc, setImageSrc] = useState("");
 	const [allowFrames, setAllowFrames] = useState(false);
@@ -312,6 +334,7 @@ function SecurityHeadersGenerator() {
 			<OutputBlock code={generatePermissionsPolicy()} language="Permissions-Policy" />
 			<OutputBlock code={generateReferrerPolicy()} language="Referrer-Policy" />
 			<OutputBlock code={generateSecurityTxt(input)} language="security.txt" />
+			<GeneratorShareBar toolName={toolName} />
 		</div>
 	);
 }

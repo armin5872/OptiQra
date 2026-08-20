@@ -8,6 +8,9 @@ import { useAIProvider } from "@/lib/hooks/useAIProvider";
 import { readNDJSONStream, type DeltaStreamEvent } from "@/lib/ndjsonStream";
 import { getErrorMessage } from "@/lib/errorUtils";
 import type { Severity } from "@/lib/auditUtils";
+import ShareReport from "@/app/components/ShareReport";
+import GetBadge from "@/app/components/GetBadge";
+import { aiLlmsTxtShareCopy, aiSeoFixShareCopy, toolBadgeIntro } from "@/lib/shareMessages";
 
 export default function AiToolClient({ tool }: { tool: ToolDef }) {
 	if (tool.aiKind === "llms-txt") return <LlmsTxtGenerator />;
@@ -85,6 +88,16 @@ function LlmsTxtGenerator() {
 					</pre>
 				</div>
 			)}
+			{status === "done" && output && (
+				<div className="tool-share-bar">
+					<ShareReport
+						{...aiLlmsTxtShareCopy({ url: /^https?:\/\//i.test(url) ? url : `https://${url}` })}
+						buttonLabel="Share result"
+						shareTitle="My generated llms.txt"
+					/>
+					<GetBadge intro={toolBadgeIntro("llms.txt Generator")} />
+				</div>
+			)}
 		</div>
 	);
 }
@@ -149,6 +162,16 @@ function SeoFixGenerator() {
 						category={category}
 						onResolve={() => setResolved(true)}
 					/>
+					{resolved && (
+						<div className="tool-share-bar">
+							<ShareReport
+								{...aiSeoFixShareCopy({ issueTitle: title })}
+								buttonLabel="Share result"
+								shareTitle="My AI-generated SEO fix"
+							/>
+							<GetBadge intro={toolBadgeIntro("AI SEO Fix Generator")} />
+						</div>
+					)}
 				</div>
 			)}
 		</div>

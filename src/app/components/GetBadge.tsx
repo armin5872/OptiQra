@@ -17,7 +17,10 @@ const BADGE_SVG_URL = `${SITE_URL}/badge.svg`;
 
 type Snippet = "html" | "markdown" | "url";
 
-export default function GetBadge() {
+const DEFAULT_INTRO =
+	"Show visitors your site is optimized. Drop this badge in your footer, README, or about page — it links back to OptiQra.";
+
+export default function GetBadge({ intro }: { intro?: string }) {
 	const [open, setOpen] = useState(false);
 	const [copied, setCopied] = useState<Snippet | null>(null);
 	const menuRef = useRef<HTMLDivElement>(null);
@@ -67,10 +70,7 @@ export default function GetBadge() {
 
 			{open && (
 				<div className="report-download-menu get-badge-menu" role="menu">
-					<p className="get-badge-intro">
-						Show visitors your site is optimized. Drop this badge in your footer, README, or
-						about page — it links back to OptiQra.
-					</p>
+					<p className="get-badge-intro">{intro || DEFAULT_INTRO}</p>
 					{/* eslint-disable-next-line @next/next/no-img-element */}
 					<img
 						className="get-badge-preview"

@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import ShareReport from "./components/ShareReport";
+import GetBadge from "./components/GetBadge";
 import CrawlTree from "./components/CrawlTree";
 import type { PageNode, Issue } from "./components/CrawlTree";
 import CrawlTree3D from "./components/CrawlTree3D";
@@ -1148,6 +1150,8 @@ export default function Home() {
 							>
 								Mark everything resolved
 							</button>
+							<ShareReport siteUrl={reportData.url} overallScore={overall} />
+							<GetBadge />
 						</div>
 					</div>
 

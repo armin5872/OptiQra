@@ -11,7 +11,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-const SITE_URL = "https://optiqra.vercel.app";
+export const SITE_URL = "https://optiqra.vercel.app";
 
 type ShareTarget =
 	| "native"
@@ -24,7 +24,7 @@ type ShareTarget =
 	| "instagram"
 	| "copy";
 
-function buildMessage(siteUrl: string, score: number, name?: string) {
+function defaultBuildMessage(siteUrl: string, score: number, name?: string) {
 	const greeting = name?.trim() ? `Hi ${name.trim()}! ` : "";
 	return `${greeting}I just scanned ${siteUrl} with OptiQra and scored ${score}/100 on my SEO report. It's a really cool (and free) tool — you should go check it out: ${SITE_URL}`;
 }
@@ -88,9 +88,24 @@ const ICONS: Record<ShareTarget, React.ReactNode> = {
 export default function ShareReport({
 	siteUrl,
 	overallScore,
+	subject,
+	buildMessage,
+	buttonLabel = "Share report",
+	shareTitle = "My OptiQra SEO report",
 }: {
-	siteUrl: string;
-	overallScore: number;
+	/** Legacy/simple usage: pass a site URL + score and a default message is built. */
+	siteUrl?: string;
+	overallScore?: number;
+	/** Email subject line. Falls back to a generic OptiQra subject if omitted. */
+	subject?: string;
+	/** Full control over the shareable message text — lets each tool/page send
+	 *  something specific to what it actually did, instead of one canned line
+	 *  reused everywhere. Receives the optional "your name" the person typed in. */
+	buildMessage?: (name?: string) => string;
+	/** Button + menu copy, so this reads right in different contexts (e.g. a
+	 *  single-tool result vs. the full site report). */
+	buttonLabel?: string;
+	shareTitle?: string;
 }) {
 	const [open, setOpen] = useState(false);
 	const [name, setName] = useState("");
@@ -118,7 +133,10 @@ export default function ShareReport({
 		};
 	}, [open]);
 
-	const message = buildMessage(siteUrl, overallScore, name);
+	const message = buildMessage
+		? buildMessage(name)
+		: defaultBuildMessage(siteUrl || SITE_URL, overallScore ?? 0, name);
+	const emailSubject = subject || (typeof overallScore === "number" ? `My OptiQra SEO report — scored ${overallScore}/100` : "Check out OptiQra");
 
 	const handleShare = async (target: ShareTarget) => {
 		const encoded = encodeURIComponent(message);
@@ -127,7 +145,7 @@ export default function ShareReport({
 		switch (target) {
 			case "native": {
 				try {
-					await navigator.share({ title: "My OptiQra SEO report", text: message, url: SITE_URL });
+					await navigator.share({ title: shareTitle, text: message, url: SITE_URL });
 					setOpen(false);
 				} catch {
 					// user cancelled the native share sheet — no-op
@@ -135,8 +153,8 @@ export default function ShareReport({
 				return;
 			}
 			case "email": {
-				const subject = encodeURIComponent(`My OptiQra SEO report — scored ${overallScore}/100`);
-				window.open(`mailto:?subject=${subject}&body=${encoded}`, "_blank");
+				const encodedSubject = encodeURIComponent(emailSubject);
+				window.open(`mailto:?subject=${encodedSubject}&body=${encoded}`, "_blank");
 				break;
 			}
 			case "sms": {
@@ -219,7 +237,7 @@ export default function ShareReport({
 				aria-haspopup="menu"
 				aria-expanded={open}
 			>
-				Share report
+				{buttonLabel}
 				<span className="report-download-caret">{open ? "▲" : "▼"}</span>
 			</button>
 

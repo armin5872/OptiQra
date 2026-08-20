@@ -3,6 +3,9 @@
 import { useState } from "react";
 import PageSpeedSetup from "@/app/components/PageSpeedSetup";
 import CoreWebVitalsPanel from "@/app/components/CoreWebVitalsPanel";
+import ShareReport from "@/app/components/ShareReport";
+import GetBadge from "@/app/components/GetBadge";
+import { pagespeedShareCopy, toolBadgeIntro } from "@/lib/shareMessages";
 
 export default function PageSpeedToolClient() {
 	const [url, setUrl] = useState("");
@@ -34,6 +37,14 @@ export default function PageSpeedToolClient() {
 			{submittedUrl && (
 				<div style={{ marginTop: 16 }}>
 					<CoreWebVitalsPanel key={submittedUrl} url={submittedUrl} />
+					<div className="tool-share-bar">
+						<ShareReport
+							{...pagespeedShareCopy({ url: submittedUrl })}
+							buttonLabel="Share result"
+							shareTitle="My Core Web Vitals result"
+						/>
+						<GetBadge intro={toolBadgeIntro("Core Web Vitals Checker")} />
+					</div>
 				</div>
 			)}
 		</div>

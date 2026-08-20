@@ -4,6 +4,9 @@ import { useState } from "react";
 import type { ToolDef } from "@/lib/toolsRegistry";
 import type { Issue } from "@/lib/auditUtils";
 import IssueList from "./IssueList";
+import ShareReport from "@/app/components/ShareReport";
+import GetBadge from "@/app/components/GetBadge";
+import { auditShareCopy, toolBadgeIntro } from "@/lib/shareMessages";
 
 interface AuditResponse {
 	ok: boolean;
@@ -109,6 +112,21 @@ export default function AuditToolClient({ tool }: { tool: ToolDef }) {
 					)}
 					<ExtraPanel source={tool.source} extra={result.extra} />
 					<IssueList issues={result.issues || []} passed={result.passed || []} />
+					{typeof result.score === "number" && (
+						<div className="tool-share-bar">
+							<ShareReport
+								{...auditShareCopy({
+									toolName: tool.shortName,
+									url: isMultiUrl ? "multiple pages" : normalizeUrl(input.trim()),
+									score: result.score,
+									issueCount: result.issues?.length || 0,
+								})}
+								buttonLabel="Share result"
+								shareTitle={`My ${tool.shortName} result`}
+							/>
+							<GetBadge intro={toolBadgeIntro(tool.shortName)} />
+						</div>
+					)}
 				</div>
 			)}
 		</div>
