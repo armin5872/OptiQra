@@ -416,6 +416,9 @@ export async function POST(req: NextRequest) {
 				if (r.missingLazyLoading.length > 0) {
 					issues.push(issue("images-no-lazy-load", `${r.missingLazyLoading.length} image(s) not lazy-loaded`, "Below-the-fold images without loading=\"lazy\" can slow initial page load.", "Add loading=\"lazy\" to offscreen images.", 2, "low"));
 				} else passed.push(pass("images-lazy-ok", "Offscreen images are lazy-loaded"));
+				if (r.lazyLoadedAboveFold.length > 0) {
+					issues.push(issue("images-lazy-above-fold", `${r.lazyLoadedAboveFold.length} likely above-the-fold image(s) marked loading="lazy"`, "Lazy-loading the page's hero/LCP image delays the browser discovering and fetching it, which can directly hurt Largest Contentful Paint.", "Remove loading=\"lazy\" from the first image(s) on the page and load them eagerly instead.", 4, "medium"));
+				}
 				if (r.brokenImages.length > 0) {
 					issues.push(issue("images-broken", `${r.brokenImages.length} broken image(s)`, `These images failed to load: ${r.brokenImages.slice(0, 5).map((i) => i.resolvedUrl).join(", ")}`, "Fix or remove broken image references.", 8, "high"));
 				}

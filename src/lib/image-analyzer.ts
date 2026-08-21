@@ -18,13 +18,20 @@ export interface ImageInfo {
 	srcset: string | null;
 	sizes: string | null;
 	hasSrcset: boolean;
+	srcsetUrls: string[]; // every candidate URL parsed out of srcset (resolved, deduped)
 	inPictureWithSources: boolean;
 	pictureSourceTypes: string[]; // e.g. ["image/webp", "image/avif"]
 	isResponsive: boolean; // srcset+sizes, or <picture> with >=1 <source>
 	declaredWidth: number | null;
 	declaredHeight: number | null;
 	extensionFormat: string | null; // guessed from URL extension
-	isModernExtension: boolean; // .webp / .avif by extension
+	isModernExtension: boolean; // .webp / .avif offered via src, srcset, OR a <picture><source type="image/webp|avif">
+	/** First couple of images in DOM order are the most likely LCP candidate
+	 *  on a typical page — Google's own guidance is to NOT lazy-load these,
+	 *  since it delays the browser discovering/fetching the very resource
+	 *  that's gating the page's Largest Contentful Paint. Everything after
+	 *  that is fair game to flag for missing loading="lazy". */
+	isLikelyAboveFold: boolean;
 }
 
 export interface ImageCheckResult {
@@ -48,6 +55,10 @@ export interface ImageAnalysisReport {
 
 	oversizedImages: (ImageCheckResult & { src: string })[];
 	missingLazyLoading: ImageInfo[];
+	/** Likely-LCP images (see isLikelyAboveFold) that were explicitly marked
+	 *  loading="lazy" — the opposite mistake from missingLazyLoading, and
+	 *  arguably worse: it actively delays the page's biggest paint metric. */
+	lazyLoadedAboveFold: ImageInfo[];
 	missingSrcset: ImageInfo[];
 	nonModernFormatImages: ImageInfo[];
 	duplicateImages: {
@@ -134,11 +145,20 @@ function parseSrcsetUrls(srcset: string, baseUrl: string): string[] {
 		.filter((u): u is string => !!u);
 }
 
+/** How many images from the top of the DOM count as "likely above the
+ *  fold" for lazy-loading purposes. This is a heuristic (we have no layout
+ *  info from static HTML) but matches what most real pages look like: the
+ *  first image in document order is very often the hero/LCP image, and by
+ *  the 3rd or 4th image on a typical page you're into content that's below
+ *  an average viewport. Kept small and conservative on purpose — better to
+ *  under-flag than to tell someone to lazy-load their actual LCP image. */
+const ABOVE_FOLD_IMAGE_COUNT = 2;
+
 export function extractImages(html: string, baseUrl: string): ImageInfo[] {
 	const $ = cheerio.load(html);
 	const images: ImageInfo[] = [];
 
-	$("img").each((_, el) => {
+	$("img").each((idx, el) => {
 		const $img = $(el);
 		const src = $img.attr("src") ?? $img.attr("data-src") ?? "";
 		const alt = $img.attr("alt");
@@ -164,6 +184,21 @@ export function extractImages(html: string, baseUrl: string): ImageInfo[] {
 		const isResponsive =
 			(hasSrcset && !!sizes) || (inPicture && sourceTypes.length > 0);
 
+		// Previously dead code (parseSrcsetUrls was defined but never called),
+		// so a srcset offering e.g. "photo.webp 2x" while src="photo.jpg" was
+		// invisible to both the modern-format check and the network checks
+		// below — those extra candidate images were silently never verified.
+		const srcsetUrls = hasSrcset
+			? Array.from(new Set(parseSrcsetUrls(srcset!, baseUrl)))
+			: [];
+		const srcsetHasModernFormat = srcsetUrls.some((u) => {
+			const e = guessExtension(u);
+			return e ? MODERN_EXTENSIONS.has(e) : false;
+		});
+		const pictureHasModernFormat = sourceTypes.some(
+			(t) => t === "image/webp" || t === "image/avif",
+		);
+
 		images.push({
 			src,
 			resolvedUrl,
@@ -175,13 +210,22 @@ export function extractImages(html: string, baseUrl: string): ImageInfo[] {
 			srcset,
 			sizes,
 			hasSrcset,
+			srcsetUrls,
 			inPictureWithSources: inPicture && sourceTypes.length > 0,
 			pictureSourceTypes: sourceTypes,
 			isResponsive,
 			declaredWidth: widthAttr ? parseInt(widthAttr, 10) || null : null,
 			declaredHeight: heightAttr ? parseInt(heightAttr, 10) || null : null,
 			extensionFormat: ext,
-			isModernExtension: ext ? MODERN_EXTENSIONS.has(ext) : false,
+			// A modern format offered via srcset or a <picture><source> counts
+			// even when the fallback src/extension itself is a plain jpg/png —
+			// that's the standard, correct pattern for serving webp/avif with
+			// a broadly-compatible fallback, not something to flag.
+			isModernExtension:
+				(ext ? MODERN_EXTENSIONS.has(ext) : false) ||
+				srcsetHasModernFormat ||
+				pictureHasModernFormat,
+			isLikelyAboveFold: idx < ABOVE_FOLD_IMAGE_COUNT,
 		});
 	});
 
@@ -299,8 +343,14 @@ export async function analyzeImages(
 
 	const images = extractImages(html, scannedUrl);
 	const withUrls = images.filter((img) => img.resolvedUrl);
+	// Include srcset candidates so a webp/avif variant offered only through
+	// srcset actually gets its own broken/oversize check instead of only the
+	// fallback src ever being verified.
 	const uniqueUrls = Array.from(
-		new Set(withUrls.map((img) => img.resolvedUrl!)),
+		new Set([
+			...withUrls.map((img) => img.resolvedUrl!),
+			...withUrls.flatMap((img) => img.srcsetUrls),
+		]),
 	);
 
 	const checked = await mapLimit(uniqueUrls, options.concurrency, (url) =>
@@ -358,7 +408,15 @@ export async function analyzeImages(
 		totalUniqueImages: uniqueUrls.length,
 
 		oversizedImages,
-		missingLazyLoading: images.filter((i) => !i.hasLazyLoading),
+		// Excludes likely-LCP images from the top of the page — those should
+		// stay eager, not lazy, so they don't belong in a "missing lazy
+		// loading" list.
+		missingLazyLoading: images.filter(
+			(i) => !i.hasLazyLoading && !i.isLikelyAboveFold,
+		),
+		lazyLoadedAboveFold: images.filter(
+			(i) => i.hasLazyLoading && i.isLikelyAboveFold,
+		),
 		missingSrcset: images.filter(
 			(i) => !i.hasSrcset && !i.inPictureWithSources,
 		),
