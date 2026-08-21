@@ -2,7 +2,7 @@
   "name": "optiqra-vscode",
   "displayName": "OptiQra \u2014 SEO, GEO & AEO Engineer",
   "description": "Offline SEO/GEO/AEO/accessibility/security auditing with live in-editor diagnostics, one-click fixes (automated or AI/BYOK via OPCA), a 2D/3D crawl-tree visualizer, and a dashboard \u2014 all running locally. Like OptiQra? Star us on GitHub: https://github.com/armin5872/OptiQra",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "publisher": "ArminRomero",
   "license": "MIT",
   "repository": {
