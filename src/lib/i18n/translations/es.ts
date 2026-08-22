@@ -29,6 +29,55 @@ const es: Translations = {
 		runDiagnostic: "Ejecutar diagnóstico →",
 		crawlSite: "Rastrear sitio →",
 	},
+	auditRules: {
+		title: {
+			title: "Falta la etiqueta de título",
+			detail: "No se encontró ningún elemento <title> en la cabecera de la página, por lo que los resultados de búsqueda muestran un título genérico o ilegible.",
+			fix: "Añade una etiqueta <title> única y descriptiva, idealmente de 50–60 caracteres.",
+			passTitle: "La etiqueta de título está presente y tiene un tamaño adecuado",
+		},
+		"title-length": {
+			title: "La longitud de la etiqueta de título no es adecuada",
+			detail: "El título tiene {length} caracteres (\"{preview}\"). Los motores de búsqueda suelen truncar los títulos fuera del rango de 50–60 caracteres.",
+			fix: "Ajusta el título a aproximadamente 50–60 caracteres manteniéndolo descriptivo.",
+		},
+		"meta-desc": {
+			title: "No hay meta descripción",
+			detail: "Los motores de búsqueda están generando su propio fragmento porque no se encontró ninguna meta descripción.",
+			fix: "Añade una meta descripción de 140–160 caracteres que resuma la página.",
+			passTitle: "La meta descripción está presente y tiene un tamaño adecuado",
+		},
+		"meta-desc-length": {
+			title: "La longitud de la meta descripción no es adecuada",
+			detail: "La descripción tiene {length} caracteres, fuera del rango de ~140–160 que los motores de búsqueda muestran por completo.",
+			fix: "Ajusta la meta descripción a aproximadamente 140–160 caracteres.",
+		},
+		"h1-missing": {
+			title: "No se encontró encabezado H1",
+			detail: "La página no tiene un H1 de nivel superior, por lo que ni los usuarios ni los motores de búsqueda tienen una indicación clara del tema de la página.",
+			fix: "Añade exactamente un H1 que describa el tema principal de la página.",
+		},
+		"h1-multiple": {
+			title: "Se encontraron varios encabezados H1 ({count})",
+			detail: "Varios elementos H1 diluyen la señal temática de la página y pueden confundir la navegación basada en encabezados.",
+			fix: "Mantén un único H1 por página y reduce el resto a H2/H3.",
+		},
+		h1: {
+			passTitle: "Exactamente un encabezado H1",
+		},
+		"html-size": {
+			title: "El documento HTML es grande ({sizeKb} KB)",
+			detail: "Una carga inicial de HTML grande retrasa el primer renderizado, especialmente en conexiones lentas.",
+			fix: "Elimina el marcado innecesario y mueve el contenido en línea grande fuera del HTML inicial.",
+			passTitle: "El tamaño de la carga inicial de HTML es razonable",
+		},
+		lang: {
+			title: "Falta el atributo lang en <html>",
+			detail: "Los lectores de pantalla usan este atributo para elegir la pronunciación y la voz correctas; sin él, adivinan por defecto.",
+			fix: "Añade un atributo lang, por ejemplo <html lang=\"es\">.",
+			passTitle: "La página declara un idioma",
+		},
+	},
 	settings: {
 		title: "Ajustes",
 		changesSaveAutomatically: "Los cambios se guardan automáticamente en este dispositivo.",

@@ -29,6 +29,55 @@ const de: Translations = {
 		runDiagnostic: "Diagnose starten →",
 		crawlSite: "Website crawlen →",
 	},
+	auditRules: {
+		title: {
+			title: "Title-Tag fehlt",
+			detail: "Im Head der Seite wurde kein <title>-Element gefunden, sodass Suchergebnisse auf einen generischen oder unlesbaren Titel zurückfallen.",
+			fix: "Füge einen eindeutigen, aussagekräftigen <title>-Tag hinzu, idealerweise 50–60 Zeichen lang.",
+			passTitle: "Title-Tag ist vorhanden und hat eine passende Länge",
+		},
+		"title-length": {
+			title: "Länge des Title-Tags ist unpassend",
+			detail: "Der Titel ist {length} Zeichen lang (\"{preview}\"). Suchmaschinen kürzen Titel außerhalb des Bereichs von 50–60 Zeichen in der Regel ab.",
+			fix: "Kürze den Titel auf etwa 50–60 Zeichen und behalte dabei die Aussagekraft bei.",
+		},
+		"meta-desc": {
+			title: "Keine Meta-Description",
+			detail: "Suchmaschinen erstellen ihren eigenen Textausschnitt, da keine Meta-Description gefunden wurde.",
+			fix: "Füge eine 140–160 Zeichen lange Meta-Description hinzu, die die Seite zusammenfasst.",
+			passTitle: "Meta-Description ist vorhanden und hat eine passende Länge",
+		},
+		"meta-desc-length": {
+			title: "Länge der Meta-Description ist unpassend",
+			detail: "Die Beschreibung ist {length} Zeichen lang, außerhalb des Bereichs von ca. 140–160 Zeichen, den Suchmaschinen vollständig anzeigen.",
+			fix: "Passe die Meta-Description auf etwa 140–160 Zeichen an.",
+		},
+		"h1-missing": {
+			title: "Keine H1-Überschrift gefunden",
+			detail: "Die Seite hat keine H1 auf oberster Ebene, wodurch weder Nutzer noch Suchmaschinen eine klare Aussage zum Thema der Seite erhalten.",
+			fix: "Füge genau eine H1 hinzu, die das Hauptthema der Seite beschreibt.",
+		},
+		"h1-multiple": {
+			title: "Mehrere H1-Überschriften gefunden ({count})",
+			detail: "Mehrere H1-Elemente verwässern das thematische Signal der Seite und können die überschriftenbasierte Navigation verwirren.",
+			fix: "Behalte nur eine H1 pro Seite und stufe die übrigen auf H2/H3 herab.",
+		},
+		h1: {
+			passTitle: "Genau eine H1-Überschrift",
+		},
+		"html-size": {
+			title: "HTML-Dokument ist groß ({sizeKb} KB)",
+			detail: "Eine große anfängliche HTML-Nutzlast verzögert den ersten Seitenaufbau, besonders bei langsameren Verbindungen.",
+			fix: "Entferne ungenutztes Markup und verschiebe große Inline-Inhalte aus dem anfänglichen HTML.",
+			passTitle: "Die Größe der anfänglichen HTML-Nutzlast ist angemessen",
+		},
+		lang: {
+			title: "lang-Attribut fehlt bei <html>",
+			detail: "Screenreader nutzen dieses Attribut, um die richtige Aussprache und Stimme zu wählen; ohne es raten sie standardmäßig.",
+			fix: "Füge ein lang-Attribut hinzu, z. B. <html lang=\"de\">.",
+			passTitle: "Die Seite gibt eine Sprache an",
+		},
+	},
 	settings: {
 		title: "Einstellungen",
 		changesSaveAutomatically: "Änderungen werden automatisch auf diesem Gerät gespeichert.",

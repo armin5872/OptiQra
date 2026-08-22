@@ -29,6 +29,55 @@ const fr: Translations = {
 		runDiagnostic: "Lancer le diagnostic →",
 		crawlSite: "Explorer le site →",
 	},
+	auditRules: {
+		title: {
+			title: "La balise de titre est manquante",
+			detail: "Aucun élément <title> n'a été trouvé dans l'en-tête de la page, donc les résultats de recherche affichent un titre générique ou illisible.",
+			fix: "Ajoutez une balise <title> unique et descriptive, idéalement entre 50 et 60 caractères.",
+			passTitle: "La balise de titre est présente et bien dimensionnée",
+		},
+		"title-length": {
+			title: "La longueur de la balise de titre est inadaptée",
+			detail: "Le titre fait {length} caractères (\"{preview}\"). Les moteurs de recherche tronquent généralement les titres en dehors de la plage de 50 à 60 caractères.",
+			fix: "Réduisez le titre à environ 50–60 caractères tout en le gardant descriptif.",
+		},
+		"meta-desc": {
+			title: "Pas de meta description",
+			detail: "Les moteurs de recherche génèrent leur propre extrait car aucune meta description n'a été trouvée.",
+			fix: "Ajoutez une meta description de 140–160 caractères résumant la page.",
+			passTitle: "La meta description est présente et bien dimensionnée",
+		},
+		"meta-desc-length": {
+			title: "La longueur de la meta description est inadaptée",
+			detail: "La description fait {length} caractères, en dehors de la plage d'environ 140–160 que les moteurs de recherche affichent en entier.",
+			fix: "Ajustez la meta description à environ 140–160 caractères.",
+		},
+		"h1-missing": {
+			title: "Aucun titre H1 trouvé",
+			detail: "La page n'a pas de H1 de premier niveau, laissant les utilisateurs et les moteurs de recherche sans indication claire du sujet de la page.",
+			fix: "Ajoutez exactement un H1 décrivant le sujet principal de la page.",
+		},
+		"h1-multiple": {
+			title: "Plusieurs titres H1 trouvés ({count})",
+			detail: "Plusieurs éléments H1 diluent le signal thématique de la page et peuvent perturber la navigation basée sur les titres.",
+			fix: "Gardez un seul H1 par page et rétrogradez les autres en H2/H3.",
+		},
+		h1: {
+			passTitle: "Exactement un titre H1",
+		},
+		"html-size": {
+			title: "Le document HTML est volumineux ({sizeKb} Ko)",
+			detail: "Une charge HTML initiale importante retarde le premier affichage, surtout sur les connexions lentes.",
+			fix: "Réduisez le balisage inutile et déplacez le contenu inline volumineux hors du HTML initial.",
+			passTitle: "La taille de la charge HTML initiale est raisonnable",
+		},
+		lang: {
+			title: "Attribut lang manquant sur <html>",
+			detail: "Les lecteurs d'écran utilisent cet attribut pour choisir la prononciation et la voix correctes ; sans lui, ils devinent par défaut.",
+			fix: "Ajoutez un attribut lang, par exemple <html lang=\"fr\">.",
+			passTitle: "La page déclare une langue",
+		},
+	},
 	settings: {
 		title: "Paramètres",
 		changesSaveAutomatically: "Les modifications sont enregistrées automatiquement sur cet appareil.",

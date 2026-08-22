@@ -29,6 +29,55 @@ const ja: Translations = {
 		runDiagnostic: "診断を実行 →",
 		crawlSite: "サイトをクロール →",
 	},
+	auditRules: {
+		title: {
+			title: "titleタグがありません",
+			detail: "ページのheadに<title>要素が見つからないため、検索結果には一般的または判読しにくいタイトルが表示されます。",
+			fix: "50〜60文字程度の、固有で説明的な<title>タグを追加してください。",
+			passTitle: "titleタグが存在し、適切な長さです",
+		},
+		"title-length": {
+			title: "titleタグの長さが適切ではありません",
+			detail: "タイトルは{length}文字です（\"{preview}\"）。検索エンジンは通常、50〜60文字の範囲外のタイトルを切り詰めます。",
+			fix: "説明性を保ちながらタイトルを50〜60文字程度に調整してください。",
+		},
+		"meta-desc": {
+			title: "meta descriptionがありません",
+			detail: "meta descriptionが見つからないため、検索エンジンが独自のスニペットを生成しています。",
+			fix: "ページを要約する140〜160文字のmeta descriptionを追加してください。",
+			passTitle: "meta descriptionが存在し、適切な長さです",
+		},
+		"meta-desc-length": {
+			title: "meta descriptionの長さが適切ではありません",
+			detail: "説明文は{length}文字で、検索エンジンが全文表示する約140〜160文字の範囲外です。",
+			fix: "meta descriptionを140〜160文字程度に調整してください。",
+		},
+		"h1-missing": {
+			title: "H1見出しが見つかりません",
+			detail: "ページにトップレベルのH1がないため、ユーザーと検索エンジンの両方にページの主題が明確に伝わりません。",
+			fix: "ページの主題を説明するH1を1つだけ追加してください。",
+		},
+		"h1-multiple": {
+			title: "複数のH1見出しが見つかりました（{count}）",
+			detail: "複数のH1要素はページのトピックシグナルを薄め、見出しベースのナビゲーションを混乱させる可能性があります。",
+			fix: "ページごとにH1を1つだけにし、残りはH2/H3に格下げしてください。",
+		},
+		h1: {
+			passTitle: "H1見出しがちょうど1つあります",
+		},
+		"html-size": {
+			title: "HTMLドキュメントが大きいです（{sizeKb} KB）",
+			detail: "初期HTMLのペイロードが大きいと、特に低速な接続で最初の描画が遅れます。",
+			fix: "未使用のマークアップを削減し、大きなインラインコンテンツを初期HTMLの外に移動してください。",
+			passTitle: "初期HTMLペイロードのサイズは妥当です",
+		},
+		lang: {
+			title: "<html>にlang属性がありません",
+			detail: "スクリーンリーダーはこの属性を使って正しい発音と音声を選択します。属性がないと推測に頼ることになります。",
+			fix: "lang属性を追加してください。例：<html lang=\"ja\">。",
+			passTitle: "ページが言語を宣言しています",
+		},
+	},
 	settings: {
 		title: "設定",
 		changesSaveAutomatically: "変更内容はこの端末に自動的に保存されます。",

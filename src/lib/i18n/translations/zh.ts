@@ -28,6 +28,55 @@ const zh: Translations = {
 		runDiagnostic: "开始诊断 →",
 		crawlSite: "抓取网站 →",
 	},
+	auditRules: {
+		title: {
+			title: "缺少标题标签",
+			detail: "页面头部未找到 <title> 元素，因此搜索结果会显示通用或不可读的标题。",
+			fix: "添加一个独特且描述性强的 <title> 标签，理想长度为 50–60 个字符。",
+			passTitle: "标题标签存在且长度合适",
+		},
+		"title-length": {
+			title: "标题标签长度不合适",
+			detail: "标题长度为 {length} 个字符（\"{preview}\"）。搜索引擎通常会截断超出 50–60 个字符范围的标题。",
+			fix: "在保持描述性的同时，将标题精简至约 50–60 个字符。",
+		},
+		"meta-desc": {
+			title: "缺少 meta description",
+			detail: "由于未找到 meta description，搜索引擎正在自行生成摘要片段。",
+			fix: "添加一段 140–160 个字符、概括页面内容的 meta description。",
+			passTitle: "Meta description 存在且长度合适",
+		},
+		"meta-desc-length": {
+			title: "Meta description 长度不合适",
+			detail: "描述长度为 {length} 个字符，超出了搜索引擎完整显示的约 140–160 个字符范围。",
+			fix: "将 meta description 调整为约 140–160 个字符。",
+		},
+		"h1-missing": {
+			title: "未找到 H1 标题",
+			detail: "页面没有顶级 H1，导致用户和搜索引擎都无法清晰了解页面主题。",
+			fix: "添加一个能描述页面主要主题的 H1。",
+		},
+		"h1-multiple": {
+			title: "发现多个 H1 标题（{count} 个）",
+			detail: "多个 H1 元素会稀释页面的主题信号，并可能扰乱基于标题的导航。",
+			fix: "每个页面只保留一个 H1，其余降级为 H2/H3。",
+		},
+		h1: {
+			passTitle: "恰好有一个 H1 标题",
+		},
+		"html-size": {
+			title: "HTML 文档较大（{sizeKb} KB）",
+			detail: "较大的初始 HTML 负载会延迟首次渲染，尤其是在网速较慢的情况下。",
+			fix: "精简未使用的标记，并将大型内联内容移出初始 HTML。",
+			passTitle: "初始 HTML 负载大小合理",
+		},
+		lang: {
+			title: "<html> 上缺少 lang 属性",
+			detail: "屏幕阅读器使用此属性来选择正确的发音和语音；缺少该属性时会默认进行猜测。",
+			fix: "添加 lang 属性，例如 <html lang=\"zh\">。",
+			passTitle: "页面已声明语言",
+		},
+	},
 	settings: {
 		title: "设置",
 		changesSaveAutomatically: "更改会自动保存在此设备上。",

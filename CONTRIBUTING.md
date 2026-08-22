@@ -27,3 +27,7 @@ Please keep the audit output shape consistent (see `src/lib/reportExport/model.t
 ## Pull Requests
 
 After you have fixed an issue or refactored the code or added something go ahead and create a pull request and I will go and sync it with the original.
+
+## Security issues
+
+If you find any security issues please refer to [SECURITY.md](./SECURITY.md)

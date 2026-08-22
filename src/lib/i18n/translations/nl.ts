@@ -29,6 +29,55 @@ const nl: Translations = {
 		runDiagnostic: "Diagnose starten →",
 		crawlSite: "Website crawlen →",
 	},
+	auditRules: {
+		title: {
+			title: "Titeltag ontbreekt",
+			detail: "Er is geen <title>-element gevonden in de paginakop, waardoor zoekresultaten terugvallen op een algemene of onleesbare titel.",
+			fix: "Voeg een unieke, beschrijvende <title>-tag toe, idealiter 50–60 tekens.",
+			passTitle: "Titeltag is aanwezig en heeft een goede lengte",
+		},
+		"title-length": {
+			title: "Lengte van de titeltag klopt niet",
+			detail: "De titel is {length} tekens lang (\"{preview}\"). Zoekmachines knippen titels buiten het bereik van 50–60 tekens meestal af.",
+			fix: "Verkort de titel tot ongeveer 50–60 tekens en houd deze beschrijvend.",
+		},
+		"meta-desc": {
+			title: "Geen meta description",
+			detail: "Zoekmachines schrijven hun eigen snippet omdat er geen meta description is gevonden.",
+			fix: "Voeg een meta description van 140–160 tekens toe die de pagina samenvat.",
+			passTitle: "Meta description is aanwezig en heeft een goede lengte",
+		},
+		"meta-desc-length": {
+			title: "Lengte van de meta description klopt niet",
+			detail: "De beschrijving is {length} tekens lang, buiten het bereik van ~140–160 tekens dat zoekmachines volledig tonen.",
+			fix: "Pas de meta description aan tot ongeveer 140–160 tekens.",
+		},
+		"h1-missing": {
+			title: "Geen H1-kop gevonden",
+			detail: "De pagina heeft geen H1 op het hoogste niveau, waardoor zowel gebruikers als zoekmachines geen duidelijk beeld hebben van het paginaonderwerp.",
+			fix: "Voeg precies één H1 toe die het hoofdonderwerp van de pagina beschrijft.",
+		},
+		"h1-multiple": {
+			title: "Meerdere H1-koppen gevonden ({count})",
+			detail: "Meerdere H1-elementen verzwakken het onderwerpsignaal van de pagina en kunnen op koppen gebaseerde navigatie verwarrend maken.",
+			fix: "Houd één H1 per pagina aan en degradeer de rest naar H2/H3.",
+		},
+		h1: {
+			passTitle: "Precies één H1-kop",
+		},
+		"html-size": {
+			title: "HTML-document is groot ({sizeKb} KB)",
+			detail: "Een grote initiële HTML-payload vertraagt de eerste weergave, vooral bij langzamere verbindingen.",
+			fix: "Verwijder ongebruikte markup en verplaats grote inline content uit de initiële HTML.",
+			passTitle: "De grootte van de initiële HTML-payload is redelijk",
+		},
+		lang: {
+			title: "lang-attribuut ontbreekt op <html>",
+			detail: "Schermlezers gebruiken dit attribuut om de juiste uitspraak en stem te kiezen; zonder dit attribuut wordt er standaard gegokt.",
+			fix: "Voeg een lang-attribuut toe, bijv. <html lang=\"nl\">.",
+			passTitle: "Pagina geeft een taal op",
+		},
+	},
 	settings: {
 		title: "Instellingen",
 		changesSaveAutomatically: "Wijzigingen worden automatisch op dit apparaat opgeslagen.",

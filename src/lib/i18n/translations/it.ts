@@ -29,6 +29,55 @@ const it: Translations = {
 		runDiagnostic: "Avvia diagnosi →",
 		crawlSite: "Esegui la scansione del sito →",
 	},
+	auditRules: {
+		title: {
+			title: "Il tag del titolo è mancante",
+			detail: "Nessun elemento <title> è stato trovato nell'intestazione della pagina, quindi i risultati di ricerca mostrano un titolo generico o illeggibile.",
+			fix: "Aggiungi un tag <title> unico e descrittivo, idealmente di 50–60 caratteri.",
+			passTitle: "Il tag del titolo è presente e ha una lunghezza adeguata",
+		},
+		"title-length": {
+			title: "La lunghezza del tag del titolo non è adeguata",
+			detail: "Il titolo ha {length} caratteri (\"{preview}\"). I motori di ricerca in genere troncano i titoli fuori dall'intervallo 50–60 caratteri.",
+			fix: "Riduci il titolo a circa 50–60 caratteri mantenendolo descrittivo.",
+		},
+		"meta-desc": {
+			title: "Nessuna meta description",
+			detail: "I motori di ricerca stanno generando il proprio snippet perché non è stata trovata alcuna meta description.",
+			fix: "Aggiungi una meta description di 140–160 caratteri che riassuma la pagina.",
+			passTitle: "La meta description è presente e ha una lunghezza adeguata",
+		},
+		"meta-desc-length": {
+			title: "La lunghezza della meta description non è adeguata",
+			detail: "La descrizione ha {length} caratteri, fuori dall'intervallo di circa 140–160 che i motori di ricerca mostrano per intero.",
+			fix: "Regola la meta description a circa 140–160 caratteri.",
+		},
+		"h1-missing": {
+			title: "Nessun titolo H1 trovato",
+			detail: "La pagina non ha un H1 di primo livello, lasciando sia gli utenti sia i motori di ricerca senza un'indicazione chiara dell'argomento della pagina.",
+			fix: "Aggiungi esattamente un H1 che descriva l'argomento principale della pagina.",
+		},
+		"h1-multiple": {
+			title: "Trovati più titoli H1 ({count})",
+			detail: "Più elementi H1 diluiscono il segnale tematico della pagina e possono confondere la navigazione basata sui titoli.",
+			fix: "Mantieni un solo H1 per pagina e retrocedi gli altri a H2/H3.",
+		},
+		h1: {
+			passTitle: "Esattamente un titolo H1",
+		},
+		"html-size": {
+			title: "Il documento HTML è di grandi dimensioni ({sizeKb} KB)",
+			detail: "Un payload HTML iniziale grande ritarda il primo rendering, specialmente su connessioni più lente.",
+			fix: "Riduci il markup inutilizzato e sposta i contenuti inline di grandi dimensioni fuori dall'HTML iniziale.",
+			passTitle: "La dimensione del payload HTML iniziale è ragionevole",
+		},
+		lang: {
+			title: "Attributo lang mancante su <html>",
+			detail: "Gli screen reader usano questo attributo per scegliere la pronuncia e la voce corrette; senza di esso indovinano per impostazione predefinita.",
+			fix: "Aggiungi un attributo lang, ad esempio <html lang=\"it\">.",
+			passTitle: "La pagina dichiara una lingua",
+		},
+	},
 	settings: {
 		title: "Impostazioni",
 		changesSaveAutomatically: "Le modifiche vengono salvate automaticamente su questo dispositivo.",
