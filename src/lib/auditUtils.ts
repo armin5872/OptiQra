@@ -8,6 +8,7 @@ export interface Issue {
   weight: number;
   severity: Severity;
   resolved: boolean;
+  params?: Record<string, string | number>;
 }
 
 /** Buckets an issue's point weight into one of five severity tiers. Used
@@ -20,16 +21,47 @@ export function severityFromWeight(weight: number): Severity {
   return 'informational';
 }
 
-export function issue(id: string, title: string, detail: string, fix: string, weight: number, severity?: Severity): Issue {
-  return { id, title, detail, fix, weight, severity: severity || severityFromWeight(weight), resolved: false };
+export function issue(
+  id: string,
+  title: string,
+  detail: string,
+  fix: string,
+  weight: number,
+  severity?: Severity,
+  params?: Record<string, string | number>
+): Issue {
+  return {
+    id,
+    title,
+    detail,
+    fix,
+    weight,
+    severity: severity || severityFromWeight(weight),
+    resolved: false,
+    params,
+  };
 }
 
-export function pass(id: string, title: string): Issue {
-  return { id, title, detail: '', weight: 0, severity: 'good', resolved: true };
+export function pass(
+  id: string,
+  title: string,
+  params?: Record<string, string | number>
+): Issue {
+  return {
+    id,
+    title,
+    detail: '',
+    weight: 0,
+    severity: 'good',
+    resolved: true,
+    params,
+  };
 }
 
 export function scoreFromIssues(issues: Issue[]) {
   let score = 100;
-  issues.forEach(i => { score -= i.weight; });
+  issues.forEach((i) => {
+    score -= i.weight;
+  });
   return Math.max(20, Math.min(99, Math.round(score)));
 }
