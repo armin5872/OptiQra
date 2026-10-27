@@ -22,7 +22,7 @@
     "desktop:package": "node server/scripts/package-sidecar.js"
   },
   "dependencies": {
-    "@sentry/nextjs": "^10.67.0",
+    "@sentry/nextjs": "^10.75.2",
     "cheerio": "^1.2.0",
     "docx": "^9.7.1",
     "idb": "^8.0.0",
